@@ -43,6 +43,7 @@ letter_map = {
 }
 
 number_map = {
+    "num_0": "Số 0",
     "num_1": "Số 1",
     "num_2": "Số 2",
     "num_3": "Số 3",

@@ -632,15 +632,13 @@ static void handle_toy_mode_key(uint8_t kc, uint8_t mod, char c) {
                     default: spell_text = "Bé học đánh vần chữ cái vui nhộn!"; break;
                 }
                 printf(" -> [BÉ HỌC ĐÁNH VẦN: %s]\r\n", spell_text);
-            } else if ((c >= '1' && c <= '9') || c == '0' || (kc >= 0x59 && kc <= 0x62)) {
+            } else if ((c >= '0' && c <= '9') || (kc >= 0x59 && kc <= 0x62)) {
                 uint8_t num = 0;
-                if (c >= '1' && c <= '9') num = c - '0';
-                else if (c == '0') num = 10;
+                if (c >= '0' && c <= '9') num = c - '0';
                 else if (kc >= 0x59 && kc <= 0x61) num = kc - 0x59 + 1; // Numpad 1..9
-                else if (kc == 0x62) num = 10; // Numpad 0 = 10
+                else if (kc == 0x62) num = 0; // Numpad 0 = 0
 
-                printf(" -> [BÉ HỌC ĐẾM: SỐ %d -> %d TIẾNG TRỐNG TÙNG! + %d ĐÈN SÁNG]\r\n", 
-                       (num == 10) ? 10 : num, num, num);
+                printf(" -> [BÉ HỌC SỐ: SỐ %d]\r\n", num);
                 fflush(stdout);
                 audio_play_counting_number(num);
             } else if (c == '\r' || c == '\n' || kc == 0x58) {

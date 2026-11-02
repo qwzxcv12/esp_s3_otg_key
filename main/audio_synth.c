@@ -886,29 +886,24 @@ static void counting_led_task(void *arg) {
 }
 
 void audio_play_counting_number(uint8_t num) {
-    if (num == 0) num = 10;
     if (num > 10) num = 10;
 
-    uint32_t spoken_dur_ms = 0;
-    if (sb_play_number(num, &spoken_dur_ms)) {
-        uint32_t beat_start = spoken_dur_ms + 80;
-        for (uint8_t i = 0; i < num; i++) {
-            sb_play_beat(beat_start + (uint32_t)i * 170);
+    if (sb_play_number(num, NULL)) {
+        if (num > 0) {
+            xTaskCreate(counting_led_task, "cnt_led", 3072, (void *)(uintptr_t)num, 3, NULL);
+        } else {
+            led_effects_color_burst(0, 200, 255);
         }
-        xTaskCreate(counting_led_task, "cnt_led", 3072, (void *)(uintptr_t)num, 3, NULL);
         return;
     }
 
-    // Harmonized bell note announcing the number
-    trigger_voice_internal(VOICE_TONE_ADSR, 261.63f + num * 32.0f, 0, 0, 0.9f, 220, TIMBRE_PIANO);
-    trigger_voice_internal(VOICE_TONE_ADSR, (261.63f + num * 32.0f) * 1.5f, 0, 0, 0.5f, 220, TIMBRE_MUSIC_BOX);
-
-    // Drum beats scheduled inside the audio engine (non-blocking, perfectly even rhythm)
-    for (uint8_t i = 0; i < num; i++) {
-        trigger_voice_at(VOICE_PITCH_SWEEP, 0, 200.0f, 60.0f, 0.95f, 120, 2, (uint32_t)i * 160 + 250);
+    // Fallback synth
+    trigger_voice_internal(VOICE_TONE_ADSR, 261.63f + num * 32.0f, 0, 0, 0.9f, 280, TIMBRE_PIANO);
+    if (num > 0) {
+        xTaskCreate(counting_led_task, "cnt_led", 3072, (void *)(uintptr_t)num, 3, NULL);
+    } else {
+        led_effects_color_burst(0, 200, 255);
     }
-    // LED counter runs in its own short task so the USB/HID task is never blocked
-    xTaskCreate(counting_led_task, "cnt_led", 3072, (void *)(uintptr_t)num, 3, NULL);
 }
 
 void audio_play_phonics_letter(char c) {

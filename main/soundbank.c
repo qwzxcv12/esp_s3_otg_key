@@ -33,8 +33,8 @@ typedef enum {
     SND_ANIMAL_ROOSTER, SND_ANIMAL_OWL, SND_ANIMAL_WOLF, SND_ANIMAL_TIGER, SND_ANIMAL_HORSE,
     SND_ANIMAL_SHEEP,
     SND_LETTER_A,                       // 26 letters follow
-    SND_NUM_1 = SND_LETTER_A + 26,      // 10 numbers follow
-    SND_PRAISE = SND_NUM_1 + 10,
+    SND_NUM_0 = SND_LETTER_A + 26,      // 11 numbers follow (0..10)
+    SND_PRAISE = SND_NUM_0 + 11,
     SND_COUNT
 } snd_id_t;
 
@@ -107,10 +107,10 @@ static void build_table(void) {
         snprintf(p, sizeof(p), "mode9/letter_%c.wav", 'a' + i);
         reg((snd_id_t)(SND_LETTER_A + i), p, M(8));
     }
-    for (int i = 0; i < 10; i++) {
+    for (int i = 0; i <= 10; i++) {
         char p[40];
-        snprintf(p, sizeof(p), "mode9/num_%d.wav", i + 1);
-        reg((snd_id_t)(SND_NUM_1 + i), p, M(8));
+        snprintf(p, sizeof(p), "mode9/num_%d.wav", i);
+        reg((snd_id_t)(SND_NUM_0 + i), p, M(8));
     }
     reg(SND_PRAISE, "mode9/praise.wav", M(8));
 }
@@ -398,9 +398,8 @@ bool sb_play_letter(char c) {
 }
 
 bool sb_play_number(uint8_t num, uint32_t *duration_ms) {
-    if (num == 0) num = 10;
     if (num > 10) num = 10;
-    snd_id_t id = (snd_id_t)(SND_NUM_1 + num - 1);
+    snd_id_t id = (snd_id_t)(SND_NUM_0 + num);
     if (!is_loaded(id)) return false;
     if (duration_ms) {
         *duration_ms = (uint32_t)((uint64_t)s_snd[id].asset.num_samples * 1000u / s_snd[id].asset.sample_rate);
