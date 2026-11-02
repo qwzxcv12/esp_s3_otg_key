@@ -938,3 +938,14 @@ void audio_play_phonics_letter(char c) {
     trigger_voice_internal(VOICE_NOISE_BURST, 0, 0, 0, 0.4f, 30, 0);
 }
 
+void audio_play_special_key(uint8_t kc) {
+    if (sb_play_special_key(kc)) return;
+    trigger_voice_internal(VOICE_TONE_ADSR, 523.25f, 0, 0, 0.70f, 180, TIMBRE_MUSIC_BOX);
+}
+
+void audio_play_symbol(char c) {
+    if (sb_play_symbol(c)) return;
+    trigger_voice_internal(VOICE_TONE_ADSR, 659.25f, 0, 0, 0.70f, 180, TIMBRE_MUSIC_BOX);
+}
+
+

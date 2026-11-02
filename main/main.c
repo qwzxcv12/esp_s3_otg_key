@@ -641,24 +641,16 @@ static void handle_toy_mode_key(uint8_t kc, uint8_t mod, char c) {
                 printf(" -> [BÉ HỌC SỐ: SỐ %d]\r\n", num);
                 fflush(stdout);
                 audio_play_counting_number(num);
-            } else if (c == '\r' || c == '\n' || kc == 0x58) {
-                audio_play_cartoon_sfx(SFX_VICTORY_FANFARE);
+            } else if (c != 0 && sb_play_symbol(c)) {
+                led_effects_color_burst(100, 220, 255);
+                printf(" -> [BÉ HỌC DẤU CÂU & KÝ TỰ: '%c']\r\n", c);
+            } else if (sb_play_special_key(kc)) {
                 led_effects_color_burst(255, 215, 0);
-                printf(" -> [BÉ HOÀN THÀNH BÀI HỌC: HOAN HÔ BÉ GIỎI QUÁ! BÉ VỖ TAY NÀO!]\r\n");
-            } else if (c == ' ') {
-                audio_play_cartoon_sfx(SFX_SPRING_BOING);
-                led_effects_color_burst(0, 255, 200);
-                printf(" -> [BÉ VẬN ĐỘNG: NHẢY LÊN NÀO! BOING BOING!]\r\n");
-            } else if (c == '\b' || kc == 0x4C) { // Backspace or DEL
-                audio_play_typewriter(TYPEWRITER_BACKSPACE);
-                led_effects_clear();
-                printf(" -> [BÉ XÓA BẢNG ĐỂ VIẾT VÀ ĐẾM LẠI TỪ ĐẦU!]\r\n");
-            } else if (kc >= 0x4F && kc <= 0x52) { // Arrow keys
-                audio_play_cartoon_sfx(SFX_WATER_DROP);
-                led_effects_beat();
-                printf(" -> [BÉ CHỈ ĐƯỜNG: BƯỚC ĐI TỪNG BƯỚC! TONG TONG!]\r\n");
+                printf(" -> [BÉ HỌC PHÍM CHỨC NĂNG & ĐIỀU HƯỚNG: 0x%02X]\r\n", kc);
             } else {
-                // Ignore other modifier / symbol keys in Phonics mode to keep speech crystal clear
+                audio_play_special_key(kc);
+                led_effects_spark();
+                printf(" -> [BÉ KHÁM PHÁ BÀN PHÍM: 0x%02X]\r\n", kc);
             }
             fflush(stdout);
             break;

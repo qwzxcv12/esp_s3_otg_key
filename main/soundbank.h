@@ -42,6 +42,8 @@ bool sb_play_animal(char key);
 bool sb_play_letter(char c);
 bool sb_play_number(uint8_t num, uint32_t *duration_ms); // spoken number, returns its length
 bool sb_play_praise(void);
+bool sb_play_special_key(uint8_t kc);                   // special / navigation / modifier keys
+bool sb_play_symbol(char c);                            // punctuation / math symbols
 bool sb_play_beat(uint32_t delay_ms);                   // counting drum hit
 bool sb_siren_loop(bool on);                            // looped siren sample on/off
 bool sb_has_siren(void);

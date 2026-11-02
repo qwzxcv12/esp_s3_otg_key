@@ -35,6 +35,29 @@ typedef enum {
     SND_LETTER_A,                       // 26 letters follow
     SND_NUM_0 = SND_LETTER_A + 26,      // 11 numbers follow (0..10)
     SND_PRAISE = SND_NUM_0 + 11,
+
+    // Phím chức năng, điều hướng & tổ hợp
+    SND_KEY_SPACE, SND_KEY_ENTER, SND_KEY_BACKSPACE, SND_KEY_TAB,
+    SND_KEY_CAPSLOCK, SND_KEY_SHIFT, SND_KEY_CTRL, SND_KEY_ALT,
+    SND_KEY_WIN, SND_KEY_ESC, SND_KEY_DELETE, SND_KEY_INSERT,
+    SND_KEY_HOME, SND_KEY_END, SND_KEY_PAGEUP, SND_KEY_PAGEDOWN,
+    SND_KEY_ARROW_UP, SND_KEY_ARROW_DOWN, SND_KEY_ARROW_LEFT, SND_KEY_ARROW_RIGHT,
+    SND_KEY_NUMLOCK, SND_KEY_SCROLLLOCK, SND_KEY_PAUSE, SND_KEY_PRTSCR,
+    SND_KEY_MENU,
+    SND_KEY_F1, SND_KEY_F2, SND_KEY_F3, SND_KEY_F4, SND_KEY_F5, SND_KEY_F6,
+    SND_KEY_F7, SND_KEY_F8, SND_KEY_F9, SND_KEY_F10, SND_KEY_F11, SND_KEY_F12,
+
+    // Ký tự, dấu câu & phép toán
+    SND_SYM_PLUS, SND_SYM_MINUS, SND_SYM_MULTIPLY, SND_SYM_DIVIDE, SND_SYM_EQUAL,
+    SND_SYM_DOT, SND_SYM_COMMA, SND_SYM_SEMICOLON, SND_SYM_COLON,
+    SND_SYM_EXCLAIM, SND_SYM_QUESTION, SND_SYM_QUOTE_SINGLE, SND_SYM_QUOTE_DOUBLE,
+    SND_SYM_AT, SND_SYM_HASH, SND_SYM_DOLLAR, SND_SYM_PERCENT, SND_SYM_CARET,
+    SND_SYM_AMPERSAND, SND_SYM_PAREN_OPEN, SND_SYM_PAREN_CLOSE,
+    SND_SYM_BRACKET_OPEN, SND_SYM_BRACKET_CLOSE,
+    SND_SYM_BRACE_OPEN, SND_SYM_BRACE_CLOSE,
+    SND_SYM_LESS_THAN, SND_SYM_GREATER_THAN,
+    SND_SYM_BACKSLASH, SND_SYM_PIPE, SND_SYM_TILDE, SND_SYM_BACKTICK, SND_SYM_UNDERSCORE,
+
     SND_COUNT
 } snd_id_t;
 
@@ -113,6 +136,72 @@ static void build_table(void) {
         reg((snd_id_t)(SND_NUM_0 + i), p, M(8));
     }
     reg(SND_PRAISE, "mode9/praise.wav", M(8));
+
+    // Phím chức năng & điều hướng
+    reg(SND_KEY_SPACE,      "mode9/key_space.wav",      M(8));
+    reg(SND_KEY_ENTER,      "mode9/key_enter.wav",      M(8));
+    reg(SND_KEY_BACKSPACE,  "mode9/key_backspace.wav",  M(8));
+    reg(SND_KEY_TAB,        "mode9/key_tab.wav",        M(8));
+    reg(SND_KEY_CAPSLOCK,   "mode9/key_capslock.wav",   M(8));
+    reg(SND_KEY_SHIFT,      "mode9/key_shift.wav",      M(8));
+    reg(SND_KEY_CTRL,       "mode9/key_ctrl.wav",       M(8));
+    reg(SND_KEY_ALT,        "mode9/key_alt.wav",        M(8));
+    reg(SND_KEY_WIN,        "mode9/key_win.wav",        M(8));
+    reg(SND_KEY_ESC,        "mode9/key_esc.wav",        M(8));
+    reg(SND_KEY_DELETE,     "mode9/key_delete.wav",     M(8));
+    reg(SND_KEY_INSERT,     "mode9/key_insert.wav",     M(8));
+    reg(SND_KEY_HOME,       "mode9/key_home.wav",       M(8));
+    reg(SND_KEY_END,        "mode9/key_end.wav",        M(8));
+    reg(SND_KEY_PAGEUP,     "mode9/key_pageup.wav",     M(8));
+    reg(SND_KEY_PAGEDOWN,   "mode9/key_pagedown.wav",   M(8));
+    reg(SND_KEY_ARROW_UP,   "mode9/key_arrow_up.wav",   M(8));
+    reg(SND_KEY_ARROW_DOWN, "mode9/key_arrow_down.wav", M(8));
+    reg(SND_KEY_ARROW_LEFT, "mode9/key_arrow_left.wav", M(8));
+    reg(SND_KEY_ARROW_RIGHT,"mode9/key_arrow_right.wav",M(8));
+    reg(SND_KEY_NUMLOCK,    "mode9/key_numlock.wav",    M(8));
+    reg(SND_KEY_SCROLLLOCK, "mode9/key_scrolllock.wav", M(8));
+    reg(SND_KEY_PAUSE,      "mode9/key_pause.wav",      M(8));
+    reg(SND_KEY_PRTSCR,     "mode9/key_prtscr.wav",     M(8));
+    reg(SND_KEY_MENU,       "mode9/key_menu.wav",       M(8));
+    for (int i = 1; i <= 12; i++) {
+        char p[32];
+        snprintf(p, sizeof(p), "mode9/key_f%d.wav", i);
+        reg((snd_id_t)(SND_KEY_F1 + i - 1), p, M(8));
+    }
+
+    // Ký tự, dấu câu & phép toán
+    reg(SND_SYM_PLUS,         "mode9/sym_plus.wav",         M(8));
+    reg(SND_SYM_MINUS,        "mode9/sym_minus.wav",        M(8));
+    reg(SND_SYM_MULTIPLY,     "mode9/sym_multiply.wav",     M(8));
+    reg(SND_SYM_DIVIDE,       "mode9/sym_divide.wav",       M(8));
+    reg(SND_SYM_EQUAL,        "mode9/sym_equal.wav",        M(8));
+    reg(SND_SYM_DOT,          "mode9/sym_dot.wav",          M(8));
+    reg(SND_SYM_COMMA,        "mode9/sym_comma.wav",        M(8));
+    reg(SND_SYM_SEMICOLON,    "mode9/sym_semicolon.wav",    M(8));
+    reg(SND_SYM_COLON,        "mode9/sym_colon.wav",        M(8));
+    reg(SND_SYM_EXCLAIM,      "mode9/sym_exclaim.wav",      M(8));
+    reg(SND_SYM_QUESTION,     "mode9/sym_question.wav",     M(8));
+    reg(SND_SYM_QUOTE_SINGLE, "mode9/sym_quote_single.wav", M(8));
+    reg(SND_SYM_QUOTE_DOUBLE, "mode9/sym_quote_double.wav", M(8));
+    reg(SND_SYM_AT,           "mode9/sym_at.wav",           M(8));
+    reg(SND_SYM_HASH,         "mode9/sym_hash.wav",         M(8));
+    reg(SND_SYM_DOLLAR,       "mode9/sym_dollar.wav",       M(8));
+    reg(SND_SYM_PERCENT,      "mode9/sym_percent.wav",      M(8));
+    reg(SND_SYM_CARET,        "mode9/sym_caret.wav",        M(8));
+    reg(SND_SYM_AMPERSAND,    "mode9/sym_ampersand.wav",    M(8));
+    reg(SND_SYM_PAREN_OPEN,   "mode9/sym_paren_open.wav",   M(8));
+    reg(SND_SYM_PAREN_CLOSE,  "mode9/sym_paren_close.wav",  M(8));
+    reg(SND_SYM_BRACKET_OPEN, "mode9/sym_bracket_open.wav", M(8));
+    reg(SND_SYM_BRACKET_CLOSE,"mode9/sym_bracket_close.wav",M(8));
+    reg(SND_SYM_BRACE_OPEN,   "mode9/sym_brace_open.wav",   M(8));
+    reg(SND_SYM_BRACE_CLOSE,  "mode9/sym_brace_close.wav",  M(8));
+    reg(SND_SYM_LESS_THAN,    "mode9/sym_less_than.wav",    M(8));
+    reg(SND_SYM_GREATER_THAN, "mode9/sym_greater_than.wav", M(8));
+    reg(SND_SYM_BACKSLASH,    "mode9/sym_backslash.wav",    M(8));
+    reg(SND_SYM_PIPE,         "mode9/sym_pipe.wav",         M(8));
+    reg(SND_SYM_TILDE,        "mode9/sym_tilde.wav",        M(8));
+    reg(SND_SYM_BACKTICK,     "mode9/sym_backtick.wav",     M(8));
+    reg(SND_SYM_UNDERSCORE,   "mode9/sym_underscore.wav",   M(8));
 }
 
 // ---------------------------------------------------------------------------
@@ -403,6 +492,87 @@ bool sb_play_number(uint8_t num, uint32_t *duration_ms) {
     if (!is_loaded(id)) return false;
     if (duration_ms) {
         *duration_ms = (uint32_t)((uint64_t)s_snd[id].asset.num_samples * 1000u / s_snd[id].asset.sample_rate);
+    }
+    return play_id(id, 1.40f, 0, false, CHOKE_SPEECH, 0, 0, 0);
+}
+
+bool sb_play_special_key(uint8_t kc) {
+    snd_id_t id;
+    switch (kc) {
+        case 0x28: case 0x58: id = SND_KEY_ENTER; break;
+        case 0x29: id = SND_KEY_ESC; break;
+        case 0x2A: id = SND_KEY_BACKSPACE; break;
+        case 0x2B: id = SND_KEY_TAB; break;
+        case 0x2C: id = SND_KEY_SPACE; break;
+        case 0x39: id = SND_KEY_CAPSLOCK; break;
+        case 0x43: id = SND_KEY_F10; break;
+        case 0x44: id = SND_KEY_F11; break;
+        case 0x45: id = SND_KEY_F12; break;
+        case 0x46: id = SND_KEY_PRTSCR; break;
+        case 0x47: id = SND_KEY_SCROLLLOCK; break;
+        case 0x48: id = SND_KEY_PAUSE; break;
+        case 0x49: id = SND_KEY_INSERT; break;
+        case 0x4A: id = SND_KEY_HOME; break;
+        case 0x4B: id = SND_KEY_PAGEUP; break;
+        case 0x4C: id = SND_KEY_DELETE; break;
+        case 0x4D: id = SND_KEY_END; break;
+        case 0x4E: id = SND_KEY_PAGEDOWN; break;
+        case 0x4F: id = SND_KEY_ARROW_RIGHT; break;
+        case 0x50: id = SND_KEY_ARROW_LEFT; break;
+        case 0x51: id = SND_KEY_ARROW_DOWN; break;
+        case 0x52: id = SND_KEY_ARROW_UP; break;
+        case 0x53: id = SND_KEY_NUMLOCK; break;
+        case 0x65: case 0x76: id = SND_KEY_MENU; break;
+        case 0xE0: case 0xE4: id = SND_KEY_CTRL; break;
+        case 0xE1: case 0xE5: id = SND_KEY_SHIFT; break;
+        case 0xE2: case 0xE6: id = SND_KEY_ALT; break;
+        case 0xE3: case 0xE7: id = SND_KEY_WIN; break;
+        default:
+            if (kc >= 0x3A && kc <= 0x42) {
+                id = (snd_id_t)(SND_KEY_F1 + (kc - 0x3A));
+                break;
+            }
+            return false;
+    }
+    return play_id(id, 1.40f, 0, false, CHOKE_SPEECH, 0, 0, 0);
+}
+
+bool sb_play_symbol(char c) {
+    snd_id_t id;
+    switch (c) {
+        case '+': id = SND_SYM_PLUS; break;
+        case '-': id = SND_SYM_MINUS; break;
+        case '*': id = SND_SYM_MULTIPLY; break;
+        case '/': id = SND_SYM_DIVIDE; break;
+        case '=': id = SND_SYM_EQUAL; break;
+        case '.': id = SND_SYM_DOT; break;
+        case ',': id = SND_SYM_COMMA; break;
+        case ';': id = SND_SYM_SEMICOLON; break;
+        case ':': id = SND_SYM_COLON; break;
+        case '!': id = SND_SYM_EXCLAIM; break;
+        case '?': id = SND_SYM_QUESTION; break;
+        case '\'': id = SND_SYM_QUOTE_SINGLE; break;
+        case '"': id = SND_SYM_QUOTE_DOUBLE; break;
+        case '@': id = SND_SYM_AT; break;
+        case '#': id = SND_SYM_HASH; break;
+        case '$': id = SND_SYM_DOLLAR; break;
+        case '%': id = SND_SYM_PERCENT; break;
+        case '^': id = SND_SYM_CARET; break;
+        case '&': id = SND_SYM_AMPERSAND; break;
+        case '(': id = SND_SYM_PAREN_OPEN; break;
+        case ')': id = SND_SYM_PAREN_CLOSE; break;
+        case '[': id = SND_SYM_BRACKET_OPEN; break;
+        case ']': id = SND_SYM_BRACKET_CLOSE; break;
+        case '{': id = SND_SYM_BRACE_OPEN; break;
+        case '}': id = SND_SYM_BRACE_CLOSE; break;
+        case '<': id = SND_SYM_LESS_THAN; break;
+        case '>': id = SND_SYM_GREATER_THAN; break;
+        case '\\': id = SND_SYM_BACKSLASH; break;
+        case '|': id = SND_SYM_PIPE; break;
+        case '~': id = SND_SYM_TILDE; break;
+        case '`': id = SND_SYM_BACKTICK; break;
+        case '_': id = SND_SYM_UNDERSCORE; break;
+        default: return false;
     }
     return play_id(id, 1.40f, 0, false, CHOKE_SPEECH, 0, 0, 0);
 }

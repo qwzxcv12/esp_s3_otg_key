@@ -103,8 +103,10 @@ bool audio_cockpit_is_siren_on(void);
 void audio_cockpit_rocket_launch(void);
 void audio_play_animal_sound(char key);
 
-// Mode 9: Phonics & Counting Learning
+// Mode 9: Phonics, Counting & Full-Keyboard Voice
 void audio_play_phonics_letter(char c);
 void audio_play_counting_number(uint8_t num);
+void audio_play_special_key(uint8_t kc);
+void audio_play_symbol(char c);
 
 #endif // AUDIO_SYNTH_H
