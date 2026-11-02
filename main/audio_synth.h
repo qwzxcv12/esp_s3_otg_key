@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include "esp_err.h"
+#include "soundbank.h"
 
 // Hardware pinout for MAX98357A on ESP32-S3
 #define PIN_I2S_LCK    11  // Word Select / LRCK / WS (LRC)
@@ -50,6 +51,18 @@ typedef enum {
 
 // Init & Controls
 esp_err_t audio_synth_init(void);
+
+// ---- Sample playback primitives (used by soundbank.c) ----
+// Plays a PSRAM PCM asset: semitone shift via linear-interpolated resampling, optional loop,
+// choke group (new sound fades the previous one of the same group), owner key (for release) and
+// non-blocking start delay. max_ms > 0 auto-fades the voice after that time. Returns voice index or -1.
+int  audio_sample_play(const pcm_asset_t *asset, float gain, float semitone, bool loop,
+                       uint8_t choke, uint8_t owner, uint32_t delay_ms, uint32_t max_ms);
+void audio_sample_release_owner(uint8_t owner, uint32_t release_ms);
+void audio_sample_invalidate(const int16_t *pcm);   // stop every voice that reads this buffer
+void audio_play_piano_note_key(float freq_hz, piano_timbre_t timbre, uint8_t owner_key);
+void audio_piano_key_release(uint8_t owner_key);    // key up -> natural 220 ms release
+void audio_play_praise(void);
 void audio_synth_set_volume(float vol);
 float audio_synth_get_volume(void);
 void audio_synth_volume_up(void);

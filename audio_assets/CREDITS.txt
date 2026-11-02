@@ -1,0 +1,25 @@
+ESP32-S3 Soundbank Audio Asset Credits & Licenses
+=====================================================
+
+1. AKAI Splendid Grand Piano
+   - Source: https://github.com/sfzinstruments/SplendidGrandPiano
+   - License: Public Domain
+   - Author: AKAI Company (released as Public Domain in early 2000s).
+
+2. VCSL (Versilian Community Sample Library)
+   - Source: https://github.com/sgossner/VCSL
+   - License: Creative Commons Zero (CC0 1.0 Universal - Public Domain Dedication)
+   - Includes: Bass Drum, Snare, Hi-Hat, Cymbal, Tenor Tom, Hand Claps, Glockenspiel bells, Triangles, Woodblocks, Toy Train Whistle.
+
+3. Vietnamese Phonics & Number Speech (Piper TTS)
+   - Voice: vi_VN-vais1000-medium
+   - Source: https://huggingface.co/rhasspy/piper-voices
+   - Model License: Creative Commons Attribution 4.0 International (CC BY 4.0)
+   - Attribution: Trained on the VAIS-1000 Vietnamese speech corpus.
+
+4. Physically Modeled SFX & Animal Vocalizations
+   - Source: Algorithmic acoustic physical modeling via Python NumPy/SciPy
+   - License: Creative Commons Zero (CC0 1.0 Universal - Public Domain Dedication)
+   - Includes: Boing, Laser, Car horn, Brass fanfare, Water drop, Ambulance siren, Tire skid, V8 Engine, Rocket launch, 16 Animal voices.
+
+All files are pre-processed and normalized to 16-bit Mono PCM WAV at 24000 Hz.

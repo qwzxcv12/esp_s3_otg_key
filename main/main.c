@@ -28,6 +28,7 @@
 #include "audio_synth.h"
 #include "led_effects.h"
 #include "rotary_encoder.h"
+#include "soundbank.h"
 
 static const char *TAG = "usb_toy";
 
@@ -200,7 +201,10 @@ static void switch_toy_mode(toy_mode_t new_mode) {
     printf("========================================================\r\n");
     fflush(stdout);
 
-    audio_play_chime_mode(s_current_mode);
+    soundbank_set_mode(s_current_mode);
+    if (!sb_play_chime(s_current_mode)) {
+        audio_play_chime_mode(s_current_mode);
+    }
     led_effects_mode_switch(s_current_mode);
 }
 
@@ -359,7 +363,7 @@ static void handle_toy_mode_key(uint8_t kc, uint8_t mod, char c) {
                 led_idx = kc % 25;
             }
 
-            audio_play_piano_note(freq, s_piano_timbre);
+            audio_play_piano_note_key(freq, s_piano_timbre, kc);
             uint8_t r = (led_idx * 23) % 255;
             uint8_t g = (255 - led_idx * 15) % 255;
             uint8_t b = (led_idx * 37) % 255;
@@ -675,6 +679,10 @@ static void print_key_combo(uint8_t mod, uint8_t kc);
 
 static void key_event_callback(key_event_t *key_event)
 {
+    if (key_event->state == KEY_STATE_RELEASED) {
+        audio_piano_key_release(key_event->key_code);
+        return;
+    }
     if (KEY_STATE_PRESSED != key_event->state) {
         return;
     }
@@ -1071,6 +1079,9 @@ void app_main(void)
 
     // 2. Initialize Audio Synthesizer Engine (Core 1)
     ESP_ERROR_CHECK(audio_synth_init());
+
+    // 2.1 Initialize Soundbank (LittleFS + PSRAM Dynamic Sampler)
+    soundbank_init();
 
     // 3. Initialize WS2812B RGB LED Strip (GPIO 4 via RMT)
     ESP_ERROR_CHECK(led_effects_init());
