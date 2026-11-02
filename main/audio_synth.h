@@ -12,7 +12,7 @@
 #define PIN_I2S_BCK    10  // Bit Clock / BCLK
 
 #define AUDIO_SAMPLE_RATE 44100
-#define AUDIO_DEFAULT_VOLUME 0.55f
+#define AUDIO_DEFAULT_VOLUME 0.90f
 
 typedef enum {
     TIMBRE_PIANO = 0,
@@ -68,6 +68,7 @@ float audio_synth_get_volume(void);
 void audio_synth_volume_up(void);
 void audio_synth_volume_down(void);
 void audio_play_volume_tick(float volume, bool is_up);
+void audio_synth_stop_all_background(void);
 
 // Mode 1: Piano & Pentatonic
 void audio_play_piano_note(float freq_hz, piano_timbre_t timbre);

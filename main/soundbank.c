@@ -296,9 +296,9 @@ bool sb_play_piano(float freq_hz, uint8_t timbre, uint8_t owner_key) {
     int count;
     float max_shift, gain;
     if (timbre == TIMBRE_PIANO) {
-        first = SND_PIANO_C2; roots = piano_midi; count = 9; max_shift = 15.0f; gain = 0.95f;
+        first = SND_PIANO_C2; roots = piano_midi; count = 9; max_shift = 15.0f; gain = 1.15f;
     } else if (timbre == TIMBRE_MUSIC_BOX) {
-        first = SND_BELL_C4; roots = bell_midi; count = 3; max_shift = 14.0f; gain = 0.9f;
+        first = SND_BELL_C4; roots = bell_midi; count = 3; max_shift = 14.0f; gain = 1.15f;
     } else {
         return false;   // 8-bit chiptune timbre stays synthesised on purpose
     }
@@ -328,43 +328,43 @@ bool sb_play_tick(float volume) {
 
 bool sb_play_drum(int drum_type) {
     switch (drum_type) {
-        case DRUM_KICK:   return play_id(SND_KICK,   1.0f,  0, false, CHOKE_NONE,  0, 0, 0);
-        case DRUM_SNARE:  return play_id(SND_SNARE,  0.95f, 0, false, CHOKE_NONE,  0, 0, 0);
-        case DRUM_HIHAT:  return play_id(SND_HIHAT,  0.8f,  0, false, CHOKE_HIHAT, 0, 0, 0);
-        case DRUM_CYMBAL: return play_id(SND_CYMBAL, 0.8f,  0, false, CHOKE_HIHAT, 0, 0, 0);
-        case DRUM_TOM:    return play_id(SND_TOM,    0.95f, 0, false, CHOKE_NONE,  0, 0, 0);
-        case DRUM_CLAP:   return play_id(SND_CLAP,   0.95f, 0, false, CHOKE_NONE,  0, 0, 0);
+        case DRUM_KICK:   return play_id(SND_KICK,   1.25f, 0, false, CHOKE_NONE,  0, 0, 0);
+        case DRUM_SNARE:  return play_id(SND_SNARE,  1.20f, 0, false, CHOKE_NONE,  0, 0, 0);
+        case DRUM_HIHAT:  return play_id(SND_HIHAT,  1.10f, 0, false, CHOKE_HIHAT, 0, 0, 0);
+        case DRUM_CYMBAL: return play_id(SND_CYMBAL, 1.10f, 0, false, CHOKE_HIHAT, 0, 0, 0);
+        case DRUM_TOM:    return play_id(SND_TOM,    1.25f, 0, false, CHOKE_NONE,  0, 0, 0);
+        case DRUM_CLAP:   return play_id(SND_CLAP,   1.20f, 0, false, CHOKE_NONE,  0, 0, 0);
     }
     return false;
 }
 
 bool sb_play_typewriter(int type) {
     switch (type) {
-        case TYPEWRITER_KEY_CLICK:  return play_id(SND_TW_CLICK, 0.9f, 0, false, CHOKE_NONE, 0, 0, 0);
-        case TYPEWRITER_SPACE_SLIDE:return play_id(SND_TW_SPACE, 0.9f, 0, false, CHOKE_NONE, 0, 0, 0);
-        case TYPEWRITER_ENTER_BELL: return play_id(SND_TW_BELL,  0.95f, 0, false, CHOKE_NONE, 0, 0, 0);
-        case TYPEWRITER_BACKSPACE:  return play_id(SND_TW_BACK,  0.9f, 0, false, CHOKE_NONE, 0, 0, 0);
+        case TYPEWRITER_KEY_CLICK:  return play_id(SND_TW_CLICK, 1.25f, 0, false, CHOKE_NONE, 0, 0, 0);
+        case TYPEWRITER_SPACE_SLIDE:return play_id(SND_TW_SPACE, 1.20f, 0, false, CHOKE_NONE, 0, 0, 0);
+        case TYPEWRITER_ENTER_BELL: return play_id(SND_TW_BELL,  1.25f, 0, false, CHOKE_NONE, 0, 0, 0);
+        case TYPEWRITER_BACKSPACE:  return play_id(SND_TW_BACK,  1.20f, 0, false, CHOKE_NONE, 0, 0, 0);
     }
     return false;
 }
 
 bool sb_play_cartoon(int sfx) {
     switch (sfx) {
-        case SFX_MARIO_COIN:       return play_id(SND_COIN,        0.9f, 0, false, CHOKE_NONE, 0, 0, 0);
-        case SFX_SPRING_BOING:     return play_id(SND_CT_BOING,    0.95f, 0, false, CHOKE_NONE, 0, 0, 0);
-        case SFX_LASER:            return play_id(SND_CT_LASER,    0.9f, 0, false, CHOKE_NONE, 0, 0, 0);
-        case SFX_CAR_HORN:         return play_id(SND_CT_HORN,     0.9f, 0, false, CHOKE_NONE, 0, 0, 0);
-        case SFX_VICTORY_FANFARE:  return play_id(SND_CT_FANFARE,  0.95f, 0, false, CHOKE_NONE, 0, 0, 0);
-        case SFX_WHISTLE_SLIDE:    return play_id(SND_CT_WHISTLE,  0.9f, 0, false, CHOKE_NONE, 0, 0, 0);
-        case SFX_WATER_DROP:       return play_id(SND_CT_DROP,     0.95f, 0, false, CHOKE_NONE, 0, 0, 0);
-        case SFX_DOORBELL:         return play_id(SND_CT_DOORBELL, 0.95f, 0, false, CHOKE_NONE, 0, 0, 0);
-        case SFX_SKID_STOP:        return play_id(SND_CT_SKID,     0.9f, 0, false, CHOKE_NONE, 0, 0, 0);
+        case SFX_MARIO_COIN:       return play_id(SND_COIN,        1.20f, 0, false, CHOKE_NONE, 0, 0, 0);
+        case SFX_SPRING_BOING:     return play_id(SND_CT_BOING,    1.20f, 0, false, CHOKE_NONE, 0, 0, 0);
+        case SFX_LASER:            return play_id(SND_CT_LASER,    1.20f, 0, false, CHOKE_NONE, 0, 0, 0);
+        case SFX_CAR_HORN:         return play_id(SND_CT_HORN,     1.20f, 0, false, CHOKE_NONE, 0, 0, 0);
+        case SFX_VICTORY_FANFARE:  return play_id(SND_CT_FANFARE,  1.25f, 0, false, CHOKE_NONE, 0, 0, 0);
+        case SFX_WHISTLE_SLIDE:    return play_id(SND_CT_WHISTLE,  1.20f, 0, false, CHOKE_NONE, 0, 0, 0);
+        case SFX_WATER_DROP:       return play_id(SND_CT_DROP,     1.25f, 0, false, CHOKE_NONE, 0, 0, 0);
+        case SFX_DOORBELL:         return play_id(SND_CT_DOORBELL, 1.25f, 0, false, CHOKE_NONE, 0, 0, 0);
+        case SFX_SKID_STOP:        return play_id(SND_CT_SKID,     1.20f, 0, false, CHOKE_NONE, 0, 0, 0);
     }
     return false;   // SFX_FIRE_SIREN is a toggle: see sb_siren_loop()
 }
 
-bool sb_play_engine(void) { return play_id(SND_ENGINE, 1.0f, 0, false, CHOKE_NONE, 0, 0, 0); }
-bool sb_play_rocket(void) { return play_id(SND_ROCKET, 1.0f, 0, false, CHOKE_NONE, 0, 0, 0); }
+bool sb_play_engine(void) { return play_id(SND_ENGINE, 1.25f, 0, false, CHOKE_NONE, 0, 0, 0); }
+bool sb_play_rocket(void) { return play_id(SND_ROCKET, 1.25f, 0, false, CHOKE_NONE, 0, 0, 0); }
 
 bool sb_play_animal(char key) {
     if (key >= 'a' && key <= 'z') key -= 32;
@@ -388,13 +388,13 @@ bool sb_play_animal(char key) {
         case 'S': id = SND_ANIMAL_SHEEP; break;
         default: return false;
     }
-    return play_id(id, 1.0f, 0, false, CHOKE_ANIMAL, 0, 0, 0);
+    return play_id(id, 1.25f, 0, false, CHOKE_ANIMAL, 0, 0, 0);
 }
 
 bool sb_play_letter(char c) {
     if (c >= 'a' && c <= 'z') c -= 32;
     if (c < 'A' || c > 'Z') return false;
-    return play_id((snd_id_t)(SND_LETTER_A + (c - 'A')), 1.0f, 0, false, CHOKE_SPEECH, 0, 0, 0);
+    return play_id((snd_id_t)(SND_LETTER_A + (c - 'A')), 1.40f, 0, false, CHOKE_SPEECH, 0, 0, 0);
 }
 
 bool sb_play_number(uint8_t num, uint32_t *duration_ms) {
@@ -405,15 +405,15 @@ bool sb_play_number(uint8_t num, uint32_t *duration_ms) {
     if (duration_ms) {
         *duration_ms = (uint32_t)((uint64_t)s_snd[id].asset.num_samples * 1000u / s_snd[id].asset.sample_rate);
     }
-    return play_id(id, 1.0f, 0, false, CHOKE_SPEECH, 0, 0, 0);
+    return play_id(id, 1.40f, 0, false, CHOKE_SPEECH, 0, 0, 0);
 }
 
 bool sb_play_praise(void) {
-    return play_id(SND_PRAISE, 1.0f, 0, false, CHOKE_SPEECH, 0, 0, 0);
+    return play_id(SND_PRAISE, 1.40f, 0, false, CHOKE_SPEECH, 0, 0, 0);
 }
 
 bool sb_play_beat(uint32_t delay_ms) {
-    return play_id(SND_TOM, 0.85f, 0, false, CHOKE_NONE, 0, delay_ms, 0);
+    return play_id(SND_TOM, 1.15f, 0, false, CHOKE_NONE, 0, delay_ms, 0);
 }
 
 bool sb_has_siren(void) { return s_mounted && is_loaded(SND_CT_SIREN); }

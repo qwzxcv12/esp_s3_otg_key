@@ -201,6 +201,7 @@ static void switch_toy_mode(toy_mode_t new_mode) {
     printf("========================================================\r\n");
     fflush(stdout);
 
+    audio_synth_stop_all_background();
     soundbank_set_mode(s_current_mode);
     if (!sb_play_chime(s_current_mode)) {
         audio_play_chime_mode(s_current_mode);
@@ -659,9 +660,7 @@ static void handle_toy_mode_key(uint8_t kc, uint8_t mod, char c) {
                 led_effects_beat();
                 printf(" -> [BÉ CHỈ ĐƯỜNG: BƯỚC ĐI TỪNG BƯỚC! TONG TONG!]\r\n");
             } else {
-                audio_play_piano_note(523.25f, TIMBRE_MUSIC_BOX);
-                led_effects_beat();
-                printf(" -> [BÉ BẤM NÚT KỲ DIỆU: KENG KENG!]\r\n");
+                // Ignore other modifier / symbol keys in Phonics mode to keep speech crystal clear
             }
             fflush(stdout);
             break;

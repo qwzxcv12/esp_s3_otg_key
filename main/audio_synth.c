@@ -20,7 +20,7 @@ static const char *TAG = "AUDIO_SYNTH";
 #endif
 
 #define MAX_POLY_VOICES 24
-#define MIX_PRE_GAIN 0.5f   // Headroom: tong cac voice nhan he so nay truoc khi qua soft-limiter
+#define MIX_PRE_GAIN 0.85f   // Headroom: tong cac voice nhan he so nay truoc khi qua soft-limiter
 #define CHUNK_SAMPLES 256
 
 // Pre-computed Sine Wavetable for Ultra-Fast DSP (512 points)
@@ -495,7 +495,8 @@ static void audio_synth_task(void *pvParameters) {
         }
 
         // Handle cockpit siren (smooth fade in/out, phase wrapped to keep float precision)
-        if (s_siren_on || s_siren_gain > 0.001f) {
+        // Only run algorithmic siren if the sample siren is NOT available on LittleFS
+        if (!sb_has_siren() && (s_siren_on || s_siren_gain > 0.001f)) {
             s_siren_step += CHUNK_SAMPLES;
             float siren_t = (float)s_siren_step / (float)AUDIO_SAMPLE_RATE;
             float siren_f = ((fmodf(siren_t, 0.7f) < 0.35f) ? 440.0f : 554.0f);
@@ -611,6 +612,12 @@ void audio_play_volume_tick(float volume, bool is_up) {
     if (sb_play_tick(volume)) return;
     float base_freq = 380.0f + (volume * 820.0f); // 380Hz - 1200Hz
     trigger_voice_internal(VOICE_TONE_ADSR, base_freq, 0, 0, 0.70f, 50, TIMBRE_MUSIC_BOX);
+}
+
+void audio_synth_stop_all_background(void) {
+    s_siren_on = false;
+    s_siren_gain = 0.0f;
+    sb_siren_loop(false);
 }
 
 // Mode 1: Piano Note
