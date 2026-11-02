@@ -11,11 +11,10 @@ ESP32-S3 Soundbank Audio Asset Credits & Licenses
    - License: Creative Commons Zero (CC0 1.0 Universal - Public Domain Dedication)
    - Includes: Bass Drum, Snare, Hi-Hat, Cymbal, Tenor Tom, Hand Claps, Glockenspiel bells, Triangles, Woodblocks, Toy Train Whistle.
 
-3. Vietnamese Phonics & Number Speech (Piper TTS)
-   - Voice: vi_VN-vais1000-medium
-   - Source: https://huggingface.co/rhasspy/piper-voices
-   - Model License: Creative Commons Attribution 4.0 International (CC BY 4.0)
-   - Attribution: Trained on the VAIS-1000 Vietnamese speech corpus.
+3. Vietnamese Phonics & Number Speech (Microsoft Edge Neural TTS)
+   - Voice: vi-VN-HoaiMyNeural
+   - Engine: Microsoft Edge Neural Text-to-Speech
+   - Features: High-fidelity natural human speech, clear pedagogical pronunciation ("Chữ A", "Chữ B", "Số 1"...), 24kHz 16-bit Mono PCM.
 
 4. Physically Modeled SFX & Animal Vocalizations
    - Source: Algorithmic acoustic physical modeling via Python NumPy/SciPy
