@@ -6,9 +6,9 @@
 #include "esp_err.h"
 
 // Hardware pinout for MAX98357A on ESP32-S3
-#define PIN_I2S_LCK    1   // Word Select / LRCK / WS
-#define PIN_I2S_DIN    2   // Serial Data / DOUT / DIN
-#define PIN_I2S_BCK    3   // Bit Clock / BCLK
+#define PIN_I2S_LCK    11  // Word Select / LRCK / WS (LRC)
+#define PIN_I2S_DIN    9   // Serial Data / DOUT / DIN
+#define PIN_I2S_BCK    10  // Bit Clock / BCLK
 
 #define AUDIO_SAMPLE_RATE 44100
 #define AUDIO_DEFAULT_VOLUME 0.40f
