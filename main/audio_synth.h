@@ -54,6 +54,7 @@ void audio_synth_set_volume(float vol);
 float audio_synth_get_volume(void);
 void audio_synth_volume_up(void);
 void audio_synth_volume_down(void);
+void audio_play_volume_tick(float volume, bool is_up);
 
 // Mode 1: Piano & Pentatonic
 void audio_play_piano_note(float freq_hz, piano_timbre_t timbre);

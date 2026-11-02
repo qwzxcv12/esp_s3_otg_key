@@ -231,12 +231,16 @@ static void handle_toy_mode_key(uint8_t kc, uint8_t mod, char c) {
         audio_synth_volume_down();
         printf(" -> [GIẢM ÂM LƯỢNG: %d%%]\r\n", (int)(audio_synth_get_volume() * 100));
         fflush(stdout);
+        audio_play_volume_tick(audio_synth_get_volume(), false);
+        led_effects_volume(audio_synth_get_volume());
         return;
     }
     if (kc == 0x45) { // F12: Vol up
         audio_synth_volume_up();
         printf(" -> [TĂNG ÂM LƯỢNG: %d%%]\r\n", (int)(audio_synth_get_volume() * 100));
         fflush(stdout);
+        audio_play_volume_tick(audio_synth_get_volume(), true);
+        led_effects_volume(audio_synth_get_volume());
         return;
     }
 
@@ -1117,9 +1121,11 @@ void app_main(void)
                 if (evt_queue.encoder_delta > 0) {
                     audio_synth_volume_up();
                     printf("\r\n>>> [NÚM XOAY HW-040: TĂNG ÂM LƯỢNG: %d%%]\r\n", (int)(audio_synth_get_volume() * 100));
+                    audio_play_volume_tick(audio_synth_get_volume(), true);
                 } else if (evt_queue.encoder_delta < 0) {
                     audio_synth_volume_down();
                     printf("\r\n>>> [NÚM XOAY HW-040: GIẢM ÂM LƯỢNG: %d%%]\r\n", (int)(audio_synth_get_volume() * 100));
+                    audio_play_volume_tick(audio_synth_get_volume(), false);
                 }
                 fflush(stdout);
                 led_effects_volume(audio_synth_get_volume());

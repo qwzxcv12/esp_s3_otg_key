@@ -396,6 +396,13 @@ void audio_synth_volume_down(void) {
     audio_synth_set_volume(s_master_volume - 0.05f);
 }
 
+// Audio feedback tick when volume changes (frequency scales with volume)
+void audio_play_volume_tick(float volume, bool is_up) {
+    if (volume <= 0.01f) return;
+    float base_freq = 380.0f + (volume * 820.0f); // 380Hz - 1200Hz
+    trigger_voice_internal(VOICE_TONE_ADSR, base_freq, 0, 0, 0.70f, 50, TIMBRE_MUSIC_BOX);
+}
+
 // Mode 1: Piano Note
 void audio_play_piano_note(float freq_hz, piano_timbre_t timbre) {
     trigger_voice_internal(VOICE_TONE_ADSR, freq_hz, 0, 0, 0.85f, 750, timbre);
