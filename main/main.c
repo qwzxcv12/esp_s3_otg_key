@@ -27,6 +27,7 @@
 
 #include "audio_synth.h"
 #include "led_effects.h"
+#include "rotary_encoder.h"
 
 static const char *TAG = "usb_toy";
 
@@ -34,16 +35,21 @@ QueueHandle_t app_event_queue = NULL;
 
 typedef enum {
     APP_EVENT_HID_HOST = 0,
-    APP_EVENT_UPDATE_LEDS
+    APP_EVENT_UPDATE_LEDS,
+    APP_EVENT_ENCODER_ROTATE,
+    APP_EVENT_ENCODER_CLICK
 } app_event_group_t;
 
 typedef struct {
     app_event_group_t event_group;
-    struct {
-        hid_host_device_handle_t handle;
-        hid_host_driver_event_t event;
-        void *arg;
-    } hid_host_device;
+    union {
+        struct {
+            hid_host_device_handle_t handle;
+            hid_host_driver_event_t event;
+            void *arg;
+        } hid_host_device;
+        int encoder_delta;
+    };
 } app_event_queue_t;
 
 static const char *hid_proto_name_str[] = {
@@ -1020,6 +1026,25 @@ static void toy_background_task(void *pvParameters) {
     }
 }
 
+static void on_encoder_rotated(int delta) {
+    if (app_event_queue) {
+        app_event_queue_t evt = {
+            .event_group = APP_EVENT_ENCODER_ROTATE,
+            .encoder_delta = delta
+        };
+        xQueueSend(app_event_queue, &evt, 0);
+    }
+}
+
+static void on_encoder_clicked(void) {
+    if (app_event_queue) {
+        app_event_queue_t evt = {
+            .event_group = APP_EVENT_ENCODER_CLICK
+        };
+        xQueueSend(app_event_queue, &evt, 0);
+    }
+}
+
 void app_main(void)
 {
     setvbuf(stdout, NULL, _IONBF, 0);
@@ -1027,6 +1052,9 @@ void app_main(void)
     ESP_LOGI(TAG, "==========================================================");
     ESP_LOGI(TAG, "   ESP32-S3 N16R8: SMART SENSORY KEYBOARD TOY STARTING    ");
     ESP_LOGI(TAG, "==========================================================");
+
+    // Create system event queue first
+    app_event_queue = xQueueCreate(32, sizeof(app_event_queue_t));
 
     // 1. Report PSRAM (8MB Octal) and Flash (16MB)
     size_t psram_size = esp_psram_get_size();
@@ -1043,15 +1071,16 @@ void app_main(void)
     // 3. Initialize WS2812B RGB LED Strip (GPIO 4 via RMT)
     ESP_ERROR_CHECK(led_effects_init());
 
-    // 4. Start toy background monitor task
+    // 4. Initialize HW-040 Rotary Encoder (CLK=14, DT=13, SW=12)
+    ESP_ERROR_CHECK(rotary_encoder_init(on_encoder_rotated, on_encoder_clicked));
+
+    // 5. Start toy background monitor task
     xTaskCreate(toy_background_task, "toy_bg", 3072, NULL, 4, NULL);
 
-    // 5. Announce Mode 1
+    // 6. Announce Mode 1
     switch_toy_mode(MODE_1_PIANO);
 
-    // 6. Start USB Host Library & HID Driver (Core 0)
-    app_event_queue = xQueueCreate(32, sizeof(app_event_queue_t));
-
+    // 7. Start USB Host Library & HID Driver (Core 0)
     BaseType_t task_created = xTaskCreatePinnedToCore(usb_lib_task,
                                                       "usb_events",
                                                       4096,
@@ -1084,6 +1113,20 @@ void app_main(void)
                                       evt_queue.hid_host_device.arg);
             } else if (APP_EVENT_UPDATE_LEDS == evt_queue.event_group) {
                 update_keyboard_leds();
+            } else if (APP_EVENT_ENCODER_ROTATE == evt_queue.event_group) {
+                if (evt_queue.encoder_delta > 0) {
+                    audio_synth_volume_up();
+                    printf("\r\n>>> [NÚM XOAY HW-040: TĂNG ÂM LƯỢNG: %d%%]\r\n", (int)(audio_synth_get_volume() * 100));
+                } else if (evt_queue.encoder_delta < 0) {
+                    audio_synth_volume_down();
+                    printf("\r\n>>> [NÚM XOAY HW-040: GIẢM ÂM LƯỢNG: %d%%]\r\n", (int)(audio_synth_get_volume() * 100));
+                }
+                fflush(stdout);
+                led_effects_volume(audio_synth_get_volume());
+            } else if (APP_EVENT_ENCODER_CLICK == evt_queue.event_group) {
+                printf("\r\n>>> [NÚM XOAY HW-040: NHẤN SW -> CHUYỂN CHẾ ĐỘ TIẾP THEO]\r\n");
+                fflush(stdout);
+                switch_toy_mode((toy_mode_t)((s_current_mode + 1) % MODE_MAX_COUNT));
             }
         }
     }

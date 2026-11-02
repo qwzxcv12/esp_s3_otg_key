@@ -220,3 +220,28 @@ void led_effects_count(uint8_t count, uint8_t r, uint8_t g, uint8_t b) {
     xSemaphoreGive(s_led_mutex);
 }
 
+// Volume bar indicator on LED strip
+void led_effects_volume(float volume) {
+    if (!s_led_strip || !s_led_mutex) return;
+    xSemaphoreTake(s_led_mutex, portMAX_DELAY);
+
+    led_strip_clear(s_led_strip);
+    int active_leds = (int)(volume * LED_STRIP_COUNT + 0.5f);
+    if (active_leds > LED_STRIP_COUNT) active_leds = LED_STRIP_COUNT;
+
+    for (int i = 0; i < active_leds; i++) {
+        float ratio = (float)i / (float)LED_STRIP_COUNT;
+        uint8_t r = 0, g = 0, b = 0;
+        if (ratio < 0.60f) {
+            r = 0; g = 180; b = 80;   // Green
+        } else if (ratio < 0.85f) {
+            r = 200; g = 180; b = 0;  // Yellow
+        } else {
+            r = 240; g = 30; b = 30;  // Red
+        }
+        led_strip_set_pixel(s_led_strip, i, r, g, b);
+    }
+    led_strip_refresh(s_led_strip);
+    xSemaphoreGive(s_led_mutex);
+}
+

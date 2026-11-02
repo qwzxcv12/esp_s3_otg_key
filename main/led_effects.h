@@ -21,5 +21,6 @@ void led_effects_matrix(void);
 void led_effects_police(bool toggle);
 void led_effects_idle_step(void);
 void led_effects_count(uint8_t count, uint8_t r, uint8_t g, uint8_t b);
+void led_effects_volume(float volume);
 
 #endif // LED_EFFECTS_H
