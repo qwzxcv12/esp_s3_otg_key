@@ -39,7 +39,7 @@ typedef enum {
 } snd_id_t;
 
 typedef struct {
-    char path[48];
+    char path[96];
     uint16_t modes;        // bitmask of modes that need this file (or ALWAYS)
     pcm_asset_t asset;
 } snd_entry_t;

@@ -1,3 +1,5 @@
 idf_component_register(SRCS "main.c" "audio_synth.c" "soundbank.c" "led_effects.c" "rotary_encoder.c"
                     INCLUDE_DIRS "."
                     REQUIRES usb_host_hid esp_driver_gpio esp_driver_i2s esp_driver_rmt led_strip esp_psram esp_timer littlefs)
+
+target_compile_options(${COMPONENT_LIB} PRIVATE -Wno-format-truncation)
