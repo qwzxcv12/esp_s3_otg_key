@@ -19,7 +19,8 @@ static const char *TAG = "AUDIO_SYNTH";
 #define M_PI 3.14159265358979323846f
 #endif
 
-#define MAX_POLY_VOICES 8
+#define MAX_POLY_VOICES 16
+#define MIX_PRE_GAIN 0.5f   // Headroom: tong cac voice nhan he so nay truoc khi qua soft-limiter
 #define CHUNK_SAMPLES 256
 
 // Pre-computed Sine Wavetable for Ultra-Fast DSP (512 points)
@@ -33,9 +34,21 @@ static void init_sine_table(void) {
     }
 }
 
+// Wavetable sine with linear interpolation (removes quantization noise / harshness)
 static inline float fast_sin(float phase) {
-    uint32_t idx = ((uint32_t)phase) & SINE_TABLE_MASK;
-    return s_sine_table[idx];
+    uint32_t i = (uint32_t)phase;
+    float frac = phase - (float)i;
+    float a = s_sine_table[i & SINE_TABLE_MASK];
+    float b = s_sine_table[(i + 1) & SINE_TABLE_MASK];
+    return a + (b - a) * frac;
+}
+
+// Soft limiter (Pade tanh approximation): no hard-clip buzz when several voices overlap
+static inline float soft_limit(float x) {
+    if (x > 3.0f) return 1.0f;
+    if (x < -3.0f) return -1.0f;
+    float x2 = x * x;
+    return x * (27.0f + x2) / (27.0f + 9.0f * x2);
 }
 
 typedef enum {
@@ -59,6 +72,8 @@ typedef struct {
     float amp;
     uint32_t pos;
     uint32_t length;
+    uint32_t delay;      // samples to wait before the voice starts (non-blocking sequencing)
+    float lp;            // filter state (noise high-pass)
     uint8_t sub_type;
 } voice_t;
 
@@ -71,6 +86,7 @@ static voice_t s_voices[MAX_POLY_VOICES];
 // Cockpit siren state
 static bool s_siren_on = false;
 static float s_siren_phase = 0.0f;
+static float s_siren_gain = 0.0f;
 static uint32_t s_siren_step = 0;
 
 // Speed runner timing
@@ -133,8 +149,8 @@ static const float s_speed_notes[] = {
 };
 
 // Thread-safe voice triggering
-static void trigger_voice_internal(voice_mode_t mode, float freq, float start_f, float end_f,
-                                   float amp, uint32_t dur_ms, uint8_t sub_type) {
+static void trigger_voice_at(voice_mode_t mode, float freq, float start_f, float end_f,
+                             float amp, uint32_t dur_ms, uint8_t sub_type, uint32_t delay_ms) {
     if (!s_voice_mutex) return;
     xSemaphoreTake(s_voice_mutex, portMAX_DELAY);
 
@@ -167,9 +183,16 @@ static void trigger_voice_internal(voice_mode_t mode, float freq, float start_f,
     chosen->length = (AUDIO_SAMPLE_RATE * dur_ms) / 1000;
     if (chosen->length == 0) chosen->length = 1;
     chosen->sub_type = sub_type;
+    chosen->delay = (AUDIO_SAMPLE_RATE * delay_ms) / 1000;
+    chosen->lp = 0.0f;
     chosen->active = true;
 
     xSemaphoreGive(s_voice_mutex);
+}
+
+static inline void trigger_voice_internal(voice_mode_t mode, float freq, float start_f, float end_f,
+                                          float amp, uint32_t dur_ms, uint8_t sub_type) {
+    trigger_voice_at(mode, freq, start_f, end_f, amp, dur_ms, sub_type, 0);
 }
 
 // Low-level audio synthesis task running on Core 1
@@ -194,7 +217,14 @@ static void audio_synth_task(void *pvParameters) {
             voice_t *vc = &s_voices[v];
             if (!vc->active) continue;
 
-            for (int i = 0; i < CHUNK_SAMPLES; i++) {
+            int start_i = 0;
+            if (vc->delay > 0) {
+                uint32_t skip = (vc->delay > CHUNK_SAMPLES) ? CHUNK_SAMPLES : vc->delay;
+                vc->delay -= skip;
+                start_i = (int)skip;
+            }
+
+            for (int i = start_i; i < CHUNK_SAMPLES; i++) {
                 if (vc->pos >= vc->length) {
                     vc->active = false;
                     break;
@@ -221,8 +251,9 @@ static void audio_synth_task(void *pvParameters) {
                             float s2 = fast_sin(vc->phase * 2.0f);
                             sample = (s + 0.35f * s2) * env * vc->amp;
                         } else if (vc->sub_type == TIMBRE_8BIT_MARIO) {
-                            // Square wave
-                            sample = ((s >= 0.0f) ? 0.7f : -0.7f) * env * vc->amp;
+                            // Band-limited square wave (1st+3rd+5th harmonics) - no harsh aliasing
+                            float sq = (s + fast_sin(vc->phase * 3.0f) * 0.3333f + fast_sin(vc->phase * 5.0f) * 0.2f) * 0.55f;
+                            sample = sq * env * vc->amp;
                         } else {
                             // Music box: Pure bell with decay
                             float bell_env = (1.0f - progress) * (1.0f - progress);
@@ -236,13 +267,34 @@ static void audio_synth_task(void *pvParameters) {
                         float cur_f = vc->start_freq + (vc->end_freq - vc->start_freq) * progress;
                         vc->phase += (float)(SINE_TABLE_SIZE * cur_f) / (float)AUDIO_SAMPLE_RATE;
                         float env = 1.0f - progress;
-                        sample = fast_sin(vc->phase) * env * vc->amp;
+                        float s = fast_sin(vc->phase);
+                        if (vc->sub_type >= 1) {
+                            // Rich: add harmonics so low thumps are audible on small speakers
+                            s = (s + 0.45f * fast_sin(vc->phase * 2.0f) + 0.2f * fast_sin(vc->phase * 3.0f)) * 0.7f;
+                        }
+                        if (vc->sub_type == 2 && vc->pos < 220) {
+                            // Kick beater click (5 ms noise transient)
+                            float click = ((float)(rand() % 2000) - 1000.0f) / 1000.0f;
+                            s += click * 0.5f * (1.0f - (float)vc->pos / 220.0f);
+                        }
+                        sample = s * env * vc->amp;
                         break;
                     }
 
                     case VOICE_NOISE_BURST: {
                         float env = (1.0f - progress) * (1.0f - progress);
                         float white = ((float)(rand() % 2000) - 1000.0f) / 1000.0f;
+                        if (vc->sub_type >= 1) {
+                            // High-pass (first difference): crisp hi-hat / cymbal / clap instead of dull static
+                            float hp = (white - vc->lp) * 0.5f;
+                            vc->lp = white;
+                            white = hp * 1.4f;
+                        }
+                        if (vc->sub_type == 2) {
+                            // Clap: three quick pulses
+                            float ph = fmodf(progress * 3.0f, 1.0f);
+                            env *= (ph < 0.3f) ? 1.0f : 0.3f;
+                        }
                         sample = white * env * vc->amp;
                         break;
                     }
@@ -257,16 +309,26 @@ static void audio_synth_task(void *pvParameters) {
                     }
 
                     case VOICE_R2D2: {
-                        vc->phase += (float)(SINE_TABLE_SIZE * vc->start_freq) / (float)AUDIO_SAMPLE_RATE;
-                        sample = fast_sin(vc->phase) * vc->amp;
+                        // Gliding chirp with soft attack/release (no clicks)
+                        float f = vc->start_freq + (vc->end_freq - vc->start_freq) * progress;
+                        float env = 1.0f;
+                        if (progress < 0.1f) env = progress / 0.1f;
+                        else if (progress > 0.8f) env = (1.0f - progress) / 0.2f;
+                        vc->phase += (float)(SINE_TABLE_SIZE * f) / (float)AUDIO_SAMPLE_RATE;
+                        sample = (fast_sin(vc->phase) + 0.25f * fast_sin(vc->phase * 2.0f)) * 0.8f * env * vc->amp;
                         break;
                     }
 
                     case VOICE_ENGINE_RUMBLE: {
-                        vc->phase += (float)(SINE_TABLE_SIZE * 55.0f) / (float)AUDIO_SAMPLE_RATE;
-                        float pulse = fast_sin(vc->phase);
+                        // 80 Hz firing pulse + harmonics + noise (55 Hz alone is inaudible on small speakers)
+                        float env = 1.0f;
+                        if (progress < 0.1f) env = progress / 0.1f;
+                        else if (progress > 0.7f) env = (1.0f - progress) / 0.3f;
+                        vc->phase += (float)(SINE_TABLE_SIZE * 80.0f) / (float)AUDIO_SAMPLE_RATE;
+                        float pulse = fast_sin(vc->phase) * 0.5f + fast_sin(vc->phase * 2.0f) * 0.35f
+                                    + fast_sin(vc->phase * 3.0f) * 0.25f;
                         float n = ((float)(rand() % 1000) - 500.0f) / 1000.0f;
-                        sample = (pulse * 0.7f + n * 0.3f) * vc->amp;
+                        sample = (pulse + n * 0.2f) * 0.7f * env * vc->amp;
                         break;
                     }
 
@@ -274,7 +336,15 @@ static void audio_synth_task(void *pvParameters) {
                         float f = vc->start_freq + (vc->end_freq - vc->start_freq) * progress;
                         vc->phase += (float)(SINE_TABLE_SIZE * f) / (float)AUDIO_SAMPLE_RATE;
                         float env = fast_sin(progress * (float)(SINE_TABLE_SIZE / 2));
-                        sample = fast_sin(vc->phase) * env * vc->amp;
+                        // Harmonically rich voice instead of a bare beep
+                        float s = fast_sin(vc->phase) + 0.5f * fast_sin(vc->phase * 2.0f) + 0.3f * fast_sin(vc->phase * 3.0f);
+                        s *= 0.55f;
+                        if (vc->start_freq < 320.0f) {
+                            // Low animals: growl via ~35 Hz amplitude modulation
+                            float gr = fast_sin((float)vc->pos * (float)(SINE_TABLE_SIZE * 35.0f) / (float)AUDIO_SAMPLE_RATE);
+                            s *= (0.65f + 0.35f * gr);
+                        }
+                        sample = s * env * vc->amp;
                         break;
                     }
 
@@ -287,27 +357,29 @@ static void audio_synth_task(void *pvParameters) {
             }
         }
 
-        // Handle cockpit siren if active
-        if (s_siren_on) {
+        // Handle cockpit siren (smooth fade in/out, phase wrapped to keep float precision)
+        if (s_siren_on || s_siren_gain > 0.001f) {
             s_siren_step += CHUNK_SAMPLES;
             float siren_t = (float)s_siren_step / (float)AUDIO_SAMPLE_RATE;
             float siren_f = ((fmodf(siren_t, 0.7f) < 0.35f) ? 440.0f : 554.0f);
             float inc = (float)(SINE_TABLE_SIZE * siren_f) / (float)AUDIO_SAMPLE_RATE;
+            float target = s_siren_on ? 1.0f : 0.0f;
             for (int i = 0; i < CHUNK_SAMPLES; i++) {
+                s_siren_gain += (target - s_siren_gain) * 0.004f;
                 s_siren_phase += inc;
-                float_mix[i] += fast_sin(s_siren_phase) * 0.45f;
+                if (s_siren_phase >= (float)SINE_TABLE_SIZE) s_siren_phase -= (float)SINE_TABLE_SIZE;
+                float sw = fast_sin(s_siren_phase) + 0.3f * fast_sin(s_siren_phase * 3.0f);
+                float_mix[i] += sw * 0.4f * s_siren_gain;
             }
+            if (s_siren_step > AUDIO_SAMPLE_RATE * 3600u) s_siren_step = 0;
         }
 
         xSemaphoreGive(s_voice_mutex);
 
-        // Convert float mix to 32-bit stereo PCM with soft limiter
+        // Convert float mix to 32-bit stereo PCM: pre-gain headroom + soft limiter (no hard clipping)
         const float max_int32 = 2147480000.0f * s_master_volume;
         for (int i = 0; i < CHUNK_SAMPLES; i++) {
-            float val = float_mix[i];
-            if (val > 1.0f) val = 1.0f;
-            else if (val < -1.0f) val = -1.0f;
-
+            float val = soft_limit(float_mix[i] * MIX_PRE_GAIN * 1.6f);
             int32_t pcm = (int32_t)(val * max_int32);
             mix_buffer[i * 2]     = pcm; // Left channel
             mix_buffer[i * 2 + 1] = pcm; // Right channel
@@ -455,23 +527,23 @@ void audio_speed_runner_idle_check(void) {
 void audio_play_drum(drum_type_t drum) {
     switch (drum) {
         case DRUM_KICK:
-            trigger_voice_internal(VOICE_PITCH_SWEEP, 0, 160.0f, 42.0f, 1.0f, 140, 0);
+            trigger_voice_internal(VOICE_PITCH_SWEEP, 0, 190.0f, 60.0f, 1.0f, 160, 2);
             break;
         case DRUM_SNARE:
-            trigger_voice_internal(VOICE_NOISE_BURST, 0, 0, 0, 0.95f, 160, 0);
+            trigger_voice_internal(VOICE_NOISE_BURST, 0, 0, 0, 0.95f, 160, 1);
             trigger_voice_internal(VOICE_TONE_ADSR, 190.0f, 0, 0, 0.65f, 80, TIMBRE_PIANO);
             break;
         case DRUM_HIHAT:
-            trigger_voice_internal(VOICE_NOISE_BURST, 0, 0, 0, 0.55f, 45, 0);
+            trigger_voice_internal(VOICE_NOISE_BURST, 0, 0, 0, 0.6f, 45, 1);
             break;
         case DRUM_CYMBAL:
-            trigger_voice_internal(VOICE_NOISE_BURST, 0, 0, 0, 0.85f, 450, 0);
+            trigger_voice_internal(VOICE_NOISE_BURST, 0, 0, 0, 0.7f, 450, 1);
             break;
         case DRUM_TOM:
-            trigger_voice_internal(VOICE_PITCH_SWEEP, 0, 220.0f, 90.0f, 0.9f, 180, 0);
+            trigger_voice_internal(VOICE_PITCH_SWEEP, 0, 300.0f, 140.0f, 0.9f, 200, 1);
             break;
         case DRUM_CLAP:
-            trigger_voice_internal(VOICE_NOISE_BURST, 0, 0, 0, 0.9f, 120, 0);
+            trigger_voice_internal(VOICE_NOISE_BURST, 0, 0, 0, 0.9f, 140, 2);
             break;
     }
 }
@@ -480,7 +552,7 @@ void audio_play_drum(drum_type_t drum) {
 void audio_play_typewriter(typewriter_sound_t type) {
     switch (type) {
         case TYPEWRITER_KEY_CLICK:
-            trigger_voice_internal(VOICE_NOISE_BURST, 0, 0, 0, 0.75f, 25, 0);
+            trigger_voice_internal(VOICE_NOISE_BURST, 0, 0, 0, 0.75f, 25, 1);
             break;
         case TYPEWRITER_SPACE_SLIDE:
             trigger_voice_internal(VOICE_NOISE_BURST, 0, 0, 0, 0.5f, 140, 0);
@@ -543,32 +615,42 @@ static const char *s_morse_table[26] = {
     "...",  "-",    "..-",  "...-", ".--",  "-..-", "-.--", "--.."
 };
 
+static const char *s_morse_digits_tbl[10] = {
+    "-----", ".----", "..---", "...--", "....-", ".....", "-....", "--...", "---..", "----."
+};
+
 void audio_play_morse_char(char c) {
     if (c >= 'a' && c <= 'z') c -= 32;
-    if (c < 'A' || c > 'Z') return;
+    const char *morse = NULL;
+    if (c >= 'A' && c <= 'Z') morse = s_morse_table[c - 'A'];
+    else if (c >= '0' && c <= '9') morse = s_morse_digits_tbl[c - '0'];
+    else return;
 
-    const char *morse = s_morse_table[c - 'A'];
+    // Non-blocking: every dit/dah is scheduled inside the audio engine
+    uint32_t t = 0;
     while (*morse) {
-        uint32_t dur = (*morse == '.') ? 60 : 180;
-        trigger_voice_internal(VOICE_MORSE, 750.0f, 0, 0, 0.85f, dur, 0);
-        vTaskDelay(pdMS_TO_TICKS(dur + 60));
+        uint32_t dur = (*morse == '.') ? 70 : 210;
+        trigger_voice_at(VOICE_MORSE, 750.0f, 0, 0, 0.8f, dur, 0, t);
+        t += dur + 70;
         morse++;
     }
 }
 
 void audio_play_robot_chirp(void) {
     int num_chirps = 3 + (rand() % 3);
+    uint32_t t = 0;
     for (int i = 0; i < num_chirps; i++) {
-        float f = 1800.0f + (rand() % 2000);
-        uint32_t dur = 30 + rand() % 40;
-        trigger_voice_internal(VOICE_R2D2, f, f, 0, 0.8f, dur, 0);
-        vTaskDelay(pdMS_TO_TICKS(dur + 20));
+        float f = 1400.0f + (rand() % 1800);
+        float f_end = f * (0.55f + (float)(rand() % 130) / 100.0f);
+        uint32_t dur = 60 + rand() % 60;
+        trigger_voice_at(VOICE_R2D2, 0, f, f_end, 0.7f, dur, 0, t);
+        t += dur + 25;
     }
 }
 
 // Mode 8: Cockpit & Animals
 void audio_cockpit_engine_start(void) {
-    trigger_voice_internal(VOICE_ENGINE_RUMBLE, 55.0f, 0, 0, 0.95f, 400, 0);
+    trigger_voice_internal(VOICE_ENGINE_RUMBLE, 80.0f, 0, 0, 0.95f, 700, 0);
 }
 
 void audio_cockpit_engine_stop(void) {}
@@ -584,7 +666,7 @@ bool audio_cockpit_is_siren_on(void) {
 
 void audio_cockpit_rocket_launch(void) {
     trigger_voice_internal(VOICE_TONE_ADSR, 880.0f, 0, 0, 0.9f, 250, TIMBRE_8BIT_MARIO);
-    trigger_voice_internal(VOICE_PITCH_SWEEP, 0, 80.0f, 500.0f, 1.0f, 800, 0);
+    trigger_voice_internal(VOICE_PITCH_SWEEP, 0, 120.0f, 700.0f, 1.0f, 800, 1);
 }
 
 void audio_play_animal_sound(char key) {
@@ -601,16 +683,16 @@ void audio_play_animal_sound(char key) {
             trigger_voice_internal(VOICE_ANIMAL, 0, 2800.0f, 3800.0f, 0.9f, 100, 0);
             break;
         case 'M': // Cow
-            trigger_voice_internal(VOICE_ANIMAL, 0, 150.0f, 120.0f, 0.9f, 500, 0);
+            trigger_voice_internal(VOICE_ANIMAL, 0, 200.0f, 150.0f, 0.9f, 500, 0);
             break;
         case 'Q': // Duck
             trigger_voice_internal(VOICE_ANIMAL, 0, 340.0f, 260.0f, 0.9f, 200, 0);
             break;
         case 'F': // Frog
-            trigger_voice_internal(VOICE_ANIMAL, 0, 140.0f, 90.0f, 0.9f, 180, 0);
+            trigger_voice_internal(VOICE_ANIMAL, 0, 200.0f, 130.0f, 0.9f, 180, 0);
             break;
         case 'L': // Lion
-            trigger_voice_internal(VOICE_ANIMAL, 0, 180.0f, 60.0f, 0.9f, 600, 0);
+            trigger_voice_internal(VOICE_ANIMAL, 0, 240.0f, 100.0f, 0.9f, 600, 0);
             break;
         case 'P': // Pig
             trigger_voice_internal(VOICE_ANIMAL, 0, 400.0f, 250.0f, 0.9f, 150, 0);
@@ -622,6 +704,15 @@ void audio_play_animal_sound(char key) {
 }
 
 // Mode 9: Phonics & Counting Learning
+static void counting_led_task(void *arg) {
+    uint8_t num = (uint8_t)(uintptr_t)arg;
+    for (uint8_t i = 0; i < num; i++) {
+        led_effects_count(i + 1, 255, 180, 0);
+        if (i < num - 1) vTaskDelay(pdMS_TO_TICKS(160));
+    }
+    vTaskDelete(NULL);
+}
+
 void audio_play_counting_number(uint8_t num) {
     if (num == 0) num = 10;
     if (num > 10) num = 10;
@@ -630,14 +721,12 @@ void audio_play_counting_number(uint8_t num) {
     trigger_voice_internal(VOICE_TONE_ADSR, 261.63f + num * 32.0f, 0, 0, 0.9f, 220, TIMBRE_PIANO);
     trigger_voice_internal(VOICE_TONE_ADSR, (261.63f + num * 32.0f) * 1.5f, 0, 0, 0.5f, 220, TIMBRE_MUSIC_BOX);
 
-    // Punchy rhythmic drum beat pulses for counting with synchronized LED count
+    // Drum beats scheduled inside the audio engine (non-blocking, perfectly even rhythm)
     for (uint8_t i = 0; i < num; i++) {
-        led_effects_count(i + 1, 255, 180, 0);
-        trigger_voice_internal(VOICE_PITCH_SWEEP, 0, 180.0f, 50.0f, 0.95f, 120, 0);
-        if (i < num - 1) {
-            vTaskDelay(pdMS_TO_TICKS(160));
-        }
+        trigger_voice_at(VOICE_PITCH_SWEEP, 0, 200.0f, 60.0f, 0.95f, 120, 2, (uint32_t)i * 160 + 250);
     }
+    // LED counter runs in its own short task so the USB/HID task is never blocked
+    xTaskCreate(counting_led_task, "cnt_led", 3072, (void *)(uintptr_t)num, 3, NULL);
 }
 
 void audio_play_phonics_letter(char c) {

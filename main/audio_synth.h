@@ -11,7 +11,7 @@
 #define PIN_I2S_BCK    10  // Bit Clock / BCLK
 
 #define AUDIO_SAMPLE_RATE 44100
-#define AUDIO_DEFAULT_VOLUME 0.40f
+#define AUDIO_DEFAULT_VOLUME 0.55f
 
 typedef enum {
     TIMBRE_PIANO = 0,
