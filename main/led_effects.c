@@ -249,3 +249,80 @@ void led_effects_volume(float volume) {
     xSemaphoreGive(s_led_mutex);
 }
 
+
+// Mozart pitch visualizer: maps musical pitch (C3..C6) across the LED strip with timbre colors
+void led_effects_mozart_note(float freq, float bass_freq, uint8_t timbre) {
+    if (!s_led_strip || !s_led_mutex) return;
+    if (xSemaphoreTake(s_led_mutex, pdMS_TO_TICKS(2)) != pdTRUE) return;
+
+    led_strip_clear(s_led_strip);
+
+    // Map 130 Hz (C3) - 1050 Hz (C6) to 0..(LED_STRIP_COUNT - 1)
+    float ratio = 0.5f;
+    if (freq >= 130.0f) {
+        ratio = log2f(freq / 130.0f) / 3.0f; // 3 octaves
+        if (ratio < 0.0f) ratio = 0.0f;
+        if (ratio > 1.0f) ratio = 1.0f;
+    }
+    int center = (int)(ratio * (LED_STRIP_COUNT - 1) + 0.5f);
+    if (center >= LED_STRIP_COUNT) center = LED_STRIP_COUNT - 1;
+
+    // Pick base color according to timbre & register
+    uint8_t mr, mg, mb;
+    if (timbre == 1) { // Music Box: Crystal Ice / Lavender
+        mr = (uint8_t)(100 + ratio * 155.0f);
+        mg = (uint8_t)(200 + (1.0f - ratio) * 55.0f);
+        mb = 255;
+    } else if (timbre == 2) { // 8-Bit Marimba: Bright Arcade Neon
+        uint16_t hue = (uint16_t)(ratio * 300.0f);
+        hsv_to_rgb(hue, 100, 90, &mr, &mg, &mb);
+    } else { // Grand Piano & others: Golden Amber to Brilliant Azure
+        uint16_t hue = (uint16_t)(35.0f + ratio * 200.0f);
+        hsv_to_rgb(hue, 85, 95, &mr, &mg, &mb);
+    }
+
+    // Light center note and soft glow neighbors
+    for (int i = 0; i < LED_STRIP_COUNT; i++) {
+        int dist = abs(i - center);
+        if (dist == 0) {
+            led_strip_set_pixel(s_led_strip, i, mr, mg, mb);
+        } else if (dist == 1) {
+            led_strip_set_pixel(s_led_strip, i, mr / 3, mg / 3, mb / 3);
+        } else if (dist == 2) {
+            led_strip_set_pixel(s_led_strip, i, mr / 8, mg / 8, mb / 8);
+        }
+    }
+
+    // If harmonic bass accompaniment note was played, light up the bass end (LED 0-2) in warm amber
+    if (bass_freq > 20.0f) {
+        led_strip_set_pixel(s_led_strip, 0, 220, 90, 10);
+        led_strip_set_pixel(s_led_strip, 1, 160, 60, 5);
+    }
+
+    led_strip_refresh(s_led_strip);
+    xSemaphoreGive(s_led_mutex);
+}
+
+// Celebration rainbow fanfare when a Mozart piece is completed
+void led_effects_celebration(void) {
+    if (!s_led_strip || !s_led_mutex) return;
+
+    for (int step = 0; step < 16; step++) {
+        if (xSemaphoreTake(s_led_mutex, pdMS_TO_TICKS(5)) == pdTRUE) {
+            for (int i = 0; i < LED_STRIP_COUNT; i++) {
+                uint8_t r, g, b;
+                uint16_t hue = (step * 25 + i * 12) % 360;
+                hsv_to_rgb(hue, 100, 85, &r, &g, &b);
+                led_strip_set_pixel(s_led_strip, i, r, g, b);
+            }
+            led_strip_refresh(s_led_strip);
+            xSemaphoreGive(s_led_mutex);
+        }
+        vTaskDelay(pdMS_TO_TICKS(25));
+    }
+
+    if (xSemaphoreTake(s_led_mutex, pdMS_TO_TICKS(5)) == pdTRUE) {
+        led_strip_clear(s_led_strip);
+        xSemaphoreGive(s_led_mutex);
+    }
+}

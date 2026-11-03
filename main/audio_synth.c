@@ -107,55 +107,310 @@ static uint32_t s_siren_step = 0;
 static int64_t s_last_speed_key_time = 0;
 static uint32_t s_speed_melody_idx = 0;
 
-// Mozart song data
+// ============================================================================
+// MOZART 20-SONG MASTER PLAYLIST & HARMONIC AUDIO ENGINE
+// ============================================================================
+#define F_C2   65.41f
+#define F_D2   73.42f
+#define F_E2   82.41f
+#define F_F2   87.31f
+#define F_FS2  92.50f
+#define F_G2   98.00f
+#define F_A2   110.00f
+#define F_AS2  116.54f
+#define F_B2   123.47f
+
+#define F_C3   130.81f
+#define F_CS3  138.59f
+#define F_D3   146.83f
+#define F_DS3  155.56f
+#define F_E3   164.81f
+#define F_F3   174.61f
+#define F_FS3  185.00f
+#define F_G3   196.00f
+#define F_GS3  207.65f
+#define F_A3   220.00f
+#define F_AS3  233.08f
+#define F_B3   246.94f
+
+#define F_C4   261.63f
+#define F_CS4  277.18f
+#define F_D4   293.66f
+#define F_DS4  311.13f
+#define F_E4   329.63f
+#define F_F4   349.23f
+#define F_FS4  369.99f
+#define F_G4   392.00f
+#define F_GS4  415.30f
+#define F_A4   440.00f
+#define F_AS4  466.16f
+#define F_B4   493.88f
+
+#define F_C5   523.25f
+#define F_CS5  554.37f
+#define F_D5   587.33f
+#define F_DS5  622.25f
+#define F_E5   659.25f
+#define F_F5   698.46f
+#define F_FS5  739.99f
+#define F_G5   783.99f
+#define F_GS5  830.61f
+#define F_A5   880.00f
+#define F_AS5  932.33f
+#define F_B5   987.77f
+
+#define F_C6   1046.50f
+#define F_D6   1174.66f
+#define F_E6   1318.51f
+#define F_F6   1396.91f
+#define F_G6   1567.98f
+
 typedef struct {
     float freq;
-    uint32_t dur_ms;
-} note_t;
+    float bass_freq;
+    uint16_t dur_ms;
+} mozart_note_t;
 
-static const note_t s_song_baby_shark[] = {
-    {293.66f, 250}, {329.63f, 250}, {392.00f, 200}, {392.00f, 200}, {392.00f, 200},
-    {392.00f, 150}, {392.00f, 150}, {392.00f, 200}, {392.00f, 350},
-    {293.66f, 250}, {329.63f, 250}, {392.00f, 200}, {392.00f, 200}, {392.00f, 200},
-    {392.00f, 150}, {392.00f, 150}, {392.00f, 200}, {392.00f, 350},
-    {293.66f, 250}, {329.63f, 250}, {392.00f, 200}, {392.00f, 200}, {392.00f, 200},
-    {392.00f, 150}, {392.00f, 150}, {392.00f, 200}, {392.00f, 350},
-    {392.00f, 250}, {392.00f, 250}, {369.99f, 600}
-};
-
-static const note_t s_song_twinkle[] = {
-    {261.63f, 300}, {261.63f, 300}, {392.00f, 300}, {392.00f, 300},
-    {440.00f, 300}, {440.00f, 300}, {392.00f, 600},
-    {349.23f, 300}, {349.23f, 300}, {329.63f, 300}, {329.63f, 300},
-    {293.66f, 300}, {293.66f, 300}, {261.63f, 600}
-};
-
-static const note_t s_song_butterfly[] = {
-    // Kìa con bướm vàng (Frère Jacques)
-    {261.63f, 300}, {293.66f, 300}, {329.63f, 300}, {261.63f, 300},
-    {261.63f, 300}, {293.66f, 300}, {329.63f, 300}, {261.63f, 300},
-    {329.63f, 300}, {349.23f, 300}, {392.00f, 600},
-    {329.63f, 300}, {349.23f, 300}, {392.00f, 600}
-};
-
-static const note_t s_song_happy_birthday[] = {
-    {261.63f, 200}, {261.63f, 200}, {293.66f, 400}, {261.63f, 400}, {349.23f, 400}, {329.63f, 800},
-    {261.63f, 200}, {261.63f, 200}, {293.66f, 400}, {261.63f, 400}, {392.00f, 400}, {349.23f, 800}
-};
-
-static const struct {
-    const note_t *notes;
+typedef struct {
+    const mozart_note_t *notes;
     size_t count;
     const char *name;
-} s_mozart_playlist[] = {
-    {s_song_baby_shark, sizeof(s_song_baby_shark)/sizeof(note_t), "Baby Shark"},
-    {s_song_butterfly, sizeof(s_song_butterfly)/sizeof(note_t), "Kia Con Buom Vang"},
-    {s_song_twinkle, sizeof(s_song_twinkle)/sizeof(note_t), "Twinkle Little Star"},
-    {s_song_happy_birthday, sizeof(s_song_happy_birthday)/sizeof(note_t), "Happy Birthday"}
+    const char *artist;
+} mozart_song_t;
+
+// 1. Rondo Alla Turca - W. A. Mozart
+static const mozart_note_t s_song_rondo_turca[] = {
+    {F_B4, 0, 160}, {F_A4, 0, 160}, {F_GS4, 0, 160}, {F_A4, 0, 160}, {F_C5, F_A3, 340},
+    {F_D5, 0, 160}, {F_C5, 0, 160}, {F_B4, 0, 160}, {F_C5, 0, 160}, {F_E5, F_A3, 340},
+    {F_F5, 0, 160}, {F_E5, 0, 160}, {F_DS5, 0, 160}, {F_E5, 0, 160}, {F_B5, F_E3, 340},
+    {F_A5, 0, 160}, {F_GS5, 0, 160}, {F_A5, 0, 160}, {F_B5, 0, 160}, {F_C6, F_A3, 400},
+    {F_A5, 0, 200}, {F_C6, 0, 200}, {F_B5, F_E3, 200}, {F_A5, 0, 200}, {F_GS5, 0, 200}, {F_A5, F_A2, 550}
 };
 
-static uint8_t s_current_song = 0;
-static uint32_t s_current_note_idx = 0;
+// 2. Eine kleine Nachtmusik - W. A. Mozart
+static const mozart_note_t s_song_eine_kleine[] = {
+    {F_G4, F_G3, 350}, {F_D4, 0, 200}, {F_G4, F_G3, 350}, {F_D4, 0, 200},
+    {F_G4, 0, 180}, {F_D4, 0, 180}, {F_G4, 0, 180}, {F_B4, 0, 180}, {F_D5, F_G3, 500},
+    {F_C5, F_D3, 350}, {F_A4, 0, 200}, {F_C5, F_D3, 350}, {F_A4, 0, 200},
+    {F_C5, 0, 180}, {F_A4, 0, 180}, {F_FS4, 0, 180}, {F_A4, 0, 180}, {F_D4, F_D3, 500},
+    {F_G4, F_G3, 250}, {F_G4, 0, 250}, {F_B4, 0, 250}, {F_A4, 0, 250}, {F_G4, F_G2, 550}
+};
+
+// 3. Ah! vous dirai-je, maman (Twinkle Twinkle) - W. A. Mozart
+static const mozart_note_t s_song_twinkle_full[] = {
+    {F_C4, F_C3, 300}, {F_C4, 0, 300}, {F_G4, F_E3, 300}, {F_G4, 0, 300},
+    {F_A4, F_F3, 300}, {F_A4, 0, 300}, {F_G4, F_C3, 600},
+    {F_F4, F_D3, 300}, {F_F4, 0, 300}, {F_E4, F_C3, 300}, {F_E4, 0, 300},
+    {F_D4, F_G3, 300}, {F_D4, 0, 300}, {F_C4, F_C3, 600},
+    {F_G4, F_G3, 300}, {F_G4, 0, 300}, {F_F4, F_D3, 300}, {F_F4, 0, 300},
+    {F_E4, F_C3, 300}, {F_E4, 0, 300}, {F_D4, F_G3, 600},
+    {F_G4, F_G3, 300}, {F_G4, 0, 300}, {F_F4, F_D3, 300}, {F_F4, 0, 300},
+    {F_E4, F_C3, 300}, {F_E4, 0, 300}, {F_D4, F_G3, 600},
+    {F_C4, F_C3, 300}, {F_C4, 0, 300}, {F_G4, F_E3, 300}, {F_G4, 0, 300},
+    {F_A4, F_F3, 300}, {F_A4, 0, 300}, {F_G4, F_C3, 600},
+    {F_F4, F_D3, 300}, {F_F4, 0, 300}, {F_E4, F_C3, 300}, {F_E4, 0, 300},
+    {F_D4, F_G3, 300}, {F_D4, 0, 300}, {F_C4, F_C2, 700}
+};
+
+// 4. Ode to Joy (Khải Hoàn Ca) - L. v. Beethoven
+static const mozart_note_t s_song_ode_to_joy[] = {
+    {F_E4, F_C3, 320}, {F_E4, 0, 320}, {F_F4, 0, 320}, {F_G4, F_G3, 320},
+    {F_G4, 0, 320}, {F_F4, 0, 320}, {F_E4, F_C3, 320}, {F_D4, 0, 320},
+    {F_C4, F_A2, 320}, {F_C4, 0, 320}, {F_D4, 0, 320}, {F_E4, F_C3, 320},
+    {F_E4, F_G3, 450}, {F_D4, 0, 200}, {F_D4, F_G2, 600},
+    {F_E4, F_C3, 320}, {F_E4, 0, 320}, {F_F4, 0, 320}, {F_G4, F_G3, 320},
+    {F_G4, 0, 320}, {F_F4, 0, 320}, {F_E4, F_C3, 320}, {F_D4, 0, 320},
+    {F_C4, F_A2, 320}, {F_C4, 0, 320}, {F_D4, 0, 320}, {F_E4, F_C3, 320},
+    {F_D4, F_G3, 450}, {F_C4, 0, 200}, {F_C4, F_C2, 600}
+};
+
+// 5. Für Elise (Cho Elise) - L. v. Beethoven
+static const mozart_note_t s_song_fur_elise[] = {
+    {F_E5, 0, 220}, {F_DS5, 0, 220}, {F_E5, 0, 220}, {F_DS5, 0, 220}, {F_E5, 0, 220},
+    {F_B4, 0, 220}, {F_D5, 0, 220}, {F_C5, 0, 220}, {F_A4, F_A2, 500},
+    {F_C4, 0, 220}, {F_E4, 0, 220}, {F_A4, 0, 220}, {F_B4, F_E3, 500},
+    {F_E4, 0, 220}, {F_GS4, 0, 220}, {F_B4, 0, 220}, {F_C5, F_A2, 500},
+    {F_E4, 0, 220}, {F_E5, 0, 220}, {F_DS5, 0, 220}, {F_E5, 0, 220}, {F_DS5, 0, 220}, {F_E5, 0, 220},
+    {F_B4, 0, 220}, {F_D5, 0, 220}, {F_C5, 0, 220}, {F_A4, F_A2, 600}
+};
+
+// 6. Canon in D - Johann Pachelbel
+static const mozart_note_t s_song_canon_in_d[] = {
+    {F_FS4, F_D3, 400}, {F_E4, F_A2, 400}, {F_D4, F_B2, 400}, {F_CS4, F_FS2, 400},
+    {F_B3,  F_G2, 400}, {F_A3, F_D2, 400}, {F_B3, F_G2, 400}, {F_CS4, F_A2, 400},
+    {F_D4,  F_D3, 300}, {F_FS4, 0, 300}, {F_A4, F_A2, 300}, {F_G4, 0, 300},
+    {F_FS4, F_B2, 300}, {F_D4, 0, 300}, {F_FS4, F_FS2, 300}, {F_E4, F_A2, 600}
+};
+
+// 7. Brahms' Lullaby (Bài ca ru con) - Johannes Brahms
+static const mozart_note_t s_song_brahms_lullaby[] = {
+    {F_E4, F_C3, 280}, {F_E4, 0, 280}, {F_G4, F_C3, 550},
+    {F_E4, 0, 280}, {F_E4, 0, 280}, {F_G4, F_C3, 550},
+    {F_E4, 0, 260}, {F_G4, 0, 260}, {F_C5, F_F3, 400}, {F_B4, 0, 260},
+    {F_A4, F_F3, 350}, {F_A4, 0, 350}, {F_G4, F_C3, 600},
+    {F_D4, F_G2, 280}, {F_E4, 0, 280}, {F_F4, F_G3, 550},
+    {F_D4, 0, 280}, {F_E4, 0, 280}, {F_F4, F_G3, 550},
+    {F_D4, 0, 260}, {F_F4, 0, 260}, {F_B4, F_G3, 400}, {F_A4, 0, 260},
+    {F_G4, F_C3, 350}, {F_B4, 0, 350}, {F_C5, F_C2, 700}
+};
+
+// 8. Spring (Mùa Xuân) - Antonio Vivaldi
+static const mozart_note_t s_song_spring_vivaldi[] = {
+    {F_E4,  F_E3, 300}, {F_GS4, 0, 300}, {F_GS4, 0, 300}, {F_GS4, F_E3, 300},
+    {F_FS4, 0, 160}, {F_E4, 0, 160}, {F_B4, F_B2, 500},
+    {F_B4,  F_E3, 300}, {F_GS4, 0, 300}, {F_GS4, 0, 300}, {F_GS4, F_E3, 300},
+    {F_FS4, 0, 160}, {F_E4, 0, 160}, {F_B4, F_B2, 500},
+    {F_GS4, F_E3, 200}, {F_A4, 0, 200}, {F_B4, 0, 300}, {F_A4, 0, 200},
+    {F_GS4, F_B2, 300}, {F_FS4, 0, 300}, {F_E4, F_E2, 600}
+};
+
+// 9. Minuet in G - J. S. Bach
+static const mozart_note_t s_song_bach_minuet[] = {
+    {F_D5, F_G3, 350}, {F_G4, 0, 200}, {F_A4, 0, 200}, {F_B4, 0, 200}, {F_C5, 0, 200},
+    {F_D5, F_G3, 350}, {F_G4, 0, 300}, {F_G4, F_G2, 400},
+    {F_E5, F_C3, 350}, {F_C5, 0, 200}, {F_D5, 0, 200}, {F_E5, 0, 200}, {F_FS5, 0, 200},
+    {F_G5, F_G3, 350}, {F_G4, 0, 300}, {F_G4, F_G2, 500}
+};
+
+// 10. Baby Shark - Pinkfong
+static const mozart_note_t s_song_baby_shark_rich[] = {
+    {F_D4, F_G3, 250}, {F_E4, 0, 250}, {F_G4, F_G3, 200}, {F_G4, 0, 200}, {F_G4, 0, 200},
+    {F_G4, 0, 150}, {F_G4, 0, 150}, {F_G4, 0, 200}, {F_G4, F_G2, 350},
+    {F_D4, F_C3, 250}, {F_E4, 0, 250}, {F_G4, F_C3, 200}, {F_G4, 0, 200}, {F_G4, 0, 200},
+    {F_G4, 0, 150}, {F_G4, 0, 150}, {F_G4, 0, 200}, {F_G4, F_C2, 350},
+    {F_D4, F_E3, 250}, {F_E4, 0, 250}, {F_G4, F_E3, 200}, {F_G4, 0, 200}, {F_G4, 0, 200},
+    {F_G4, 0, 150}, {F_G4, 0, 150}, {F_G4, 0, 200}, {F_G4, F_E2, 350},
+    {F_G4, F_D3, 250}, {F_G4, 0, 250}, {F_FS4, F_D2, 600}
+};
+
+// 11. Happy Birthday (Chúc mừng sinh nhật)
+static const mozart_note_t s_song_happy_bday_full[] = {
+    {F_C4, F_F3, 220}, {F_C4, 0, 220}, {F_D4, 0, 400}, {F_C4, 0, 400}, {F_F4, F_F3, 400}, {F_E4, F_C3, 750},
+    {F_C4, F_C3, 220}, {F_C4, 0, 220}, {F_D4, 0, 400}, {F_C4, 0, 400}, {F_G4, F_C3, 400}, {F_F4, F_F3, 750},
+    {F_C4, F_F3, 220}, {F_C4, 0, 220}, {F_C5, F_A3, 400}, {F_A4, 0, 400}, {F_F4, F_D3, 400}, {F_E4, 0, 400}, {F_D4, F_AS2, 600},
+    {F_AS4, F_AS2, 220}, {F_AS4, 0, 220}, {F_A4, F_F3, 400}, {F_F4, 0, 400}, {F_G4, F_C3, 400}, {F_F4, F_F2, 800}
+};
+
+// 12. Mary Had a Little Lamb (Chú cừu nhỏ của Mary)
+static const mozart_note_t s_song_mary_lamb[] = {
+    {F_E4, F_C3, 300}, {F_D4, 0, 300}, {F_C4, 0, 300}, {F_D4, 0, 300},
+    {F_E4, F_C3, 300}, {F_E4, 0, 300}, {F_E4, F_C3, 500},
+    {F_D4, F_G3, 300}, {F_D4, 0, 300}, {F_D4, F_G3, 500},
+    {F_E4, F_C3, 300}, {F_G4, 0, 300}, {F_G4, F_C3, 500},
+    {F_E4, F_C3, 300}, {F_D4, 0, 300}, {F_C4, 0, 300}, {F_D4, 0, 300},
+    {F_E4, F_C3, 300}, {F_E4, 0, 300}, {F_E4, 0, 300}, {F_E4, 0, 300},
+    {F_D4, F_G3, 300}, {F_D4, 0, 300}, {F_E4, 0, 300}, {F_D4, 0, 300}, {F_C4, F_C2, 600}
+};
+
+// 13. Old MacDonald Had a Farm (Nông trại vui vẻ)
+static const mozart_note_t s_song_old_macdonald[] = {
+    {F_G4, F_G3, 300}, {F_G4, 0, 300}, {F_G4, 0, 300}, {F_D4, F_D3, 300},
+    {F_E4, F_C3, 300}, {F_E4, 0, 300}, {F_D4, F_G3, 600},
+    {F_B4, F_G3, 300}, {F_B4, 0, 300}, {F_A4, F_D3, 300}, {F_A4, 0, 300}, {F_G4, F_G2, 600},
+    {F_D4, F_G3, 300}, {F_G4, 0, 300}, {F_G4, 0, 300}, {F_G4, 0, 300}, {F_D4, 0, 300},
+    {F_E4, F_C3, 300}, {F_E4, 0, 300}, {F_D4, F_G3, 600},
+    {F_B4, F_G3, 300}, {F_B4, 0, 300}, {F_A4, F_D3, 300}, {F_A4, 0, 300}, {F_G4, F_G2, 700}
+};
+
+// 14. Jingle Bells (Chuông ngân Giáng sinh)
+static const mozart_note_t s_song_jingle_bells[] = {
+    {F_E4, F_C3, 260}, {F_E4, 0, 260}, {F_E4, F_C3, 500},
+    {F_E4, 0, 260}, {F_E4, 0, 260}, {F_E4, F_C3, 500},
+    {F_E4, 0, 260}, {F_G4, 0, 260}, {F_C4, 0, 350}, {F_D4, 0, 200}, {F_E4, F_C3, 600},
+    {F_F4, F_F3, 260}, {F_F4, 0, 260}, {F_F4, 0, 300}, {F_F4, 0, 200},
+    {F_F4, F_F3, 260}, {F_E4, 0, 260}, {F_E4, 0, 260}, {F_E4, 0, 200},
+    {F_E4, F_C3, 260}, {F_D4, 0, 260}, {F_D4, 0, 260}, {F_E4, 0, 260}, {F_D4, F_G3, 450}, {F_G4, F_G2, 600}
+};
+
+// 15. You Are My Sunshine (Ánh dương của mẹ)
+static const mozart_note_t s_song_you_are_my_sunshine[] = {
+    {F_C4, F_F3, 300}, {F_F4, 0, 300}, {F_G4, 0, 300}, {F_A4, F_F3, 400}, {F_A4, 0, 500},
+    {F_A4, 0, 250}, {F_G4, 0, 250}, {F_A4, F_F3, 350}, {F_F4, 0, 500},
+    {F_F4, F_F3, 300}, {F_G4, 0, 300}, {F_A4, 0, 300}, {F_AS4, F_AS2, 400}, {F_D5, 0, 500},
+    {F_D5, 0, 250}, {F_C5, 0, 250}, {F_AS4, 0, 350}, {F_A4, F_F3, 600},
+    {F_F4, F_F3, 300}, {F_G4, 0, 300}, {F_A4, 0, 300}, {F_AS4, F_AS2, 350}, {F_D5, 0, 350},
+    {F_C5, F_C3, 350}, {F_AS4, 0, 350}, {F_A4, F_F3, 350}, {F_G4, F_C3, 350}, {F_F4, F_F2, 600}
+};
+
+// 16. Row, Row, Row Your Boat (Chèo thuyền êm trôi)
+static const mozart_note_t s_song_row_your_boat[] = {
+    {F_C4, F_C3, 350}, {F_C4, 0, 350}, {F_C4, 0, 350}, {F_D4, 0, 200}, {F_E4, F_C3, 500},
+    {F_E4, 0, 300}, {F_D4, 0, 200}, {F_E4, 0, 300}, {F_F4, 0, 200}, {F_G4, F_G3, 600},
+    {F_C5, F_C4, 200}, {F_C5, 0, 200}, {F_C5, 0, 200},
+    {F_G4, F_E3, 200}, {F_G4, 0, 200}, {F_G4, 0, 200},
+    {F_E4, F_C3, 200}, {F_E4, 0, 200}, {F_E4, 0, 200},
+    {F_C4, F_C2, 200}, {F_C4, 0, 200}, {F_C4, 0, 200},
+    {F_G4, F_G3, 300}, {F_F4, 0, 200}, {F_E4, F_C3, 300}, {F_D4, F_G2, 200}, {F_C4, F_C2, 600}
+};
+
+// 17. Kìa con bướm vàng (Frère Jacques - 4 câu trọn vẹn)
+static const mozart_note_t s_song_butterfly_vn[] = {
+    {F_C4, F_C3, 300}, {F_D4, 0, 300}, {F_E4, F_C3, 300}, {F_C4, 0, 300},
+    {F_C4, F_C3, 300}, {F_D4, 0, 300}, {F_E4, F_C3, 300}, {F_C4, 0, 300},
+    {F_E4, F_C3, 300}, {F_F4, 0, 300}, {F_G4, F_C3, 600},
+    {F_E4, F_C3, 300}, {F_F4, 0, 300}, {F_G4, F_C3, 600},
+    {F_G4, F_G3, 160}, {F_A4, 0, 160}, {F_G4, 0, 160}, {F_F4, 0, 160}, {F_E4, F_C3, 300}, {F_C4, 0, 300},
+    {F_G4, F_G3, 160}, {F_A4, 0, 160}, {F_G4, 0, 160}, {F_F4, 0, 160}, {F_E4, F_C3, 300}, {F_C4, 0, 300},
+    {F_C4, F_C3, 300}, {F_G3, F_G2, 300}, {F_C4, F_C3, 600},
+    {F_C4, F_C3, 300}, {F_G3, F_G2, 300}, {F_C4, F_C2, 600}
+};
+
+// 18. Chú ếch con - Phan Nhân (Thiếu nhi VN)
+static const mozart_note_t s_song_chu_ech_con[] = {
+    {F_C4, F_C3, 260}, {F_E4, 0, 260}, {F_G4, F_C3, 260}, {F_G4, 0, 260}, {F_A4, F_F3, 260}, {F_G4, F_C3, 450},
+    {F_E4, 0, 260}, {F_G4, 0, 260}, {F_E4, F_C3, 260}, {F_D4, 0, 260}, {F_C4, 0, 260}, {F_D4, F_G3, 450},
+    {F_C4, F_C3, 260}, {F_E4, 0, 260}, {F_G4, F_C3, 260}, {F_G4, 0, 260}, {F_A4, F_F3, 260}, {F_G4, F_C3, 450},
+    {F_E4, 0, 260}, {F_G4, 0, 260}, {F_D4, F_G3, 260}, {F_E4, 0, 260}, {F_C4, F_C2, 600}
+};
+
+// 19. Cháu lên ba - Phạm Minh Tuấn (Thiếu nhi VN)
+static const mozart_note_t s_song_chau_len_ba[] = {
+    {F_G4, F_C3, 280}, {F_E4, 0, 280}, {F_G4, F_C3, 500},
+    {F_G4, 0, 280}, {F_E4, 0, 280}, {F_G4, F_C3, 500},
+    {F_A4, F_F3, 280}, {F_G4, 0, 280}, {F_C5, F_C4, 500},
+    {F_A4, F_F3, 280}, {F_G4, 0, 280}, {F_E4, F_C3, 500},
+    {F_G4, 0, 280}, {F_A4, 0, 280}, {F_G4, F_C3, 500},
+    {F_E4, 0, 280}, {F_D4, F_G2, 280}, {F_C4, F_C2, 600}
+};
+
+// 20. Rửa mặt như mèo - Hàn Ngọc Bích (Thiếu nhi VN)
+static const mozart_note_t s_song_rua_mat_nhu_meo[] = {
+    {F_E4, F_C3, 280}, {F_G4, 0, 280}, {F_E4, F_C3, 500},
+    {F_C4, 0, 280}, {F_D4, 0, 280}, {F_E4, 0, 280}, {F_G4, F_C3, 500},
+    {F_E4, 0, 280}, {F_G4, 0, 280}, {F_A4, F_F3, 300}, {F_G4, F_C3, 400},
+    {F_E4, 0, 280}, {F_D4, F_G2, 280}, {F_C4, F_C2, 600}
+};
+
+// 20-Song Mozart Playlist
+static const mozart_song_t s_mozart_playlist[] = {
+    {s_song_rondo_turca,        sizeof(s_song_rondo_turca)/sizeof(mozart_note_t),        "Rondo Alla Turca (Hanh khuc Tho Nhi Ky)", "W. A. Mozart"},
+    {s_song_eine_kleine,        sizeof(s_song_eine_kleine)/sizeof(mozart_note_t),        "Eine kleine Nachtmusik (Da khuc dem he)", "W. A. Mozart"},
+    {s_song_twinkle_full,       sizeof(s_song_twinkle_full)/sizeof(mozart_note_t),       "Twinkle Twinkle Little Star (Ah! vous)",  "W. A. Mozart"},
+    {s_song_ode_to_joy,         sizeof(s_song_ode_to_joy)/sizeof(mozart_note_t),         "Ode to Joy (Khai Hoan Ca - Giao huong so 9)", "L. v. Beethoven"},
+    {s_song_fur_elise,          sizeof(s_song_fur_elise)/sizeof(mozart_note_t),          "Fur Elise (Cho Elise)",                   "L. v. Beethoven"},
+    {s_song_canon_in_d,         sizeof(s_song_canon_in_d)/sizeof(mozart_note_t),         "Canon in D",                              "Johann Pachelbel"},
+    {s_song_brahms_lullaby,     sizeof(s_song_brahms_lullaby)/sizeof(mozart_note_t),     "Brahms' Lullaby (Bai ca ru con)",         "Johannes Brahms"},
+    {s_song_spring_vivaldi,     sizeof(s_song_spring_vivaldi)/sizeof(mozart_note_t),     "Spring (Mua Xuan - The Four Seasons)",    "Antonio Vivaldi"},
+    {s_song_bach_minuet,        sizeof(s_song_bach_minuet)/sizeof(mozart_note_t),        "Minuet in G major",                       "J. S. Bach"},
+    {s_song_baby_shark_rich,    sizeof(s_song_baby_shark_rich)/sizeof(mozart_note_t),    "Baby Shark",                              "Pinkfong"},
+    {s_song_happy_bday_full,    sizeof(s_song_happy_bday_full)/sizeof(mozart_note_t),    "Happy Birthday to You",                   "Truyen thong"},
+    {s_song_mary_lamb,          sizeof(s_song_mary_lamb)/sizeof(mozart_note_t),          "Mary Had a Little Lamb",                  "Dan ca My"},
+    {s_song_old_macdonald,      sizeof(s_song_old_macdonald)/sizeof(mozart_note_t),      "Old MacDonald Had a Farm",                "Thieu nhi"},
+    {s_song_jingle_bells,       sizeof(s_song_jingle_bells)/sizeof(mozart_note_t),       "Jingle Bells",                            "J. Pierpont"},
+    {s_song_you_are_my_sunshine,sizeof(s_song_you_are_my_sunshine)/sizeof(mozart_note_t),"You Are My Sunshine",                     "J. Davis"},
+    {s_song_row_your_boat,      sizeof(s_song_row_your_boat)/sizeof(mozart_note_t),      "Row, Row, Row Your Boat",                 "Dan ca Anh"},
+    {s_song_butterfly_vn,       sizeof(s_song_butterfly_vn)/sizeof(mozart_note_t),       "Kia Con Buom Vang (Frere Jacques)",       "Dan ca Phap / VN"},
+    {s_song_chu_ech_con,        sizeof(s_song_chu_ech_con)/sizeof(mozart_note_t),        "Chu Ech Con",                             "Phan Nhan"},
+    {s_song_chau_len_ba,        sizeof(s_song_chau_len_ba)/sizeof(mozart_note_t),        "Chau Len Ba",                             "Pham Minh Tuan"},
+    {s_song_rua_mat_nhu_meo,    sizeof(s_song_rua_mat_nhu_meo)/sizeof(mozart_note_t),    "Rua Mat Nhu Meo",                         "Han Ngoc Bich"}
+};
+
+static uint8_t s_mozart_song_idx = 0;
+static uint16_t s_mozart_note_idx = 0;
+static uint8_t s_mozart_timbre = TIMBRE_PIANO;
+static bool s_mozart_autoplay = false;
+static int64_t s_mozart_last_tick_us = 0;
+static uint32_t s_mozart_next_delay_ms = 400;
 
 static const float s_speed_notes[] = {
     261.63f, 293.66f, 329.63f, 349.23f, 392.00f, 440.00f, 493.88f, 523.25f,
@@ -661,24 +916,171 @@ void audio_play_chime_mode(uint8_t mode_index) {
     trigger_voice_internal(VOICE_TONE_ADSR, root_f * 1.5f, 0, 0, 0.8f, 400, TIMBRE_MUSIC_BOX);
 }
 
-// Mode 2: Baby Mozart
-void audio_play_mozart_next_note(void) {
-    const note_t *curr_notes = s_mozart_playlist[s_current_song].notes;
-    size_t count = s_mozart_playlist[s_current_song].count;
-
-    note_t n = curr_notes[s_current_note_idx];
-    s_current_note_idx = (s_current_note_idx + 1) % count;
-
-    if (!sb_play_piano(n.freq, TIMBRE_PIANO, 0)) {
-        trigger_voice_internal(VOICE_TONE_ADSR, n.freq, 0, 0, 0.9f, n.dur_ms * 2, TIMBRE_PIANO);
+// ============================================================================
+// MODE 2: BABY MOZART AUDIO ENGINE IMPLEMENTATION
+// ============================================================================
+const char *audio_mozart_get_timbre_name(void) {
+    switch (s_mozart_timbre) {
+        case TIMBRE_PIANO: return "Dai Duong Cam (Grand Piano)";
+        case TIMBRE_MUSIC_BOX: return "Hop Nhac Than Tien (Music Box / Bell)";
+        case TIMBRE_8BIT_MARIO: return "Dan Go Marimba (8-Bit Arcade)";
+        default: return "Dan Piano Co Dien";
     }
 }
 
+uint8_t audio_mozart_toggle_timbre(void) {
+    s_mozart_timbre = (s_mozart_timbre + 1) % 3; // 0=Grand Piano, 1=Music Box Bell, 2=8-bit Marimba
+    return s_mozart_timbre;
+}
+
+uint8_t audio_mozart_get_timbre(void) {
+    return s_mozart_timbre;
+}
+
+void audio_mozart_get_info(mozart_play_info_t *out_info) {
+    if (!out_info) return;
+    const mozart_song_t *curr = &s_mozart_playlist[s_mozart_song_idx];
+    out_info->name = curr->name;
+    out_info->artist = curr->artist;
+    out_info->song_idx = s_mozart_song_idx;
+    out_info->total_songs = sizeof(s_mozart_playlist) / sizeof(s_mozart_playlist[0]);
+    out_info->note_idx = s_mozart_note_idx + 1;
+    out_info->total_notes = curr->count;
+    out_info->freq = curr->notes[s_mozart_note_idx].freq;
+    out_info->bass_freq = curr->notes[s_mozart_note_idx].bass_freq;
+    out_info->timbre = s_mozart_timbre;
+    out_info->is_finished = false;
+}
+
+void audio_mozart_restart_song(void) {
+    s_mozart_note_idx = 0;
+    s_mozart_last_tick_us = esp_timer_get_time();
+    s_mozart_next_delay_ms = 300;
+}
+
 void audio_mozart_next_song(void) {
-    s_current_song = (s_current_song + 1) % (sizeof(s_mozart_playlist) / sizeof(s_mozart_playlist[0]));
-    s_current_note_idx = 0;
-    ESP_LOGI(TAG, "Switched song to: %s", s_mozart_playlist[s_current_song].name);
+    s_mozart_song_idx = (s_mozart_song_idx + 1) % (sizeof(s_mozart_playlist) / sizeof(s_mozart_playlist[0]));
+    s_mozart_note_idx = 0;
+    s_mozart_last_tick_us = esp_timer_get_time();
+    s_mozart_next_delay_ms = 400;
+    ESP_LOGI(TAG, "Switched Mozart song to: %s (%s)",
+             s_mozart_playlist[s_mozart_song_idx].name,
+             s_mozart_playlist[s_mozart_song_idx].artist);
     audio_play_cartoon_sfx(SFX_MARIO_COIN);
+}
+
+void audio_mozart_prev_song(void) {
+    size_t total = sizeof(s_mozart_playlist) / sizeof(s_mozart_playlist[0]);
+    s_mozart_song_idx = (s_mozart_song_idx + total - 1) % total;
+    s_mozart_note_idx = 0;
+    s_mozart_last_tick_us = esp_timer_get_time();
+    s_mozart_next_delay_ms = 400;
+    ESP_LOGI(TAG, "Switched Mozart song to: %s (%s)",
+             s_mozart_playlist[s_mozart_song_idx].name,
+             s_mozart_playlist[s_mozart_song_idx].artist);
+    audio_play_cartoon_sfx(SFX_MARIO_COIN);
+}
+
+void audio_mozart_select_song(uint8_t song_index) {
+    size_t total = sizeof(s_mozart_playlist) / sizeof(s_mozart_playlist[0]);
+    if (song_index >= total) song_index = total - 1;
+    s_mozart_song_idx = song_index;
+    s_mozart_note_idx = 0;
+    s_mozart_last_tick_us = esp_timer_get_time();
+    s_mozart_next_delay_ms = 400;
+    ESP_LOGI(TAG, "Selected Mozart song: %s (%s)",
+             s_mozart_playlist[s_mozart_song_idx].name,
+             s_mozart_playlist[s_mozart_song_idx].artist);
+    audio_play_cartoon_sfx(SFX_MARIO_COIN);
+}
+
+bool audio_mozart_play_next_note(mozart_play_info_t *out_info) {
+    const mozart_song_t *curr = &s_mozart_playlist[s_mozart_song_idx];
+    mozart_note_t n = curr->notes[s_mozart_note_idx];
+
+    // 1. Play main melody note
+    if (!sb_play_piano(n.freq, s_mozart_timbre, 0)) {
+        trigger_voice_internal(VOICE_TONE_ADSR, n.freq, 0, 0, 0.90f, n.dur_ms * 2 + 50, s_mozart_timbre);
+    }
+
+    // 2. Play harmonic bass accompaniment simultaneously if present
+    if (n.bass_freq > 20.0f) {
+        if (!sb_play_piano(n.bass_freq, s_mozart_timbre, 0)) {
+            trigger_voice_internal(VOICE_TONE_ADSR, n.bass_freq, 0, 0, 0.70f, n.dur_ms * 2 + 100, s_mozart_timbre);
+        }
+    }
+
+    bool finished = false;
+    uint16_t played_idx = s_mozart_note_idx;
+    s_mozart_note_idx++;
+    if (s_mozart_note_idx >= curr->count) {
+        finished = true;
+        s_mozart_note_idx = 0;
+        // Celebration praise / fanfare
+        audio_play_praise();
+        // Advance to next song
+        s_mozart_song_idx = (s_mozart_song_idx + 1) % (sizeof(s_mozart_playlist) / sizeof(s_mozart_playlist[0]));
+    }
+
+    if (out_info) {
+        out_info->name = curr->name;
+        out_info->artist = curr->artist;
+        out_info->song_idx = s_mozart_song_idx;
+        out_info->total_songs = sizeof(s_mozart_playlist) / sizeof(s_mozart_playlist[0]);
+        out_info->note_idx = played_idx + 1;
+        out_info->total_notes = curr->count;
+        out_info->freq = n.freq;
+        out_info->bass_freq = n.bass_freq;
+        out_info->timbre = s_mozart_timbre;
+        out_info->is_finished = finished;
+    }
+    return finished;
+}
+
+void audio_play_mozart_next_note(void) {
+    audio_mozart_play_next_note(NULL);
+}
+
+void audio_mozart_toggle_autoplay(void) {
+    s_mozart_autoplay = !s_mozart_autoplay;
+    s_mozart_last_tick_us = esp_timer_get_time();
+    s_mozart_next_delay_ms = 400;
+}
+
+void audio_mozart_set_autoplay(bool enable) {
+    s_mozart_autoplay = enable;
+    if (enable) {
+        s_mozart_last_tick_us = esp_timer_get_time();
+        s_mozart_next_delay_ms = 400;
+    }
+}
+
+bool audio_mozart_is_autoplay(void) {
+    return s_mozart_autoplay;
+}
+
+void audio_mozart_autoplay_tick(void) {
+    if (!s_mozart_autoplay) return;
+    int64_t now = esp_timer_get_time();
+    if (now - s_mozart_last_tick_us < (int64_t)s_mozart_next_delay_ms * 1000) {
+        return;
+    }
+
+    const mozart_song_t *curr = &s_mozart_playlist[s_mozart_song_idx];
+    s_mozart_next_delay_ms = curr->notes[s_mozart_note_idx].dur_ms;
+    s_mozart_last_tick_us = now;
+
+    mozart_play_info_t info;
+    bool finished = audio_mozart_play_next_note(&info);
+    led_effects_mozart_note(info.freq, info.bass_freq, info.timbre);
+
+    if (finished) {
+        led_effects_celebration();
+        printf("
+🎉🎉🎉 [AUTO-PLAY: BE VUA HOAN THANH: "%s" (%s)!] 🎉🎉🎉
+", info.name, info.artist);
+        s_mozart_next_delay_ms = 1200;
+    }
 }
 
 // Mode 3: Speed Runner

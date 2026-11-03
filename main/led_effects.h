@@ -22,5 +22,7 @@ void led_effects_police(bool toggle);
 void led_effects_idle_step(void);
 void led_effects_count(uint8_t count, uint8_t r, uint8_t g, uint8_t b);
 void led_effects_volume(float volume);
+void led_effects_mozart_note(float freq, float bass_freq, uint8_t timbre);
+void led_effects_celebration(void);
 
 #endif // LED_EFFECTS_H

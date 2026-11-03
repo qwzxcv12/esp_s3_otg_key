@@ -202,6 +202,7 @@ static void switch_toy_mode(toy_mode_t new_mode) {
     fflush(stdout);
 
     audio_synth_stop_all_background();
+    audio_mozart_set_autoplay(false);
     soundbank_set_mode(s_current_mode);
     if (!sb_play_mode_name(s_current_mode)) {
         if (!sb_play_chime(s_current_mode)) {
@@ -209,6 +210,14 @@ static void switch_toy_mode(toy_mode_t new_mode) {
         }
     }
     led_effects_mode_switch(s_current_mode);
+
+    if (s_current_mode == MODE_2_BABY_MOZART) {
+        mozart_play_info_t info;
+        audio_mozart_get_info(&info);
+        printf("\r\n🎼 [BABY MOZART READY: 20 Tuyệt Phẩm Cổ Điển & Thiếu Nhi]\r\n");
+        printf("🎼 [Bài mở đầu: \"%s\" - %s (%d nốt)]\r\n", info.name, info.artist, info.total_notes);
+        printf("🎼 [Phím tắt: Space/Mũi tên = Đổi bài | Tab/T = Đổi nhạc cụ | Enter/P = Hát Ru Auto-Play | 1..9 = Chọn bài]\r\n\r\n");
+    }
 }
 
 static const char *s_morse_letters[26] = {
@@ -392,16 +401,92 @@ static void handle_toy_mode_key(uint8_t kc, uint8_t mod, char c) {
         }
 
         // =====================================================
-        // MODE 2: NGHỆ SĨ THIÊN TÀI (BABY MOZART - MỌI PHÍM)
+        // MODE 2: NGHỆ SĨ THIÊN TÀI (BABY MOZART)
         // =====================================================
         case MODE_2_BABY_MOZART: {
-            if (c == ' ') {
+            // 1. Phím Enter hoặc 'P': Bật / Tắt chế độ Auto-Play (Hát ru / Demo)
+            if (kc == 0x28 || kc == 0x58 || upper == 'P') {
+                audio_mozart_toggle_autoplay();
+                bool ap = audio_mozart_is_autoplay();
+                printf("\r\n>>> [BABY MOZART: %s CHẾ ĐỘ TỰ ĐỘNG BIỂU DIỄN (LULLABY AUTO-PLAY)] <<<\r\n",
+                       ap ? "BẬT" : "TẮT");
+                led_effects_color_burst(ap ? 0 : 255, ap ? 200 : 100, ap ? 255 : 50);
+                break;
+            }
+
+            // Tắt auto-play nếu bé bắt đầu tự tay gõ phím
+            if (audio_mozart_is_autoplay()) {
+                audio_mozart_set_autoplay(false);
+                printf(" -> [BABY MOZART: Bé bắt đầu tự tay gõ -> Tạm dừng tự động!]\r\n");
+            }
+
+            // 2. Phím Space hoặc Mũi tên Phải: Bài kế tiếp
+            if (c == ' ' || kc == 0x4F) {
                 audio_mozart_next_song();
+                mozart_play_info_t info;
+                audio_mozart_get_info(&info);
+                printf("\r\n>>> [BABY MOZART - BÀI HÁT KẾ TIẾP (%d/%d): \"%s\" - %s (%d nốt)] <<<\r\n",
+                       info.song_idx + 1, info.total_songs, info.name, info.artist, info.total_notes);
                 led_effects_mode_switch(1);
-            } else {
-                audio_play_mozart_next_note();
-                led_effects_color_burst(rand() % 256, rand() % 256, rand() % 256);
-                printf(" -> [BABY MOZART: Bé chơi nốt tiếp theo của bài hát!]\r\n");
+            }
+            // 3. Phím Mũi tên Trái: Lùi bài trước
+            else if (kc == 0x50) {
+                audio_mozart_prev_song();
+                mozart_play_info_t info;
+                audio_mozart_get_info(&info);
+                printf("\r\n>>> [BABY MOZART - BÀI TRƯỚC (%d/%d): \"%s\" - %s (%d nốt)] <<<\r\n",
+                       info.song_idx + 1, info.total_songs, info.name, info.artist, info.total_notes);
+                led_effects_mode_switch(1);
+            }
+            // 4. Phím Tab hoặc 'T': Đổi âm sắc nhạc cụ
+            else if (kc == 0x2B || upper == 'T') {
+                audio_mozart_toggle_timbre();
+                printf("\r\n>>> [BABY MOZART: ĐỔI NHẠC CỤ -> %s] <<<\r\n", audio_mozart_get_timbre_name());
+                audio_play_cartoon_sfx(SFX_MARIO_COIN);
+                led_effects_color_burst(255, 215, 0);
+            }
+            // 5. Phím 'R': Chơi lại bài hiện tại từ đầu
+            else if (upper == 'R') {
+                audio_mozart_restart_song();
+                mozart_play_info_t info;
+                audio_mozart_get_info(&info);
+                printf("\r\n>>> [BABY MOZART: CHƠI LẠI TỪ ĐẦU BÀI: \"%s\"] <<<\r\n", info.name);
+                led_effects_color_burst(100, 255, 100);
+            }
+            // 6. Phím số 1..9 và 0: Chọn trực tiếp bài hát 1..10
+            else if (c >= '1' && c <= '9') {
+                uint8_t target = (c - '1');
+                audio_mozart_select_song(target);
+                mozart_play_info_t info;
+                audio_mozart_get_info(&info);
+                printf("\r\n>>> [BABY MOZART - CHỌN BÀI %d/%d: \"%s\" - %s] <<<\r\n",
+                       info.song_idx + 1, info.total_songs, info.name, info.artist);
+                led_effects_mode_switch(1);
+            }
+            else if (c == '0') {
+                audio_mozart_select_song(9); // Bài số 10
+                mozart_play_info_t info;
+                audio_mozart_get_info(&info);
+                printf("\r\n>>> [BABY MOZART - CHỌN BÀI 10/%d: \"%s\" - %s] <<<\r\n",
+                       info.song_idx + 1, info.total_songs, info.name, info.artist);
+                led_effects_mode_switch(1);
+            }
+            // 7. Tất cả các phím còn lại: Bé chơi nốt tiếp theo (One-Key-One-Note)!
+            else {
+                mozart_play_info_t info;
+                bool finished = audio_mozart_play_next_note(&info);
+                led_effects_mozart_note(info.freq, info.bass_freq, info.timbre);
+
+                if (finished) {
+                    led_effects_celebration();
+                    printf(" -> ⭐⭐⭐ [XUẤT SẮC! BÉ VỪA HOÀN THÀNH BÀI: \"%s\" (%s)!] ⭐⭐⭐\r\n",
+                           info.name, info.artist);
+                } else {
+                    printf(" -> [BABY MOZART: \"%s\" | Nốt %d/%d: %.1f Hz %s| Đàn %s]\r\n",
+                           info.name, info.note_idx, info.total_notes, info.freq,
+                           (info.bass_freq > 20.0f) ? "+ Bass hòa thanh " : "",
+                           audio_mozart_get_timbre_name());
+                }
             }
             break;
         }
@@ -1014,6 +1099,10 @@ static void toy_background_task(void *pvParameters) {
     bool police_toggle = false;
     while (1) {
         vTaskDelay(pdMS_TO_TICKS(50));
+
+        if (s_current_mode == MODE_2_BABY_MOZART) {
+            audio_mozart_autoplay_tick();
+        }
 
         if (s_current_mode == MODE_3_SPEED_RUNNER) {
             audio_speed_runner_idle_check();

@@ -102,10 +102,10 @@ static void build_table(void) {
         snprintf(p, sizeof(p), "mode1/piano_%s.wav", piano_names[i]);
         reg((snd_id_t)(SND_PIANO_C2 + i), p, M(0) | M(1));   // Piano + Baby Mozart
     }
-    reg(SND_BELL_C4, "mode1/bell_c4.wav", M(0) | M(8));
-    reg(SND_BELL_C5, "mode1/bell_c5.wav", M(0) | M(8));
-    reg(SND_BELL_C6, "mode1/bell_c6.wav", M(0) | M(8));
-    reg(SND_BELL_C7, "mode1/bell_c7.wav", M(0) | M(8));
+    reg(SND_BELL_C4, "mode1/bell_c4.wav", M(0) | M(1) | M(8));
+    reg(SND_BELL_C5, "mode1/bell_c5.wav", M(0) | M(1) | M(8));
+    reg(SND_BELL_C6, "mode1/bell_c6.wav", M(0) | M(1) | M(8));
+    reg(SND_BELL_C7, "mode1/bell_c7.wav", M(0) | M(1) | M(8));
 
     reg(SND_KICK,   "mode4/kick.wav",   M(3));
     reg(SND_SNARE,  "mode4/snare.wav",  M(3));
@@ -149,7 +149,7 @@ static void build_table(void) {
         snprintf(p, sizeof(p), "mode9/num_%d.wav", i);
         reg((snd_id_t)(SND_NUM_0 + i), p, M(8));
     }
-    reg(SND_PRAISE, "mode9/praise.wav", M(8));
+    reg(SND_PRAISE, "mode9/praise.wav", M(1) | M(8));
 
     // Phím chức năng & điều hướng
     reg(SND_KEY_SPACE,      "mode9/key_space.wav",      M(8));

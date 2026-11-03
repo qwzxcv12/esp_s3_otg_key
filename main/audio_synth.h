@@ -75,8 +75,33 @@ void audio_play_piano_note(float freq_hz, piano_timbre_t timbre);
 void audio_play_chime_mode(uint8_t mode_index);
 
 // Mode 2: Baby Mozart
+typedef struct {
+    const char *name;
+    const char *artist;
+    uint8_t song_idx;
+    uint8_t total_songs;
+    uint16_t note_idx;
+    uint16_t total_notes;
+    float freq;
+    float bass_freq;
+    uint8_t timbre;
+    bool is_finished;
+} mozart_play_info_t;
+
+bool audio_mozart_play_next_note(mozart_play_info_t *out_info);
 void audio_play_mozart_next_note(void);
 void audio_mozart_next_song(void);
+void audio_mozart_prev_song(void);
+void audio_mozart_select_song(uint8_t song_index);
+void audio_mozart_restart_song(void);
+uint8_t audio_mozart_toggle_timbre(void);
+uint8_t audio_mozart_get_timbre(void);
+const char *audio_mozart_get_timbre_name(void);
+void audio_mozart_toggle_autoplay(void);
+void audio_mozart_set_autoplay(bool enable);
+bool audio_mozart_is_autoplay(void);
+void audio_mozart_autoplay_tick(void);
+void audio_mozart_get_info(mozart_play_info_t *out_info);
 
 // Mode 3: Speed Runner
 void audio_speed_runner_keystroke(void);
