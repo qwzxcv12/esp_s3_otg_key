@@ -20,6 +20,8 @@ static const char *TAG = "SOUNDBANK";
 
 typedef enum {
     SND_CHIME, SND_COIN,
+    SND_MODE_1, SND_MODE_2, SND_MODE_3, SND_MODE_4, SND_MODE_5,
+    SND_MODE_6, SND_MODE_7, SND_MODE_8, SND_MODE_9,
     SND_PIANO_C2, SND_PIANO_FS2, SND_PIANO_C3, SND_PIANO_FS3,
     SND_PIANO_C4, SND_PIANO_D4, SND_PIANO_E4, SND_PIANO_F4, SND_PIANO_G4, SND_PIANO_A4, SND_PIANO_B4,
     SND_PIANO_C5, SND_PIANO_FS5, SND_PIANO_C6, SND_PIANO_C7,
@@ -83,6 +85,12 @@ static void build_table(void) {
     memset(s_snd, 0, sizeof(s_snd));
     reg(SND_CHIME, "common/chime.wav", ALWAYS);
     reg(SND_COIN,  "common/coin.wav",  ALWAYS);
+
+    for (int i = 0; i < 9; i++) {
+        char p[40];
+        snprintf(p, sizeof(p), "common/mode_%d.wav", i + 1);
+        reg((snd_id_t)(SND_MODE_1 + i), p, ALWAYS);
+    }
 
     static const char *piano_names[15] = {
         "c2", "fs2", "c3", "fs3",
@@ -411,6 +419,13 @@ bool sb_play_piano(float freq_hz, uint8_t timbre, uint8_t owner_key) {
     }
     if (best < 0 || best_dist > max_shift) return false;
     return play_id((snd_id_t)(first + best), gain, midi - (float)roots[best], false, CHOKE_NONE, owner_key, 0, 0);
+}
+
+bool sb_play_mode_name(uint8_t mode_index) {
+    if (!s_mounted || mode_index >= 9) return false;
+    snd_id_t id = (snd_id_t)(SND_MODE_1 + mode_index);
+    if (!is_loaded(id)) return false;
+    return play_id(id, 1.40f, 0, false, CHOKE_SPEECH, 0, 0, 0);
 }
 
 bool sb_play_chime(uint8_t mode_index) {

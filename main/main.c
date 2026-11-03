@@ -203,8 +203,10 @@ static void switch_toy_mode(toy_mode_t new_mode) {
 
     audio_synth_stop_all_background();
     soundbank_set_mode(s_current_mode);
-    if (!sb_play_chime(s_current_mode)) {
-        audio_play_chime_mode(s_current_mode);
+    if (!sb_play_mode_name(s_current_mode)) {
+        if (!sb_play_chime(s_current_mode)) {
+            audio_play_chime_mode(s_current_mode);
+        }
     }
     led_effects_mode_switch(s_current_mode);
 }

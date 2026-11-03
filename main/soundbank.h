@@ -30,6 +30,7 @@ void      soundbank_set_mode(uint8_t mode_index); // async: load this mode's ban
 bool      soundbank_available(void);              // LittleFS mounted
 
 // Sample playback helpers (all non-blocking)
+bool sb_play_mode_name(uint8_t mode_index);                              // voice announcement: "Chế độ 1: Đàn Piano diệu kỳ!"
 bool sb_play_piano(float freq_hz, uint8_t timbre, uint8_t owner_key);   // real piano / bells, pitch shifted
 bool sb_play_chime(uint8_t mode_index);
 bool sb_play_tick(float volume);
