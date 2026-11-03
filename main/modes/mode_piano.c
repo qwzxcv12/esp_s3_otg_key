@@ -37,8 +37,8 @@ static bool mode_piano_handle_key(uint8_t kc, uint8_t mod, char c) {
     if (kc == 0x2B) {
         s_pentatonic_mode = !s_pentatonic_mode;
         printf(" -> [THANG ÂM NGŨ CUNG (PENTATONIC): %s]\r\n", s_pentatonic_mode ? "BẬT (CHỐNG PHÔ TOÀN BÀN PHÍM)" : "TẮT (CHUẨN 7 NỐT & PHÍM ĐEN)");
-        audio_play_piano_note_dur(523.25f, s_piano_timbre, 240);
-        audio_play_piano_note_dur(659.25f, s_piano_timbre, 260);
+        audio_play_piano_note_dur(523.25f, s_piano_timbre, 0, 240);
+        audio_play_piano_note_dur(659.25f, s_piano_timbre, 0, 260);
         led_effects_color_burst(255, 215, 0);
         return true;
     }
@@ -49,8 +49,8 @@ static bool mode_piano_handle_key(uint8_t kc, uint8_t mod, char c) {
         const char *t_name = (s_piano_timbre == TIMBRE_PIANO) ? "ĐÀN PIANO TRẦM ẤM" :
                              (s_piano_timbre == TIMBRE_8BIT_MARIO) ? "RETRO GAME 8-BIT MARIO" : "CHUÔNG GIÓ MUSIC BOX";
         printf(" -> [ĐỔI ÂM SẮC: %s]\r\n", t_name);
-        audio_play_piano_note_dur(523.25f, s_piano_timbre, 280);
-        audio_play_piano_note_dur(783.99f, s_piano_timbre, 300);
+        audio_play_piano_note_dur(523.25f, s_piano_timbre, 0, 280);
+        audio_play_piano_note_dur(783.99f, s_piano_timbre, 0, 300);
         led_effects_color_burst(0, 255, 255);
         return true;
     }

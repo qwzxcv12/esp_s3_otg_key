@@ -37,7 +37,7 @@ static bool mode_agent_handle_key(uint8_t kc, uint8_t mod, char c) {
         printf(" -> [ĐIỆP VIÊN: MÃ MORSE SỐ '%c' = %s]\r\n", c, s_morse_digits[c - '0']);
     } else if (c == ' ' || kc == 0x2C) {
         // Phím Space: Phát sóng Radar Sonar Ping dò tìm mục tiêu
-        audio_play_piano_note_dur(1046.50f, TIMBRE_MUSIC_BOX, 180);
+        audio_play_piano_note_dur(1046.50f, TIMBRE_MUSIC_BOX, 0, 180);
         audio_play_robot_chirp();
         led_effects_color_burst(0, 255, 120);
         printf(" -> [ĐIỆP VIÊN: QUÉT SÓNG RADAR SONAR PING... BÍP!]\r\n");

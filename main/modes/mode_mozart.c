@@ -57,7 +57,7 @@ static bool mode_mozart_handle_key(uint8_t kc, uint8_t mod, char c) {
         printf("\r\n>>> [BABY MOZART: ĐỔI NHẠC CỤ -> %s] <<<\r\n", audio_mozart_get_timbre_name());
         mozart_play_info_t info;
         audio_mozart_get_info(&info);
-        audio_play_piano_note_dur(523.25f, info.timbre, 260);
+        audio_play_piano_note_dur(523.25f, (piano_timbre_t)info.timbre, 0, 260);
         led_effects_color_burst(255, 215, 0);
         return true;
     }
