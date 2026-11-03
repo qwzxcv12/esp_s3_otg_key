@@ -204,19 +204,7 @@ static const animal_info_t s_animals[26] = {
     {'W', "Chó Sói",     "Wolf",       "Hú trăng huuu hoang dã đại ngàn!",     130, 150, 180},
     {'X', "Báo Săn",     "Cheetah",    "Bứt tốc chạy nhanh nhất thế giới!",    240, 160,  30},
     {'Y', "Bò Tây Tạng", "Yak",        "Thở phì phò gầm rền trên tuyết trắng!", 160, 100, 60},
-    {'Z', "Ngựa Vằn",    "Zebra",      "Sọc đen trắng phi lách cách!",         200, 200, 220}    } else if (s_current_mode == MODE_8_COCKPIT_ANIMALS) {
-        s_rescue_mission_active = false;
-        s_rescue_target_animal = 0;
-        s_rescue_score = 0;
-        s_rescue_next_prompt_time = 0;
-        printf("\r\n>>> [BUỒNG LÁI XE CỨU HỎA ĐẶC NHIỆM & 26 CON VẬT (FULL A-Z)] <<<\r\n");
-        printf(">>> [Phím A..Z: 26 Bạn Thú Rừng Thực Tế (100%% không trùng phím xe)] <<<\r\n");
-        printf(">>> [Phím Space: Đạp Ga Vroom Vroom | Enter: Vòi Rồng Phun Nước | Backspace: Phanh Két Két] <<<\r\n");
-        printf(">>> [Phím Tab/Caps: Bật/Tắt Còi Cứu Hỏa Ưu Tiên 114 (Đèn Xanh Đỏ Chớp)] <<<\r\n");
-        printf(">>> [Mũi tên: Lên=Tăng tốc | Xuống=Số lùi bíp bíp | Trái/Phải=Xi-nhan rẽ] <<<\r\n");
-        printf(">>> [Phím 1..0: 1=Còi hơi | 2=Bộ đàm 114 | 3=Chuông đồn | 4=Đèn pha | 5=Lửa cháy | 6=Trực thăng | 7=Hoan hô | 8=Turbo] <<<\r\n");
-        printf(">>> [Phím 9 hoặc F10 / ~: BẬT MINI-GAME \"NHIỆM VỤ CỨU HỘ VƯỜN THÚ 114\"!] <<<\r\n\r\n");
-
+    {'Z', "Ngựa Vằn",    "Zebra",      "Sọc đen trắng phi lách cách!",         200, 200, 220}
 };
 
 static bool s_rescue_mission_active = false;
@@ -285,6 +273,18 @@ static void switch_toy_mode(toy_mode_t new_mode) {
         printf(">>> [1..0/Numpad = Mario & Arcade | QWERTY = Action Hero | ASDFGH = Tom & Jerry Slapstick | ZXCVBNM = Phép Thuật] <<<\r\n");
         printf(">>> [Phím Space = Vở kịch rượt đuổi Tom & Jerry | Backspace = Troll Trombone | Enter = Fanfare Chiến Thắng] <<<\r\n");
         printf(">>> [Gõ phím liên tục tạo COMBO x5, COMBO x10 nhận phần thưởng âm thanh & đèn LED rực rỡ!] <<<\r\n\r\n");
+    } else if (s_current_mode == MODE_8_COCKPIT_ANIMALS) {
+        s_rescue_mission_active = false;
+        s_rescue_target_animal = 0;
+        s_rescue_score = 0;
+        s_rescue_next_prompt_time = 0;
+        printf("\r\n>>> [BUỒNG LÁI XE CỨU HỎA ĐẶC NHIỆM & 26 CON VẬT (FULL A-Z)] <<<\r\n");
+        printf(">>> [Phím A..Z: 26 Bạn Thú Rừng Thực Tế (100%% không trùng phím xe)] <<<\r\n");
+        printf(">>> [Phím Space: Đạp Ga Vroom Vroom | Enter: Vòi Rồng Phun Nước | Backspace: Phanh Két Két] <<<\r\n");
+        printf(">>> [Phím Tab/Caps: Bật/Tắt Còi Cứu Hỏa Ưu Tiên 114 (Đèn Xanh Đỏ Chớp)] <<<\r\n");
+        printf(">>> [Mũi tên: Lên=Tăng tốc | Xuống=Số lùi bíp bíp | Trái/Phải=Xi-nhan rẽ] <<<\r\n");
+        printf(">>> [Phím 1..0: 1=Còi hơi | 2=Bộ đàm 114 | 3=Chuông đồn | 4=Đèn pha | 5=Lửa cháy | 6=Trực thăng | 7=Hoan hô | 8=Turbo] <<<\r\n");
+        printf(">>> [Phím 9 hoặc F10 / ~: BẬT MINI-GAME \"NHIỆM VỤ CỨU HỘ VƯỜN THÚ 114\"!] <<<\r\n\r\n");
     }
 }
 
@@ -965,7 +965,7 @@ static void handle_toy_mode_key(uint8_t kc, uint8_t mod, char c) {
                 }
             }
             else if (c == '0') {
-                audio_play_cartoon_sfx(SFX_BRASS_FANFARE);
+                audio_play_cartoon_sfx(SFX_VICTORY_FANFARE);
                 led_effects_rescue_success();
                 printf(" -> [BẢNG ĐIỀU KHIỂN: 🎺 KHÚC QUÂN HÀNH CHIẾN THẮNG DẬP TẮT LỬA!]\r\n");
             }

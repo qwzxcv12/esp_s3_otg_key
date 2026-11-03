@@ -1337,7 +1337,7 @@ void audio_cockpit_skid(void) {
 
 void audio_cockpit_bell(void) {
     if (sb_play_cockpit_sfx(COCKPIT_SFX_BELL)) return;
-    trigger_voice_internal(VOICE_TONE_ADSR, 1200.0f, 0, 0, 0.9f, 400, TIMBRE_BELLS);
+    trigger_voice_internal(VOICE_TONE_ADSR, 1200.0f, 0, 0, 0.9f, 400, TIMBRE_MUSIC_BOX);
 }
 
 void audio_cockpit_reverse(void) {
@@ -1357,7 +1357,7 @@ void audio_cockpit_radio(void) {
 
 void audio_cockpit_cheer(void) {
     if (sb_play_cockpit_sfx(COCKPIT_SFX_CHEER)) return;
-    audio_play_cartoon_sfx(SFX_BRASS_FANFARE);
+    audio_play_cartoon_sfx(SFX_VICTORY_FANFARE);
 }
 
 void audio_cockpit_fire(void) {
