@@ -1196,9 +1196,7 @@ bool audio_speed_play_note(speed_note_info_t *out_info) {
     bool finished = false;
     if (s_speed_note_idx >= curr->count) {
         finished = true;
-        s_speed_note_idx = 0;
-        audio_play_praise();
-        s_speed_song_idx = (s_speed_song_idx + 1) % SPEED_SONG_COUNT;
+        s_speed_note_idx = 0; // Lap lai lien mach tu dau bai hat hien tai, khong chen tieng noi gay roi
     }
 
     if (out_info) {

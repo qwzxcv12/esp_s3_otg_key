@@ -86,9 +86,9 @@ static bool mode_speed_handle_key(uint8_t kc, uint8_t mod, char c) {
     led_effects_note(info.note_idx, info.total_notes, r, g, b);
 
     if (finished) {
-        led_effects_celebration();
-        printf("\r\n🎉🎉🎉 [XUẤT SẮC! HOÀN THÀNH BÀI: \"%s\" (%s)! CHUYỂN BÀI TIẾP...] 🎉🎉🎉\r\n\r\n",
-               info.song_name, info.title_vi);
+        printf(" -> [🎵 \"%s\" | Nốt cuối -> Lặp lại mượt mà! | Tốc độ: %u BPM]
+",
+               info.song_name, (unsigned int)info.speed_bpm);
     } else {
         printf(" -> [🎵 \"%s\" | Nốt %u/%u (%.1f Hz) | Tốc độ: %u BPM | %s]\r\n",
                info.song_name,
