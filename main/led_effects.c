@@ -46,7 +46,7 @@ esp_err_t led_effects_init(void) {
 
 void led_effects_clear(void) {
     if (!s_led_strip || !s_led_mutex) return;
-    xSemaphoreTake(s_led_mutex, portMAX_DELAY);
+    if (xSemaphoreTake(s_led_mutex, pdMS_TO_TICKS(2)) != pdTRUE) return;
     led_strip_clear(s_led_strip);
     xSemaphoreGive(s_led_mutex);
 }
@@ -76,33 +76,37 @@ static void hsv_to_rgb(uint16_t h, uint8_t s, uint8_t v, uint8_t *r, uint8_t *g,
     *b = (uint8_t)(bf * 255.0f);
 }
 
-// Mode switch wave animation
+// Mode switch wave animation (non-blocking yield so USB HID keyboard never stutters)
 void led_effects_mode_switch(uint8_t mode_index) {
     if (!s_led_strip || !s_led_mutex) return;
-    xSemaphoreTake(s_led_mutex, portMAX_DELAY);
 
     uint16_t base_hue = (mode_index * 40) % 360;
     for (int step = 0; step < LED_STRIP_COUNT + 5; step++) {
-        for (int i = 0; i < LED_STRIP_COUNT; i++) {
-            if (i <= step && (step - i) < 6) {
-                uint8_t r, g, b;
-                hsv_to_rgb((base_hue + i * 8) % 360, 100, 80, &r, &g, &b);
-                led_strip_set_pixel(s_led_strip, i, r, g, b);
-            } else {
-                led_strip_set_pixel(s_led_strip, i, 0, 0, 0);
+        if (xSemaphoreTake(s_led_mutex, pdMS_TO_TICKS(2)) == pdTRUE) {
+            for (int i = 0; i < LED_STRIP_COUNT; i++) {
+                if (i <= step && (step - i) < 6) {
+                    uint8_t r, g, b;
+                    hsv_to_rgb((base_hue + i * 8) % 360, 100, 80, &r, &g, &b);
+                    led_strip_set_pixel(s_led_strip, i, r, g, b);
+                } else {
+                    led_strip_set_pixel(s_led_strip, i, 0, 0, 0);
+                }
             }
+            led_strip_refresh(s_led_strip);
+            xSemaphoreGive(s_led_mutex);
         }
-        led_strip_refresh(s_led_strip);
-        vTaskDelay(pdMS_TO_TICKS(15));
+        vTaskDelay(pdMS_TO_TICKS(10));
     }
-    led_strip_clear(s_led_strip);
-    xSemaphoreGive(s_led_mutex);
+    if (xSemaphoreTake(s_led_mutex, pdMS_TO_TICKS(2)) == pdTRUE) {
+        led_strip_clear(s_led_strip);
+        xSemaphoreGive(s_led_mutex);
+    }
 }
 
 // Note hit visual: center around note_idx on the strip
 void led_effects_note(uint8_t note_idx, uint8_t total_notes, uint8_t r, uint8_t g, uint8_t b) {
     if (!s_led_strip || !s_led_mutex) return;
-    xSemaphoreTake(s_led_mutex, portMAX_DELAY);
+    if (xSemaphoreTake(s_led_mutex, pdMS_TO_TICKS(2)) != pdTRUE) return;
 
     int center = (note_idx * (LED_STRIP_COUNT - 1)) / (total_notes > 0 ? total_notes : 1);
     for (int i = 0; i < LED_STRIP_COUNT; i++) {
@@ -122,7 +126,7 @@ void led_effects_note(uint8_t note_idx, uint8_t total_notes, uint8_t r, uint8_t 
 // Drum beat strobe
 void led_effects_beat(void) {
     if (!s_led_strip || !s_led_mutex) return;
-    xSemaphoreTake(s_led_mutex, portMAX_DELAY);
+    if (xSemaphoreTake(s_led_mutex, pdMS_TO_TICKS(2)) != pdTRUE) return;
 
     for (int i = 0; i < LED_STRIP_COUNT; i++) {
         led_strip_set_pixel(s_led_strip, i, 180, 20, 20); // Bright Red strobe
@@ -134,7 +138,7 @@ void led_effects_beat(void) {
 // Typewriter mechanical spark
 void led_effects_spark(void) {
     if (!s_led_strip || !s_led_mutex) return;
-    xSemaphoreTake(s_led_mutex, portMAX_DELAY);
+    if (xSemaphoreTake(s_led_mutex, pdMS_TO_TICKS(2)) != pdTRUE) return;
 
     int pos = rand() % LED_STRIP_COUNT;
     led_strip_clear(s_led_strip);
@@ -148,7 +152,7 @@ void led_effects_spark(void) {
 // Full strip color burst
 void led_effects_color_burst(uint8_t r, uint8_t g, uint8_t b) {
     if (!s_led_strip || !s_led_mutex) return;
-    xSemaphoreTake(s_led_mutex, portMAX_DELAY);
+    if (xSemaphoreTake(s_led_mutex, pdMS_TO_TICKS(2)) != pdTRUE) return;
 
     for (int i = 0; i < LED_STRIP_COUNT; i++) {
         led_strip_set_pixel(s_led_strip, i, r, g, b);
@@ -160,7 +164,7 @@ void led_effects_color_burst(uint8_t r, uint8_t g, uint8_t b) {
 // Matrix green trail for Morse / Robot
 void led_effects_matrix(void) {
     if (!s_led_strip || !s_led_mutex) return;
-    xSemaphoreTake(s_led_mutex, portMAX_DELAY);
+    if (xSemaphoreTake(s_led_mutex, pdMS_TO_TICKS(2)) != pdTRUE) return;
 
     int pos = rand() % LED_STRIP_COUNT;
     led_strip_set_pixel(s_led_strip, pos, 0, 255, 40); // Bright Matrix Green
@@ -171,7 +175,7 @@ void led_effects_matrix(void) {
 // Cockpit police lights: left red, right blue alternating
 void led_effects_police(bool toggle) {
     if (!s_led_strip || !s_led_mutex) return;
-    xSemaphoreTake(s_led_mutex, portMAX_DELAY);
+    if (xSemaphoreTake(s_led_mutex, pdMS_TO_TICKS(2)) != pdTRUE) return;
 
     int half = LED_STRIP_COUNT / 2;
     for (int i = 0; i < LED_STRIP_COUNT; i++) {
@@ -190,7 +194,7 @@ void led_effects_police(bool toggle) {
 // Gentle breathing animation when idle
 void led_effects_idle_step(void) {
     if (!s_led_strip || !s_led_mutex) return;
-    xSemaphoreTake(s_led_mutex, portMAX_DELAY);
+    if (xSemaphoreTake(s_led_mutex, pdMS_TO_TICKS(2)) != pdTRUE) return;
 
     s_idle_step++;
     float rad = (float)s_idle_step * 0.05f;
@@ -208,7 +212,7 @@ void led_effects_idle_step(void) {
 // Light up exactly N LEDs for counting
 void led_effects_count(uint8_t count, uint8_t r, uint8_t g, uint8_t b) {
     if (!s_led_strip || !s_led_mutex) return;
-    xSemaphoreTake(s_led_mutex, portMAX_DELAY);
+    if (xSemaphoreTake(s_led_mutex, pdMS_TO_TICKS(2)) != pdTRUE) return;
 
     led_strip_clear(s_led_strip);
     if (count > LED_STRIP_COUNT) count = LED_STRIP_COUNT;
@@ -223,7 +227,7 @@ void led_effects_count(uint8_t count, uint8_t r, uint8_t g, uint8_t b) {
 // Volume bar indicator on LED strip
 void led_effects_volume(float volume) {
     if (!s_led_strip || !s_led_mutex) return;
-    xSemaphoreTake(s_led_mutex, portMAX_DELAY);
+    if (xSemaphoreTake(s_led_mutex, pdMS_TO_TICKS(2)) != pdTRUE) return;
 
     led_strip_clear(s_led_strip);
     int active_leds = (int)(volume * LED_STRIP_COUNT + 0.5f);

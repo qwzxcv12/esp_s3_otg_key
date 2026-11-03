@@ -166,7 +166,7 @@ static const float s_speed_notes[] = {
 static void trigger_voice_at(voice_mode_t mode, float freq, float start_f, float end_f,
                              float amp, uint32_t dur_ms, uint8_t sub_type, uint32_t delay_ms) {
     if (!s_voice_mutex) return;
-    xSemaphoreTake(s_voice_mutex, portMAX_DELAY);
+    if (xSemaphoreTake(s_voice_mutex, pdMS_TO_TICKS(5)) != pdTRUE) return;
 
     voice_t *chosen = NULL;
     for (int i = 0; i < MAX_POLY_VOICES; i++) {
@@ -217,7 +217,19 @@ static inline void trigger_voice_internal(voice_mode_t mode, float freq, float s
 int audio_sample_play(const pcm_asset_t *asset, float gain, float semitone, bool loop,
                       uint8_t choke, uint8_t owner, uint32_t delay_ms, uint32_t max_ms) {
     if (!s_voice_mutex || !asset || !asset->pcm || asset->num_samples < 2) return -1;
-    xSemaphoreTake(s_voice_mutex, portMAX_DELAY);
+    if (xSemaphoreTake(s_voice_mutex, pdMS_TO_TICKS(5)) != pdTRUE) return -1;
+
+    // Disown and quickly fade out prior voice of the same owner key to prevent retrigger release race
+    if (owner != 0) {
+        for (int i = 0; i < MAX_POLY_VOICES; i++) {
+            voice_t *o = &s_voices[i];
+            if (o->active && o->mode == VOICE_SAMPLE && o->owner == owner) {
+                o->owner = 0; // Release event from old press will no longer affect this
+                o->releasing = true;
+                o->rel_decay = 1.0f / ((float)(AUDIO_SAMPLE_RATE * 8) / 1000.0f); // Fast 8ms fade
+            }
+        }
+    }
 
     // Choke group: fade the previous sound of the same group in ~6 ms instead of stacking
     if (choke != 0) {
@@ -268,12 +280,13 @@ void audio_sample_release_owner(uint8_t owner, uint32_t release_ms) {
     if (!s_voice_mutex || owner == 0) return;
     if (release_ms == 0) release_ms = 10;
     float decay = 1.0f / ((float)(AUDIO_SAMPLE_RATE * release_ms) / 1000.0f);
-    xSemaphoreTake(s_voice_mutex, portMAX_DELAY);
+    if (xSemaphoreTake(s_voice_mutex, pdMS_TO_TICKS(5)) != pdTRUE) return;
     for (int i = 0; i < MAX_POLY_VOICES; i++) {
         voice_t *v = &s_voices[i];
         if (v->active && v->mode == VOICE_SAMPLE && v->owner == owner && !v->releasing) {
             v->releasing = true;
             v->rel_decay = decay;
+            v->owner = 0; // Disown so it won't be re-released
         }
     }
     xSemaphoreGive(s_voice_mutex);
@@ -281,7 +294,7 @@ void audio_sample_release_owner(uint8_t owner, uint32_t release_ms) {
 
 void audio_sample_invalidate(const int16_t *pcm) {
     if (!s_voice_mutex || !pcm) return;
-    xSemaphoreTake(s_voice_mutex, portMAX_DELAY);
+    if (xSemaphoreTake(s_voice_mutex, pdMS_TO_TICKS(10)) != pdTRUE) return;
     for (int i = 0; i < MAX_POLY_VOICES; i++) {
         if (s_voices[i].active && s_voices[i].mode == VOICE_SAMPLE && s_voices[i].pcm == pcm) {
             s_voices[i].active = false;

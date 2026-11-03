@@ -320,6 +320,7 @@ static void bank_load_for_mode(uint8_t mode) {
         } else {
             missing++;
         }
+        vTaskDelay(pdMS_TO_TICKS(1)); // Yield CPU so USB Host & audio tasks never stall
     }
 
     ESP_LOGI(TAG, "Mode %d bank ready: +%d loaded, -%d freed, %d missing files, %lld ms, PSRAM free %u KB",
@@ -359,7 +360,7 @@ esp_err_t soundbank_init(void) {
     esp_littlefs_info("storage", &total, &used);
     ESP_LOGI(TAG, "LittleFS mounted: %u KB used of %u KB", (unsigned)(used / 1024), (unsigned)(total / 1024));
 
-    xTaskCreatePinnedToCore(loader_task, "sb_loader", 6144, NULL, 3, &s_loader_task, 0);
+    xTaskCreatePinnedToCore(loader_task, "sb_loader", 6144, NULL, 1, &s_loader_task, 0);
     return ESP_OK;
 }
 
@@ -376,14 +377,17 @@ void soundbank_set_mode(uint8_t mode_index) {
 // ---------------------------------------------------------------------------
 static bool play_id(snd_id_t id, float gain, float semitone, bool loop, choke_group_t choke,
                     uint8_t owner, uint32_t delay_ms, uint32_t max_ms) {
-    if (!s_mounted) return false;
-    bool ok = false;
-    xSemaphoreTake(s_bank_mutex, portMAX_DELAY);
-    if (s_snd[id].asset.pcm) {
-        ok = audio_sample_play(&s_snd[id].asset, gain, semitone, loop, (uint8_t)choke, owner, delay_ms, max_ms) >= 0;
+    if (!s_mounted || id >= SND_COUNT) return false;
+    pcm_asset_t a = {0};
+    // Non-blocking mutex check (max 2ms) so USB Host / HID keyboard driver NEVER stalls
+    if (xSemaphoreTake(s_bank_mutex, pdMS_TO_TICKS(2)) != pdTRUE) {
+        return false;
     }
+    a = s_snd[id].asset;
     xSemaphoreGive(s_bank_mutex);
-    return ok;
+
+    if (!a.pcm) return false;
+    return audio_sample_play(&a, gain, semitone, loop, (uint8_t)choke, owner, delay_ms, max_ms) >= 0;
 }
 
 static bool is_loaded(snd_id_t id) { return s_snd[id].asset.pcm != NULL; }

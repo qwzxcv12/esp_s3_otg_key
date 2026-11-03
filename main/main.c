@@ -237,7 +237,6 @@ static void handle_toy_mode_key(uint8_t kc, uint8_t mod, char c) {
     if (kc == 0x44) { // F11: Vol down
         audio_synth_volume_down();
         printf(" -> [GIẢM ÂM LƯỢNG: %d%%]\r\n", (int)(audio_synth_get_volume() * 100));
-        fflush(stdout);
         audio_play_volume_tick(audio_synth_get_volume(), false);
         led_effects_volume(audio_synth_get_volume());
         return;
@@ -245,7 +244,6 @@ static void handle_toy_mode_key(uint8_t kc, uint8_t mod, char c) {
     if (kc == 0x45) { // F12: Vol up
         audio_synth_volume_up();
         printf(" -> [TĂNG ÂM LƯỢNG: %d%%]\r\n", (int)(audio_synth_get_volume() * 100));
-        fflush(stdout);
         audio_play_volume_tick(audio_synth_get_volume(), true);
         led_effects_volume(audio_synth_get_volume());
         return;
@@ -265,14 +263,19 @@ static void handle_toy_mode_key(uint8_t kc, uint8_t mod, char c) {
             if (kc == 0x2B) { // TAB
                 s_pentatonic_mode = !s_pentatonic_mode;
                 printf(" -> [THANG ÂM NGŨ CUNG (PENTATONIC): %s]\r\n", s_pentatonic_mode ? "BẬT (CHỐNG PHÔ)" : "TẮT (CHUẨN 7 NỐT)");
-                fflush(stdout);
                 audio_play_cartoon_sfx(SFX_MARIO_COIN);
                 led_effects_color_burst(255, 215, 0);
                 return;
             }
-            if (c == '1') { s_piano_timbre = TIMBRE_PIANO; printf(" -> [ĐỔI ÂM SẮC: ĐÀN PIANO TRẦM ẤM]\r\n"); fflush(stdout); audio_play_piano_note_key(523.25f, s_piano_timbre, 0); return; }
-            if (c == '2') { s_piano_timbre = TIMBRE_8BIT_MARIO; printf(" -> [ĐỔI ÂM SẮC: RETRO GAME 8-BIT MARIO]\r\n"); fflush(stdout); audio_play_piano_note_key(523.25f, s_piano_timbre, 0); return; }
-            if (c == '3') { s_piano_timbre = TIMBRE_MUSIC_BOX; printf(" -> [ĐỔI ÂM SẮC: CHUÔNG GIÓ MUSIC BOX]\r\n"); fflush(stdout); audio_play_piano_note_key(523.25f, s_piano_timbre, 0); return; }
+            if (kc == 0x43) { // F10: Luân chuyển âm sắc (Piano trầm ấm -> Retro 8-bit -> Chuông gió Music Box)
+                s_piano_timbre = (piano_timbre_t)((s_piano_timbre + 1) % 3);
+                const char *t_name = (s_piano_timbre == TIMBRE_PIANO) ? "ĐÀN PIANO TRẦM ẤM" :
+                                     (s_piano_timbre == TIMBRE_8BIT_MARIO) ? "RETRO GAME 8-BIT MARIO" : "CHUÔNG GIÓ MUSIC BOX";
+                printf(" -> [ĐỔI ÂM SẮC: %s]\r\n", t_name);
+                audio_play_cartoon_sfx(SFX_MARIO_COIN);
+                led_effects_color_burst(0, 255, 255);
+                return;
+            }
 
             float freq = 0.0f;
             int led_idx = 0;
@@ -318,16 +321,19 @@ static void handle_toy_mode_key(uint8_t kc, uint8_t mod, char c) {
             else if (c == ']')     { freq = 987.77f; note_name = "Sí (B5)"; led_idx = 11; }
             else if (c == '\\')    { freq = 1046.50f; note_name = "Đố (C6 Siêu Cao)"; led_idx = 12; }
 
-            // HÀNG SỐ TRÊN (4..=)
-            else if (c == '4') { freq = 1046.50f; note_name = "Đố (C6)"; led_idx = 1; }
-            else if (c == '5') { freq = 1174.66f; note_name = "Rế (D6)"; led_idx = 3; }
-            else if (c == '6') { freq = 1318.51f; note_name = "Mí (E6)"; led_idx = 5; }
-            else if (c == '7') { freq = 1396.91f; note_name = "Phá (F6)"; led_idx = 7; }
-            else if (c == '8') { freq = 1567.98f; note_name = "Són (G6)"; led_idx = 9; }
-            else if (c == '9') { freq = 1760.00f; note_name = "Lá (A6)"; led_idx = 11; }
-            else if (c == '0') { freq = 1975.53f; note_name = "Sí (B6)"; led_idx = 13; }
-            else if (c == '-') { freq = 2093.00f; note_name = "Đố (C7)"; led_idx = 15; }
-            else if (c == '=') { freq = 2349.32f; note_name = "Rế (D7)"; led_idx = 17; }
+            // HÀNG SỐ TRÊN: Quãng 5-6 Đầy đủ nốt (1..=)
+            else if (c == '1') { freq = 523.25f; note_name = "Đố (C5)"; led_idx = 0; }
+            else if (c == '2') { freq = 587.33f; note_name = "Rế (D5)"; led_idx = 2; }
+            else if (c == '3') { freq = 659.25f; note_name = "Mí (E5)"; led_idx = 4; }
+            else if (c == '4') { freq = 698.46f; note_name = "Phá (F5)"; led_idx = 6; }
+            else if (c == '5') { freq = 783.99f; note_name = "Són (G5)"; led_idx = 8; }
+            else if (c == '6') { freq = 880.00f; note_name = "Lá (A5)"; led_idx = 10; }
+            else if (c == '7') { freq = 987.77f; note_name = "Sí (B5)"; led_idx = 12; }
+            else if (c == '8') { freq = 1046.50f; note_name = "Đố (C6)"; led_idx = 14; }
+            else if (c == '9') { freq = 1174.66f; note_name = "Rế (D6)"; led_idx = 16; }
+            else if (c == '0') { freq = 1318.51f; note_name = "Mí (E6)"; led_idx = 18; }
+            else if (c == '-') { freq = 1396.91f; note_name = "Phá (F6)"; led_idx = 20; }
+            else if (c == '=') { freq = 1567.98f; note_name = "Són (G6)"; led_idx = 22; }
 
             // CỤM PHÍM SỐ NUMPAD BÊN PHẢI (0..9, +, -, *, /, .)
             else if (kc >= 0x54 && kc <= 0x63) {
@@ -372,7 +378,6 @@ static void handle_toy_mode_key(uint8_t kc, uint8_t mod, char c) {
             uint8_t b = (led_idx * 37) % 255;
             led_effects_note(led_idx, 28, r, g, b);
             printf(" -> [PIANO: %s - %.1f Hz]\r\n", note_name, freq);
-            fflush(stdout);
             break;
         }
 
@@ -387,7 +392,6 @@ static void handle_toy_mode_key(uint8_t kc, uint8_t mod, char c) {
                 audio_play_mozart_next_note();
                 led_effects_color_burst(rand() % 256, rand() % 256, rand() % 256);
                 printf(" -> [BABY MOZART: Bé chơi nốt tiếp theo của bài hát!]\r\n");
-                fflush(stdout);
             }
             break;
         }
@@ -399,7 +403,6 @@ static void handle_toy_mode_key(uint8_t kc, uint8_t mod, char c) {
             audio_speed_runner_keystroke();
             led_effects_beat();
             printf(" -> [SPEED RUNNER: Nhịp nhạc lướt nhanh theo tốc độ gõ!]\r\n");
-            fflush(stdout);
             break;
         }
 
@@ -449,7 +452,6 @@ static void handle_toy_mode_key(uint8_t kc, uint8_t mod, char c) {
                 led_effects_spark();
                 printf(" -> [DÀN TRỐNG: BỘ GÕ TIẾT TẤU DJ!]\r\n");
             }
-            fflush(stdout);
             break;
         }
 
@@ -476,7 +478,6 @@ static void handle_toy_mode_key(uint8_t kc, uint8_t mod, char c) {
                 led_effects_spark();
                 printf(" -> [MÁY GÕ CHỮ: BÚA KIM LOẠI TÁCH CẠCH!]\r\n");
             }
-            fflush(stdout);
             break;
         }
 
@@ -500,7 +501,6 @@ static void handle_toy_mode_key(uint8_t kc, uint8_t mod, char c) {
                 led_effects_spark();
                 printf(" -> [CARTOON: HIỆU ỨNG ÂM THANH HOẠT HÌNH!]\r\n");
             }
-            fflush(stdout);
             break;
         }
 
@@ -521,7 +521,6 @@ static void handle_toy_mode_key(uint8_t kc, uint8_t mod, char c) {
                 led_effects_matrix();
                 printf(" -> [ROBOT R2-D2: LÍU LO BÍP BOOP CHIRP!]\r\n");
             }
-            fflush(stdout);
             break;
         }
 
@@ -587,7 +586,6 @@ static void handle_toy_mode_key(uint8_t kc, uint8_t mod, char c) {
                 audio_play_cartoon_sfx(SFX_LASER);
                 printf(" -> [BUỒNG LÁI: BẬT NÚT ĐẶC CHỦNG!]\r\n");
             }
-            fflush(stdout);
             break;
         }
 
@@ -641,7 +639,6 @@ static void handle_toy_mode_key(uint8_t kc, uint8_t mod, char c) {
                 else if (kc == 0x62) num = 0; // Numpad 0 = 0
 
                 printf(" -> [BÉ HỌC SỐ: SỐ %d]\r\n", num);
-                fflush(stdout);
                 audio_play_counting_number(num);
             } else if (c != 0 && sb_play_symbol(c)) {
                 led_effects_color_burst(100, 220, 255);
@@ -654,7 +651,6 @@ static void handle_toy_mode_key(uint8_t kc, uint8_t mod, char c) {
                 led_effects_spark();
                 printf(" -> [BÉ KHÁM PHÁ BÀN PHÍM: 0x%02X]\r\n", kc);
             }
-            fflush(stdout);
             break;
         }
 
@@ -700,7 +696,6 @@ static void key_event_callback(key_event_t *key_event)
         bool upper = is_shift ^ s_caps_lock;
         c = upper ? ('A' + (kc - 0x04)) : ('a' + (kc - 0x04));
         putchar(c);
-        fflush(stdout);
         handle_toy_mode_key(kc, mod, c);
         return;
     }
@@ -716,7 +711,6 @@ static void key_event_callback(key_event_t *key_event)
         } else if (c) {
             putchar(c);
         }
-        fflush(stdout);
         handle_toy_mode_key(kc, mod, c);
         return;
     }
@@ -724,13 +718,11 @@ static void key_event_callback(key_event_t *key_event)
     // 3. Special keys
     if (kc == 0x29) { // Escape
         printf("[ESC]");
-        fflush(stdout);
         handle_toy_mode_key(kc, mod, 0);
         return;
     }
     if (kc == 0x2B) { // Tab
         printf("[TAB]");
-        fflush(stdout);
         handle_toy_mode_key(kc, mod, '\t');
         return;
     }
@@ -738,7 +730,6 @@ static void key_event_callback(key_event_t *key_event)
         s_caps_lock = !s_caps_lock;
         trigger_led_update();
         printf("[CAPSLOCK: %s]", s_caps_lock ? "BẬT" : "TẮT");
-        fflush(stdout);
         handle_toy_mode_key(kc, mod, 0);
         return;
     }
@@ -746,37 +737,34 @@ static void key_event_callback(key_event_t *key_event)
     // 4. Function keys (F1 - F12)
     if (kc >= 0x3A && kc <= 0x45) {
         printf("[F%d]", (kc - 0x3A + 1));
-        fflush(stdout);
         handle_toy_mode_key(kc, mod, 0);
         return;
     }
 
     // 5. Navigation & Editing keys
     switch (kc) {
-        case 0x46: printf("[PRTSC]"); fflush(stdout); handle_toy_mode_key(kc, mod, 0); return;
+        case 0x46: printf("[PRTSC]"); handle_toy_mode_key(kc, mod, 0); return;
         case 0x47: 
             s_scroll_lock = !s_scroll_lock;
             trigger_led_update();
             printf("[SCRLK: %s]", s_scroll_lock ? "BẬT" : "TẮT"); 
-            fflush(stdout); 
             handle_toy_mode_key(kc, mod, 0);
             return;
-        case 0x48: printf("[PAUSE]"); fflush(stdout); handle_toy_mode_key(kc, mod, 0); return;
-        case 0x49: printf("[INS]"); fflush(stdout); handle_toy_mode_key(kc, mod, 0); return;
-        case 0x4A: printf("[HOME]"); fflush(stdout); handle_toy_mode_key(kc, mod, 0); return;
-        case 0x4B: printf("[PGUP]"); fflush(stdout); handle_toy_mode_key(kc, mod, 0); return;
-        case 0x4C: printf("[DEL]"); fflush(stdout); handle_toy_mode_key(kc, mod, 0); return;
-        case 0x4D: printf("[END]"); fflush(stdout); handle_toy_mode_key(kc, mod, 0); return;
-        case 0x4E: printf("[PGDN]"); fflush(stdout); handle_toy_mode_key(kc, mod, 0); return;
-        case 0x4F: printf("[RIGHT]"); fflush(stdout); handle_toy_mode_key(kc, mod, 0); return;
-        case 0x50: printf("[LEFT]"); fflush(stdout); handle_toy_mode_key(kc, mod, 0); return;
-        case 0x51: printf("[DOWN]"); fflush(stdout); handle_toy_mode_key(kc, mod, 0); return;
-        case 0x52: printf("[UP]"); fflush(stdout); handle_toy_mode_key(kc, mod, 0); return;
+        case 0x48: printf("[PAUSE]"); handle_toy_mode_key(kc, mod, 0); return;
+        case 0x49: printf("[INS]"); handle_toy_mode_key(kc, mod, 0); return;
+        case 0x4A: printf("[HOME]"); handle_toy_mode_key(kc, mod, 0); return;
+        case 0x4B: printf("[PGUP]"); handle_toy_mode_key(kc, mod, 0); return;
+        case 0x4C: printf("[DEL]"); handle_toy_mode_key(kc, mod, 0); return;
+        case 0x4D: printf("[END]"); handle_toy_mode_key(kc, mod, 0); return;
+        case 0x4E: printf("[PGDN]"); handle_toy_mode_key(kc, mod, 0); return;
+        case 0x4F: printf("[RIGHT]"); handle_toy_mode_key(kc, mod, 0); return;
+        case 0x50: printf("[LEFT]"); handle_toy_mode_key(kc, mod, 0); return;
+        case 0x51: printf("[DOWN]"); handle_toy_mode_key(kc, mod, 0); return;
+        case 0x52: printf("[UP]"); handle_toy_mode_key(kc, mod, 0); return;
         case 0x53: // NumLock
             s_num_lock = !s_num_lock;
             trigger_led_update();
             printf("[NUMLOCK: %s]", s_num_lock ? "BẬT" : "TẮT");
-            fflush(stdout);
             handle_toy_mode_key(kc, mod, 0);
             return;
         default:
@@ -803,7 +791,6 @@ static void key_event_callback(key_event_t *key_event)
             case 0x62: c = '0'; printf("[NUM 0]"); break;
             case 0x63: c = '.'; printf("[NUM .]"); break;
         }
-        fflush(stdout);
         handle_toy_mode_key(kc, mod, c);
         return;
     }
@@ -841,7 +828,6 @@ static void print_key_combo(uint8_t mod, uint8_t kc)
         printf("SPACE");
     }
     printf("]");
-    fflush(stdout);
 }
 
 static inline bool key_found(const uint8_t *const src, uint8_t key, unsigned int length)
@@ -874,14 +860,14 @@ static void hid_host_keyboard_report_callback(const uint8_t *const data, const i
 
     // Nhận diện phím Modifier bấm đơn lẻ (Ctrl, Alt, Win, Shift)
     if (!any_key_pressed && pressed_mods != 0) {
-        if (pressed_mods & 0x01) { printf("[LCTRL]"); fflush(stdout); handle_toy_mode_key(0xE0, 0x01, 0); }
-        if (pressed_mods & 0x04) { printf("[LALT]"); fflush(stdout); handle_toy_mode_key(0xE2, 0x04, 0); }
-        if (pressed_mods & 0x08) { printf("[LWIN]"); fflush(stdout); handle_toy_mode_key(0xE3, 0x08, 0); }
-        if (pressed_mods & 0x10) { printf("[RCTRL]"); fflush(stdout); handle_toy_mode_key(0xE4, 0x10, 0); }
-        if (pressed_mods & 0x40) { printf("[RALT]"); fflush(stdout); handle_toy_mode_key(0xE6, 0x40, 0); }
-        if (pressed_mods & 0x80) { printf("[RWIN]"); fflush(stdout); handle_toy_mode_key(0xE7, 0x80, 0); }
-        if (pressed_mods & 0x02) { printf("[LSHIFT]"); fflush(stdout); handle_toy_mode_key(0xE1, 0x02, 0); }
-        if (pressed_mods & 0x20) { printf("[RSHIFT]"); fflush(stdout); handle_toy_mode_key(0xE5, 0x20, 0); }
+        if (pressed_mods & 0x01) { printf("[LCTRL]"); handle_toy_mode_key(0xE0, 0x01, 0); }
+        if (pressed_mods & 0x04) { printf("[LALT]"); handle_toy_mode_key(0xE2, 0x04, 0); }
+        if (pressed_mods & 0x08) { printf("[LWIN]"); handle_toy_mode_key(0xE3, 0x08, 0); }
+        if (pressed_mods & 0x10) { printf("[RCTRL]"); handle_toy_mode_key(0xE4, 0x10, 0); }
+        if (pressed_mods & 0x40) { printf("[RALT]"); handle_toy_mode_key(0xE6, 0x40, 0); }
+        if (pressed_mods & 0x80) { printf("[RWIN]"); handle_toy_mode_key(0xE7, 0x80, 0); }
+        if (pressed_mods & 0x02) { printf("[LSHIFT]"); handle_toy_mode_key(0xE1, 0x02, 0); }
+        if (pressed_mods & 0x20) { printf("[RSHIFT]"); handle_toy_mode_key(0xE5, 0x20, 0); }
     }
     prev_modifier = curr_modifier;
 
