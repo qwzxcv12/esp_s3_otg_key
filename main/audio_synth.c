@@ -166,7 +166,7 @@ static const float s_speed_notes[] = {
 static void trigger_voice_at(voice_mode_t mode, float freq, float start_f, float end_f,
                              float amp, uint32_t dur_ms, uint8_t sub_type, uint32_t delay_ms) {
     if (!s_voice_mutex) return;
-    if (xSemaphoreTake(s_voice_mutex, pdMS_TO_TICKS(5)) != pdTRUE) return;
+    if (xSemaphoreTake(s_voice_mutex, pdMS_TO_TICKS(25)) != pdTRUE) return;
 
     voice_t *chosen = NULL;
     for (int i = 0; i < MAX_POLY_VOICES; i++) {
@@ -217,7 +217,7 @@ static inline void trigger_voice_internal(voice_mode_t mode, float freq, float s
 int audio_sample_play(const pcm_asset_t *asset, float gain, float semitone, bool loop,
                       uint8_t choke, uint8_t owner, uint32_t delay_ms, uint32_t max_ms) {
     if (!s_voice_mutex || !asset || !asset->pcm || asset->num_samples < 2) return -1;
-    if (xSemaphoreTake(s_voice_mutex, pdMS_TO_TICKS(5)) != pdTRUE) return -1;
+    if (xSemaphoreTake(s_voice_mutex, pdMS_TO_TICKS(25)) != pdTRUE) return -1;
 
     // Disown and quickly fade out prior voice of the same owner key to prevent retrigger release race
     if (owner != 0) {
@@ -645,7 +645,7 @@ void audio_play_piano_note_key(float freq_hz, piano_timbre_t timbre, uint8_t own
 }
 
 void audio_piano_key_release(uint8_t owner_key) {
-    audio_sample_release_owner(owner_key, 70);
+    audio_sample_release_owner(owner_key, 350); // Natural piano damper release ~350ms (never clips or drops short taps)
 }
 
 void audio_play_praise(void) {

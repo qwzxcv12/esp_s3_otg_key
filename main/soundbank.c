@@ -379,8 +379,8 @@ static bool play_id(snd_id_t id, float gain, float semitone, bool loop, choke_gr
                     uint8_t owner, uint32_t delay_ms, uint32_t max_ms) {
     if (!s_mounted || id >= SND_COUNT) return false;
     pcm_asset_t a = {0};
-    // Non-blocking mutex check (max 2ms) so USB Host / HID keyboard driver NEVER stalls
-    if (xSemaphoreTake(s_bank_mutex, pdMS_TO_TICKS(2)) != pdTRUE) {
+    // Safe non-blocking mutex check (25ms) so sample copy never misses a keystroke
+    if (xSemaphoreTake(s_bank_mutex, pdMS_TO_TICKS(25)) != pdTRUE) {
         return false;
     }
     a = s_snd[id].asset;

@@ -257,10 +257,10 @@ static void handle_toy_mode_key(uint8_t kc, uint8_t mod, char c) {
     switch (s_current_mode) {
 
         // =====================================================
-        // MODE 1: ĐÀN PIANO DIỆU KỲ & NGŨ CUNG (FULL 88 PHÍM)
+        // MODE 1: ĐÀN PIANO DIỆU KỲ & NGŨ CUNG (FULL 100% TOÀN BỘ PHÍM)
         // =====================================================
         case MODE_1_PIANO: {
-            if (kc == 0x2B) { // TAB
+            if (kc == 0x2B) { // TAB: Bật / tắt thang âm ngũ cung
                 s_pentatonic_mode = !s_pentatonic_mode;
                 printf(" -> [THANG ÂM NGŨ CUNG (PENTATONIC): %s]\r\n", s_pentatonic_mode ? "BẬT (CHỐNG PHÔ)" : "TẮT (CHUẨN 7 NỐT)");
                 audio_play_cartoon_sfx(SFX_MARIO_COIN);
@@ -281,61 +281,67 @@ static void handle_toy_mode_key(uint8_t kc, uint8_t mod, char c) {
             int led_idx = 0;
             const char *note_name = NULL;
 
-            // HÀNG DƯỚI: Quãng 3 Trầm (C3 -> E4)
-            if (upper == 'Z') { freq = 130.81f; note_name = "Đồ (C3 Trầm)"; led_idx = 0; }
-            else if (upper == 'X') { freq = 146.83f; note_name = "Rê (D3 Trầm)"; led_idx = 1; }
-            else if (upper == 'C') { freq = 164.81f; note_name = "Mi (E3 Trầm)"; led_idx = 2; }
-            else if (upper == 'V') { freq = 174.61f; note_name = "Pha (F3 Trầm)"; led_idx = 3; }
-            else if (upper == 'B') { freq = 196.00f; note_name = "Son (G3 Trầm)"; led_idx = 4; }
-            else if (upper == 'N') { freq = 220.00f; note_name = "La (A3 Trầm)"; led_idx = 5; }
-            else if (upper == 'M') { freq = 246.94f; note_name = "Si (B3 Trầm)"; led_idx = 6; }
-            else if (c == ',')      { freq = 261.63f; note_name = "Đồ (C4)"; led_idx = 7; }
-            else if (c == '.')      { freq = 293.66f; note_name = "Rê (D4)"; led_idx = 8; }
-            else if (c == '/')      { freq = 329.63f; note_name = "Mi (E4)"; led_idx = 9; }
+            // 1. HÀNG SỐ TRÊN (14 phím: ~ .. 0, -, =, Backspace)
+            if (kc == 0x35 || c == '`' || c == '~')      { freq = 493.88f; note_name = "Si (B4)"; led_idx = 0; }
+            else if (kc == 0x1E || c == '1' || c == '!') { freq = 523.25f; note_name = "Đố (C5)"; led_idx = 1; }
+            else if (kc == 0x1F || c == '2' || c == '@') { freq = 587.33f; note_name = "Rế (D5)"; led_idx = 2; }
+            else if (kc == 0x20 || c == '3' || c == '#') { freq = 659.25f; note_name = "Mí (E5)"; led_idx = 3; }
+            else if (kc == 0x21 || c == '4' || c == '$') { freq = 698.46f; note_name = "Phá (F5)"; led_idx = 4; }
+            else if (kc == 0x22 || c == '5' || c == '%') { freq = 783.99f; note_name = "Són (G5)"; led_idx = 5; }
+            else if (kc == 0x23 || c == '6' || c == '^') { freq = 880.00f; note_name = "Lá (A5)"; led_idx = 6; }
+            else if (kc == 0x24 || c == '7' || c == '&') { freq = 987.77f; note_name = "Sí (B5)"; led_idx = 7; }
+            else if (kc == 0x25 || c == '8' || c == '*') { freq = 1046.50f; note_name = "Đố (C6)"; led_idx = 8; }
+            else if (kc == 0x26 || c == '9' || c == '(') { freq = 1174.66f; note_name = "Rế (D6)"; led_idx = 9; }
+            else if (kc == 0x27 || c == '0' || c == ')') { freq = 1318.51f; note_name = "Mí (E6)"; led_idx = 10; }
+            else if (kc == 0x2D || c == '-' || c == '_') { freq = 1396.91f; note_name = "Phá (F6)"; led_idx = 11; }
+            else if (kc == 0x2E || c == '=' || c == '+') { freq = 1567.98f; note_name = "Són (G6)"; led_idx = 12; }
+            else if (kc == 0x2A || c == '\b')            { freq = 1760.00f; note_name = "Lá (A6)"; led_idx = 13; }
 
-            // HÀNG GIỮA: Quãng 4 Trung (C4 -> F5)
-            else if (upper == 'A') { freq = s_pentatonic_mode ? 261.63f : 261.63f; note_name = "Đồ (C4)"; led_idx = 0; }
-            else if (upper == 'S') { freq = s_pentatonic_mode ? 293.66f : 293.66f; note_name = "Rê (D4)"; led_idx = 1; }
-            else if (upper == 'D') { freq = s_pentatonic_mode ? 329.63f : 329.63f; note_name = "Mi (E4)"; led_idx = 2; }
-            else if (upper == 'F') { freq = s_pentatonic_mode ? 392.00f : 349.23f; note_name = s_pentatonic_mode ? "Son (G4 Ngũ Cung)" : "Pha (F4)"; led_idx = 3; }
-            else if (upper == 'G') { freq = s_pentatonic_mode ? 440.00f : 392.00f; note_name = s_pentatonic_mode ? "La (A4 Ngũ Cung)" : "Son (G4)"; led_idx = 4; }
-            else if (upper == 'H') { freq = s_pentatonic_mode ? 523.25f : 440.00f; note_name = s_pentatonic_mode ? "Đố (C5 Ngũ Cung)" : "La (A4)"; led_idx = 5; }
-            else if (upper == 'J') { freq = s_pentatonic_mode ? 587.33f : 493.88f; note_name = s_pentatonic_mode ? "Rế (D5 Ngũ Cung)" : "Si (B4)"; led_idx = 6; }
-            else if (upper == 'K') { freq = s_pentatonic_mode ? 659.25f : 523.25f; note_name = s_pentatonic_mode ? "Mí (E5 Ngũ Cung)" : "Đố (C5)"; led_idx = 7; }
-            else if (upper == 'L') { freq = s_pentatonic_mode ? 783.99f : 587.33f; note_name = s_pentatonic_mode ? "Són (G5 Ngũ Cung)" : "Rế (D5)"; led_idx = 8; }
-            else if (c == ';')     { freq = s_pentatonic_mode ? 880.00f : 659.25f; note_name = s_pentatonic_mode ? "Lá (A5 Ngũ Cung)" : "Mí (E5)"; led_idx = 9; }
-            else if (c == '\'')    { freq = 698.46f; note_name = "Phá (F5)"; led_idx = 10; }
+            // 2. HÀNG QWERTY (Quãng 5 Bổng & Phím đen C#4 -> C6)
+            else if (kc == 0x14 || upper == 'Q') { freq = 523.25f; note_name = "Đố (C5 Bổng)"; led_idx = 0; }
+            else if (kc == 0x1A || upper == 'W') { freq = 277.18f; note_name = "Đồ# (C#4)"; led_idx = 1; }
+            else if (kc == 0x08 || upper == 'E') { freq = 311.13f; note_name = "Rê# (D#4)"; led_idx = 2; }
+            else if (kc == 0x15 || upper == 'R') { freq = 698.46f; note_name = "Phá (F5)"; led_idx = 3; }
+            else if (kc == 0x17 || upper == 'T') { freq = 369.99f; note_name = "Pha# (F#4)"; led_idx = 4; }
+            else if (kc == 0x1C || upper == 'Y') { freq = 415.30f; note_name = "Son# (G#4)"; led_idx = 5; }
+            else if (kc == 0x18 || upper == 'U') { freq = 466.16f; note_name = "La# (A#4)"; led_idx = 6; }
+            else if (kc == 0x0C || upper == 'I') { freq = 783.99f; note_name = "Són (G5)"; led_idx = 7; }
+            else if (kc == 0x12 || upper == 'O') { freq = 554.37f; note_name = "Đố# (C#5)"; led_idx = 8; }
+            else if (kc == 0x13 || upper == 'P') { freq = 622.25f; note_name = "Rế# (D#5)"; led_idx = 9; }
+            else if (kc == 0x2F || c == '[' || c == '{') { freq = 880.00f; note_name = "Lá (A5)"; led_idx = 10; }
+            else if (kc == 0x30 || c == ']' || c == '}') { freq = 987.77f; note_name = "Sí (B5)"; led_idx = 11; }
+            else if (kc == 0x31 || c == '\\' || c == '|' || kc == 0x32) { freq = 1046.50f; note_name = "Đố (C6 Siêu Cao)"; led_idx = 12; }
 
-            // HÀNG TRÊN: Quãng 5 Bổng & Phím đen (C#4 -> C6)
-            else if (upper == 'Q') { freq = 523.25f; note_name = "Đố (C5 Bổng)"; led_idx = 0; }
-            else if (upper == 'W') { freq = 277.18f; note_name = "Đồ# (C#4)"; led_idx = 1; }
-            else if (upper == 'E') { freq = 311.13f; note_name = "Rê# (D#4)"; led_idx = 2; }
-            else if (upper == 'R') { freq = 698.46f; note_name = "Phá (F5)"; led_idx = 3; }
-            else if (upper == 'T') { freq = 369.99f; note_name = "Pha# (F#4)"; led_idx = 4; }
-            else if (upper == 'Y') { freq = 415.30f; note_name = "Son# (G#4)"; led_idx = 5; }
-            else if (upper == 'U') { freq = 466.16f; note_name = "La# (A#4)"; led_idx = 6; }
-            else if (upper == 'I') { freq = 783.99f; note_name = "Són (G5)"; led_idx = 7; }
-            else if (upper == 'O') { freq = 554.37f; note_name = "Đố# (C#5)"; led_idx = 8; }
-            else if (upper == 'P') { freq = 622.25f; note_name = "Rế# (D#5)"; led_idx = 9; }
-            else if (c == '[')     { freq = 880.00f; note_name = "Lá (A5)"; led_idx = 10; }
-            else if (c == ']')     { freq = 987.77f; note_name = "Sí (B5)"; led_idx = 11; }
-            else if (c == '\\')    { freq = 1046.50f; note_name = "Đố (C6 Siêu Cao)"; led_idx = 12; }
+            // 3. HÀNG ASDF (Quãng 4 Trung chuẩn, gam Đô Trưởng / Ngũ Cung)
+            else if (kc == 0x39)                 { freq = 65.41f;  note_name = "Caps: Đồ Siêu Trầm (C2)"; led_idx = 0; }
+            else if (kc == 0x04 || upper == 'A') { freq = 261.63f; note_name = "Đồ (C4)"; led_idx = 0; }
+            else if (kc == 0x16 || upper == 'S') { freq = 293.66f; note_name = "Rê (D4)"; led_idx = 1; }
+            else if (kc == 0x07 || upper == 'D') { freq = 329.63f; note_name = "Mi (E4)"; led_idx = 2; }
+            else if (kc == 0x09 || upper == 'F') { freq = s_pentatonic_mode ? 392.00f : 349.23f; note_name = s_pentatonic_mode ? "Son (G4 Ngũ Cung)" : "Pha (F4)"; led_idx = 3; }
+            else if (kc == 0x0A || upper == 'G') { freq = s_pentatonic_mode ? 440.00f : 392.00f; note_name = s_pentatonic_mode ? "La (A4 Ngũ Cung)" : "Son (G4)"; led_idx = 4; }
+            else if (kc == 0x0B || upper == 'H') { freq = s_pentatonic_mode ? 523.25f : 440.00f; note_name = s_pentatonic_mode ? "Đố (C5 Ngũ Cung)" : "La (A4)"; led_idx = 5; }
+            else if (kc == 0x0D || upper == 'J') { freq = s_pentatonic_mode ? 587.33f : 493.88f; note_name = s_pentatonic_mode ? "Rế (D5 Ngũ Cung)" : "Si (B4)"; led_idx = 6; }
+            else if (kc == 0x0E || upper == 'K') { freq = s_pentatonic_mode ? 659.25f : 523.25f; note_name = s_pentatonic_mode ? "Mí (E5 Ngũ Cung)" : "Đố (C5)"; led_idx = 7; }
+            else if (kc == 0x0F || upper == 'L') { freq = s_pentatonic_mode ? 783.99f : 587.33f; note_name = s_pentatonic_mode ? "Són (G5 Ngũ Cung)" : "Rế (D5)"; led_idx = 8; }
+            else if (kc == 0x33 || c == ';' || c == ':') { freq = s_pentatonic_mode ? 880.00f : 659.25f; note_name = s_pentatonic_mode ? "Lá (A5 Ngũ Cung)" : "Mí (E5)"; led_idx = 9; }
+            else if (kc == 0x34 || c == '\'' || c == '"') { freq = 698.46f; note_name = "Phá (F5)"; led_idx = 10; }
+            else if (kc == 0x28 || c == '\r' || c == '\n') { freq = 523.25f; note_name = "Enter: Hợp Âm Kết Thúc"; led_idx = 15; }
 
-            // HÀNG SỐ TRÊN: Quãng 5-6 Đầy đủ nốt (1..=)
-            else if (c == '1') { freq = 523.25f; note_name = "Đố (C5)"; led_idx = 0; }
-            else if (c == '2') { freq = 587.33f; note_name = "Rế (D5)"; led_idx = 2; }
-            else if (c == '3') { freq = 659.25f; note_name = "Mí (E5)"; led_idx = 4; }
-            else if (c == '4') { freq = 698.46f; note_name = "Phá (F5)"; led_idx = 6; }
-            else if (c == '5') { freq = 783.99f; note_name = "Són (G5)"; led_idx = 8; }
-            else if (c == '6') { freq = 880.00f; note_name = "Lá (A5)"; led_idx = 10; }
-            else if (c == '7') { freq = 987.77f; note_name = "Sí (B5)"; led_idx = 12; }
-            else if (c == '8') { freq = 1046.50f; note_name = "Đố (C6)"; led_idx = 14; }
-            else if (c == '9') { freq = 1174.66f; note_name = "Rế (D6)"; led_idx = 16; }
-            else if (c == '0') { freq = 1318.51f; note_name = "Mí (E6)"; led_idx = 18; }
-            else if (c == '-') { freq = 1396.91f; note_name = "Phá (F6)"; led_idx = 20; }
-            else if (c == '=') { freq = 1567.98f; note_name = "Són (G6)"; led_idx = 22; }
+            // 4. HÀNG ZXCV (Quãng 3 Trầm Ấm)
+            else if (kc == 0xE1)                 { freq = 130.81f; note_name = "Shift Trái: Đồ (C3)"; led_idx = 0; }
+            else if (kc == 0x1D || upper == 'Z') { freq = 130.81f; note_name = "Đồ (C3 Trầm)"; led_idx = 0; }
+            else if (kc == 0x1B || upper == 'X') { freq = 146.83f; note_name = "Rê (D3 Trầm)"; led_idx = 1; }
+            else if (kc == 0x06 || upper == 'C') { freq = 164.81f; note_name = "Mi (E3 Trầm)"; led_idx = 2; }
+            else if (kc == 0x19 || upper == 'V') { freq = 174.61f; note_name = "Pha (F3 Trầm)"; led_idx = 3; }
+            else if (kc == 0x05 || upper == 'B') { freq = 196.00f; note_name = "Son (G3 Trầm)"; led_idx = 4; }
+            else if (kc == 0x11 || upper == 'N') { freq = 220.00f; note_name = "La (A3 Trầm)"; led_idx = 5; }
+            else if (kc == 0x10 || upper == 'M') { freq = 246.94f; note_name = "Si (B3 Trầm)"; led_idx = 6; }
+            else if (kc == 0x36 || c == ',' || c == '<') { freq = 261.63f; note_name = "Đồ (C4)"; led_idx = 7; }
+            else if (kc == 0x37 || c == '.' || c == '>') { freq = 293.66f; note_name = "Rê (D4)"; led_idx = 8; }
+            else if (kc == 0x38 || c == '/' || c == '?') { freq = 329.63f; note_name = "Mi (E4)"; led_idx = 9; }
+            else if (kc == 0xE5)                 { freq = 349.23f; note_name = "Shift Phải: Pha (F4)"; led_idx = 10; }
 
-            // CỤM PHÍM SỐ NUMPAD BÊN PHẢI (0..9, +, -, *, /, .)
+            // 5. CỤM PHÍM SỐ NUMPAD BÊN PHẢI (0..9, +, -, *, /, .)
             else if (kc >= 0x54 && kc <= 0x63) {
                 switch (kc) {
                     case 0x59: freq = 261.63f; note_name = "Numpad 1: Đồ (C4)"; led_idx = 0; break;
@@ -357,18 +363,22 @@ static void handle_toy_mode_key(uint8_t kc, uint8_t mod, char c) {
                 }
             }
 
-            // PHÍM ĐẶC BIỆT & ĐIỀU HƯỚNG
-            else if (c == ' ') {
+            // 6. PHÍM ĐẶC BIỆT, ĐIỀU HƯỚNG & MODIFIERS
+            else if (kc == 0x2C || c == ' ') {
                 freq = 261.63f; note_name = "Space: Bàn Đạp Ngân Vang (Pedal)"; led_idx = 15;
-            } else if (c == '\r' || c == '\n') {
-                freq = 523.25f; note_name = "Enter: Hợp Âm Kết Thúc"; led_idx = 15;
             } else if (kc >= 0x4F && kc <= 0x52) { // Mũi tên
                 freq = 440.0f + (kc - 0x4F) * 110.0f;
                 note_name = "Phím Mũi Tên: Lướt Âm Arpeggio";
                 led_idx = (kc - 0x4F) * 6;
-            } else { // Các phím còn lại (Insert, Delete, Home, End...)
+            } else if (kc == 0xE0 || kc == 0xE4) { // Ctrl
+                freq = 130.81f; note_name = "Phím Ctrl: Hợp Âm Trầm Đô"; led_idx = 2;
+            } else if (kc == 0xE2 || kc == 0xE6) { // Alt
+                freq = 164.81f; note_name = "Phím Alt: Hợp Âm Trầm Mi"; led_idx = 4;
+            } else if (kc == 0xE3 || kc == 0xE7) { // Win
+                freq = 196.00f; note_name = "Phím Win: Hợp Âm Trầm Son"; led_idx = 6;
+            } else { // Các phím còn lại (Insert, Delete, Home, End, PageUp, PageDown, Pause, PrtSc...)
                 freq = 300.0f + (kc % 15) * 50.0f;
-                note_name = "Phím Điều Hướng: Nốt Chuông Nhạc";
+                note_name = "Phím Chức Năng: Nốt Chuông Nhạc";
                 led_idx = kc % 25;
             }
 
@@ -700,7 +710,19 @@ static void key_event_callback(key_event_t *key_event)
         return;
     }
 
-    // 2. Numbers & symbols (0x1E - 0x38)
+    // 2. Special control keys (Esc, Tab)
+    if (kc == 0x29) { // Escape
+        printf("[ESC]");
+        handle_toy_mode_key(kc, mod, 0);
+        return;
+    }
+    if (kc == 0x2B) { // Tab
+        printf("[TAB]");
+        handle_toy_mode_key(kc, mod, '\t');
+        return;
+    }
+
+    // 3. Numbers & symbols (0x1E - 0x38)
     if (kc >= 0x1E && kc <= 0x38) {
         uint8_t shift_idx = is_shift ? 1 : 0;
         c = keycode2ascii[kc][shift_idx];
@@ -715,17 +737,6 @@ static void key_event_callback(key_event_t *key_event)
         return;
     }
 
-    // 3. Special keys
-    if (kc == 0x29) { // Escape
-        printf("[ESC]");
-        handle_toy_mode_key(kc, mod, 0);
-        return;
-    }
-    if (kc == 0x2B) { // Tab
-        printf("[TAB]");
-        handle_toy_mode_key(kc, mod, '\t');
-        return;
-    }
     if (kc == 0x39) { // CapsLock
         s_caps_lock = !s_caps_lock;
         trigger_led_update();
