@@ -1016,8 +1016,7 @@ bool audio_mozart_play_next_note(mozart_play_info_t *out_info) {
     if (s_mozart_note_idx >= curr->count) {
         finished = true;
         s_mozart_note_idx = 0;
-        // Celebration praise / fanfare
-        audio_play_praise();
+        // Advance to next song (praise is played in main.c only when child plays manually)
         // Advance to next song
         s_mozart_song_idx = (s_mozart_song_idx + 1) % (sizeof(s_mozart_playlist) / sizeof(s_mozart_playlist[0]));
     }
@@ -1075,9 +1074,11 @@ void audio_mozart_autoplay_tick(void) {
     led_effects_mozart_note(info.freq, info.bass_freq, info.timbre);
 
     if (finished) {
-        led_effects_celebration();
-        printf("\r\n>>> [AUTO-PLAY: BE VUA HOAN THANH: \"%s\" (%s)!] <<<\r\n", info.name, info.artist);
-        s_mozart_next_delay_ms = 1200;
+        // Che do Hat Ru (Lullaby / Auto-Play): Khong phat am thanh hoan ho, chuyen bai em ai
+        printf("\r\n>>> [LULLABY AUTO-PLAY: CHUYEN TIEP SANG BAI: \"%s\" (%s)] <<<\r\n",
+               s_mozart_playlist[s_mozart_song_idx].name,
+               s_mozart_playlist[s_mozart_song_idx].artist);
+        s_mozart_next_delay_ms = 1500;
     }
 }
 

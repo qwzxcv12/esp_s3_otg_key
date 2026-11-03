@@ -478,6 +478,7 @@ static void handle_toy_mode_key(uint8_t kc, uint8_t mod, char c) {
                 led_effects_mozart_note(info.freq, info.bass_freq, info.timbre);
 
                 if (finished) {
+                    audio_play_praise();
                     led_effects_celebration();
                     printf(" -> [XUẤT SẮC! BÉ VỪA HOÀN THÀNH BÀI: \"%s\" (%s)!]\r\n",
                            info.name, info.artist);
