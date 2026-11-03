@@ -167,16 +167,15 @@ static inline bool hid_keyboard_is_modifier_shift(uint8_t modifier) {
 // -------------------------------------------------------------
 // TOY KEY EVENT HANDLER (GLOBAL SHORTCUTS & MODE DISPATCHER)
 // -------------------------------------------------------------
+static int64_t s_last_mode_switch_us = 0;
+static int64_t s_last_esc_press_us = 0;
+
 static void handle_toy_key(uint8_t kc, uint8_t mod, char c) {
+    int64_t now_us = esp_timer_get_time();
+    bool is_mode_9 = (mode_manager_get_current_index() == 8);
+    bool has_ctrl_or_alt = ((mod & 0x55) != 0);
+
     // 1. Phím tắt hệ thống toàn cục (Global System Shortcuts)
-    if (kc == 0x29) { // ESC: Chuyển sang chế độ tiếp theo
-        mode_manager_next();
-        return;
-    }
-    if (kc >= 0x3A && kc <= 0x42) { // F1 - F9: Nhảy trực tiếp tới Chế độ 1 - 9
-        mode_manager_switch_to(kc - 0x3A);
-        return;
-    }
     if (kc == 0x44) { // F11: Giảm âm lượng
         audio_synth_volume_down();
         printf(" -> [GIẢM ÂM LƯỢNG: %d%%]\r\n", (int)(audio_synth_get_volume() * 100));
@@ -190,6 +189,40 @@ static void handle_toy_key(uint8_t kc, uint8_t mod, char c) {
         audio_play_volume_tick(audio_synth_get_volume(), true);
         led_effects_volume(audio_synth_get_volume());
         return;
+    }
+
+    if (kc == 0x29) { // ESC
+        if (is_mode_9 && !has_ctrl_or_alt) {
+            // Trong Mode 9 (Bé Học Đánh Vần), bấm ESC đơn lẻ đọc "Phím Escape",
+            // bấm đúp ESC trong vòng 650ms sẽ chuyển chế độ!
+            if ((now_us - s_last_esc_press_us) < 650000LL) {
+                s_last_esc_press_us = 0;
+                s_last_mode_switch_us = now_us;
+                mode_manager_next();
+                return;
+            }
+            s_last_esc_press_us = now_us;
+            // Chuyển xuống Mode 9 để đọc "Phím Escape"
+        } else {
+            if ((now_us - s_last_mode_switch_us) > 400000LL) {
+                s_last_mode_switch_us = now_us;
+                mode_manager_next();
+            }
+            return;
+        }
+    }
+
+    if (kc >= 0x3A && kc <= 0x42) { // F1 - F9
+        if (is_mode_9 && !has_ctrl_or_alt) {
+            // Trong Mode 9, nhấn F1..F9 đơn lẻ cho phép bé học tên phím F1..F9
+            // Nếu giữ Ctrl/Alt + F1..F9 thì nhảy sang chế độ tương ứng
+        } else {
+            if ((now_us - s_last_mode_switch_us) > 400000LL) {
+                s_last_mode_switch_us = now_us;
+                mode_manager_switch_to(kc - 0x3A);
+            }
+            return;
+        }
     }
 
     // 2. Chuyển tiếp sự kiện tới chế độ hiện tại qua Mode Manager
@@ -215,15 +248,13 @@ static void key_event_callback(key_event_t *key_event)
     uint8_t mod = key_event->modifier;
     bool is_shift = hid_keyboard_is_modifier_shift(mod);
 
-    // Xử lý tổ hợp Ctrl / Alt / Win
     bool has_ctrl = (mod & 0x11) != 0;
     bool has_alt  = (mod & 0x44) != 0;
     bool has_gui  = (mod & 0x88) != 0;
+    bool is_combo = (has_ctrl || has_alt || has_gui);
 
-    if (has_ctrl || has_alt || has_gui) {
+    if (is_combo) {
         print_key_combo(mod, kc);
-        handle_toy_key(kc, mod, 0); // Vẫn kích hoạt âm thanh cho phím tổ hợp!
-        return;
     }
 
     char c = 0;
@@ -232,19 +263,19 @@ static void key_event_callback(key_event_t *key_event)
     if (kc >= 0x04 && kc <= 0x1D) {
         bool upper = is_shift ^ s_caps_lock;
         c = upper ? ('A' + (kc - 0x04)) : ('a' + (kc - 0x04));
-        putchar(c);
+        if (!is_combo) putchar(c);
         handle_toy_key(kc, mod, c);
         return;
     }
 
     // 2. Phím điều khiển đặc biệt (Esc, Tab)
     if (kc == 0x29) { // Escape
-        printf("[ESC]");
+        if (!is_combo) printf("[ESC]");
         handle_toy_key(kc, mod, 0);
         return;
     }
     if (kc == 0x2B) { // Tab
-        printf("[TAB]");
+        if (!is_combo) printf("[TAB]");
         handle_toy_key(kc, mod, '\t');
         return;
     }
@@ -253,12 +284,14 @@ static void key_event_callback(key_event_t *key_event)
     if (kc >= 0x1E && kc <= 0x38) {
         uint8_t shift_idx = is_shift ? 1 : 0;
         c = keycode2ascii[kc][shift_idx];
-        if (c == KEYBOARD_ENTER_MAIN_CHAR) {
-            printf("[ENTER]");
-        } else if (c == '\b') {
-            printf("[BACKSPACE]");
-        } else if (c) {
-            putchar(c);
+        if (!is_combo) {
+            if (c == KEYBOARD_ENTER_MAIN_CHAR) {
+                printf("[ENTER]");
+            } else if (c == '\b') {
+                printf("[BACKSPACE]");
+            } else if (c) {
+                putchar(c);
+            }
         }
         handle_toy_key(kc, mod, c);
         return;
@@ -274,7 +307,7 @@ static void key_event_callback(key_event_t *key_event)
 
     // 4. Các phím chức năng (F1 - F12)
     if (kc >= 0x3A && kc <= 0x45) {
-        printf("[F%d]", (kc - 0x3A + 1));
+        if (!is_combo) printf("[F%d]", (kc - 0x3A + 1));
         handle_toy_key(kc, mod, 0);
         return;
     }
@@ -383,10 +416,24 @@ static void hid_host_keyboard_report_callback(const uint8_t *const data, const i
 
     static uint8_t prev_keys[HID_KEYBOARD_KEY_MAX] = { 0 };
     static uint8_t prev_modifier = 0;
+    static int64_t s_last_slap_us = 0;
     key_event_t key_event;
+
+    // 1. Phát hiện bé đập cả bàn tay lên bàn phím (6-Key Rollover / Phantom State = 0x01)
+    if (kb_report->key[0] == HID_KEY_ROLLOVER) {
+        int64_t now_us = esp_timer_get_time();
+        if ((now_us - s_last_slap_us) > 350000LL) {
+            s_last_slap_us = now_us;
+            printf("\r\n[PALM SLAP! -> BÙNG NỔ HỢP ÂM VUI NHỘN!]\r\n");
+            audio_play_slap_chord();
+            led_effects_color_burst(255, 220, 80);
+        }
+        return;
+    }
 
     uint8_t curr_modifier = kb_report->modifier.val;
     uint8_t pressed_mods = curr_modifier & (~prev_modifier);
+    uint8_t released_mods = prev_modifier & (~curr_modifier);
     bool any_key_pressed = false;
 
     for (int i = 0; i < HID_KEYBOARD_KEY_MAX; i++) {
@@ -396,7 +443,16 @@ static void hid_host_keyboard_report_callback(const uint8_t *const data, const i
         }
     }
 
-    // Nhận diện phím Modifier bấm đơn lẻ (Ctrl, Alt, Win, Shift)
+    // 2. Xử lý nhả phím Modifier (0xE0..0xE7) để không bị treo âm thanh trên các phím này
+    if (released_mods != 0) {
+        for (uint8_t bit = 0; bit < 8; bit++) {
+            if (released_mods & (1 << bit)) {
+                mode_manager_dispatch_release(0xE0 + bit);
+            }
+        }
+    }
+
+    // 3. Nhận diện phím Modifier bấm đơn lẻ (Ctrl, Alt, Win, Shift)
     if (!any_key_pressed && pressed_mods != 0) {
         if (pressed_mods & 0x01) { printf("[LCTRL]"); handle_toy_key(0xE0, 0x01, 0); }
         if (pressed_mods & 0x04) { printf("[LALT]"); handle_toy_key(0xE2, 0x04, 0); }
@@ -409,6 +465,7 @@ static void hid_host_keyboard_report_callback(const uint8_t *const data, const i
     }
     prev_modifier = curr_modifier;
 
+    int newly_pressed_count = 0;
     for (int i = 0; i < HID_KEYBOARD_KEY_MAX; i++) {
         if (prev_keys[i] > HID_KEY_ERROR_UNDEFINED &&
             !key_found(kb_report->key, prev_keys[i], HID_KEYBOARD_KEY_MAX)) {
@@ -420,10 +477,20 @@ static void hid_host_keyboard_report_callback(const uint8_t *const data, const i
 
         if (kb_report->key[i] > HID_KEY_ERROR_UNDEFINED &&
             !key_found(prev_keys, kb_report->key[i], HID_KEYBOARD_KEY_MAX)) {
+            newly_pressed_count++;
             key_event.key_code = kb_report->key[i];
             key_event.modifier = kb_report->modifier.val;
             key_event.state = KEY_STATE_PRESSED;
             key_event_callback(&key_event);
+        }
+    }
+
+    // Nếu bé đập từ 4 phím trở lên cùng một tích tắc (1 USB frame), thưởng thêm hiệu ứng pháo hoa LED!
+    if (newly_pressed_count >= 4) {
+        int64_t now_us = esp_timer_get_time();
+        if ((now_us - s_last_slap_us) > 350000LL) {
+            s_last_slap_us = now_us;
+            led_effects_color_burst(255, 220, 80);
         }
     }
 
@@ -536,11 +603,16 @@ static void usb_lib_task(void *pvParameters)
     }
 }
 
-// Background task: Gọi định kỳ tác vụ nền của chế độ hiện tại qua Mode Manager
+// Background task: Cập nhật LED non-blocking mỗi 25ms và gọi tác vụ nền Mode Manager mỗi 50ms
 static void toy_background_task(void *pvParameters) {
+    uint8_t divider = 0;
     while (1) {
-        vTaskDelay(pdMS_TO_TICKS(50));
-        mode_manager_tick(50);
+        vTaskDelay(pdMS_TO_TICKS(25));
+        led_effects_tick(25);
+        divider ^= 1;
+        if (divider == 0) {
+            mode_manager_tick(50);
+        }
     }
 }
 
@@ -598,7 +670,7 @@ void app_main(void)
     // 5. Khởi tạo Mode Manager & Đăng ký toàn bộ 9 chế độ chuẩn hóa
     ESP_ERROR_CHECK(mode_manager_init());
 
-    // 6. Start toy background monitor task (gọi mode_manager_tick)
+    // 6. Start toy background monitor task (gọi led_effects_tick & mode_manager_tick)
     xTaskCreate(toy_background_task, "toy_bg", 3072, NULL, 4, NULL);
 
     // 7. Chuyển vào chế độ đầu tiên: Mode 1 (Đàn Piano Diệu Kỳ)

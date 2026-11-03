@@ -19,7 +19,22 @@ static void mode_cartoon_on_enter(void) {
     printf(">>> [Gõ phím liên tục tạo COMBO x5, COMBO x10 nhận phần thưởng âm thanh & đèn LED rực rỡ!] <<<\r\n\r\n");
 }
 
+static void check_and_schedule_combo_reward(void) {
+    if (s_cartoon_combo == 5) {
+        // Thưởng âm thanh 1-UP nối tiếp ngay sau tiếng của phím vừa bấm (delay 240ms)
+        audio_play_cartoon_sfx_ex(SFX_GAME_1UP, 0, 240);
+        led_effects_color_burst(255, 215, 0);
+        printf(" -> [COMBO X5! SIÊU CHIẾN BINH HOẠT HÌNH - TẶNG THƯỞNG 1-UP!]\r\n");
+    } else if (s_cartoon_combo >= 10) {
+        audio_play_cartoon_sfx_ex(SFX_VICTORY_FANFARE, 0, 260);
+        led_effects_celebration();
+        printf(" -> [COMBO X10 HOÀN HẢO! BẬC THẦY GAME ARCADE - PHÁO HOA CHIẾN THẮNG!]\r\n");
+        s_cartoon_combo = 0;
+    }
+}
+
 static bool mode_cartoon_handle_key(uint8_t kc, uint8_t mod, char c) {
+    (void)mod;
     int64_t now = esp_timer_get_time();
     if (now - s_cartoon_last_key_time < 1200000LL) {
         s_cartoon_combo++;
@@ -27,20 +42,6 @@ static bool mode_cartoon_handle_key(uint8_t kc, uint8_t mod, char c) {
         s_cartoon_combo = 1;
     }
     s_cartoon_last_key_time = now;
-
-    // Kiểm tra thưởng chuỗi gõ nhanh Combo
-    if (s_cartoon_combo == 5) {
-        audio_play_cartoon_sfx(SFX_GAME_1UP);
-        led_effects_color_burst(255, 215, 0);
-        printf("\r\n>>> [COMBO X5! SIÊU CHIẾN BINH HOẠT HÌNH - TẶNG 1-UP!] <<<\r\n");
-        return true;
-    } else if (s_cartoon_combo == 10) {
-        audio_play_cartoon_sfx(SFX_VICTORY_FANFARE);
-        led_effects_celebration();
-        printf("\r\n>>> [COMBO X10 HOÀN HẢO! BÉ LÀ BẬC THẦY GAME ARCADE - PHÁO HOA CHIẾN THẮNG!] <<<\r\n");
-        s_cartoon_combo = 0;
-        return true;
-    }
 
     char upper = 0;
     if (c >= 'a' && c <= 'z') upper = c - 32;
@@ -67,6 +68,7 @@ static bool mode_cartoon_handle_key(uint8_t kc, uint8_t mod, char c) {
         audio_play_cartoon_sfx(s_chase_steps[step].sfx);
         led_effects_color_burst(s_chase_steps[step].r, s_chase_steps[step].g, s_chase_steps[step].b);
         printf(" -> %s (Combo: %d)\r\n", s_chase_steps[step].desc, s_cartoon_combo);
+        check_and_schedule_combo_reward();
         return true;
     }
 
@@ -75,6 +77,7 @@ static bool mode_cartoon_handle_key(uint8_t kc, uint8_t mod, char c) {
         audio_play_cartoon_sfx(SFX_GAME_OVER_TROMBONE);
         led_effects_color_burst(200, 30, 30);
         printf(" -> [HOẠT HÌNH: TÉ NGÃ THẢM BẠI WAH WAH WAAAH! (SAD TROMBONE)]\r\n");
+        check_and_schedule_combo_reward();
         return true;
     }
 
@@ -83,6 +86,7 @@ static bool mode_cartoon_handle_key(uint8_t kc, uint8_t mod, char c) {
         audio_play_cartoon_sfx(SFX_VICTORY_FANFARE);
         led_effects_celebration();
         printf(" -> [CHIẾN THẮNG KHẢI HOÀN: LEVEL CLEAR FANFARE TƯNG BỪNG!]\r\n");
+        s_cartoon_combo = 0;
         return true;
     }
 
@@ -91,6 +95,7 @@ static bool mode_cartoon_handle_key(uint8_t kc, uint8_t mod, char c) {
         audio_play_cartoon_sfx(SFX_CT_MAGIC_WAND);
         led_effects_color_burst(180, 50, 255);
         printf(" -> [VŨ TRỤ ÂM THANH: 1..0=Arcade | Q..P=Hero | A..L=Slapstick | Z..M=Magic]\r\n");
+        check_and_schedule_combo_reward();
         return true;
     }
 
@@ -99,21 +104,25 @@ static bool mode_cartoon_handle_key(uint8_t kc, uint8_t mod, char c) {
         audio_play_cartoon_sfx(SFX_GAME_JUMP);
         led_effects_color_burst(50, 255, 50);
         printf(" -> [MŨI TÊN LÊN: NHẢY BỔNG HIGH JUMP!]\r\n");
+        check_and_schedule_combo_reward();
         return true;
     } else if (kc == 0x51) { // Arrow DOWN: Timpani Boom / Ground Pound
         audio_play_cartoon_sfx(SFX_CT_TIMPANI_BOOM);
         led_effects_color_burst(255, 50, 0);
         printf(" -> [MŨI TÊN XUỐNG: TIẾNG ĐẬP ĐẤT TIMPANI BOOM!]\r\n");
+        check_and_schedule_combo_reward();
         return true;
     } else if (kc == 0x50) { // Arrow LEFT: Phanh gấp
         audio_play_cartoon_sfx(SFX_SKID_STOP);
         led_effects_color_burst(255, 100, 0);
         printf(" -> [MŨI TÊN TRÁI: PHANH XE CHÁY ĐƯỜNG KÉÉÉT!]\r\n");
+        check_and_schedule_combo_reward();
         return true;
     } else if (kc == 0x4F) { // Arrow RIGHT: Phóng vù
         audio_play_cartoon_sfx(SFX_CT_RUN_AWAY);
         led_effects_color_burst(0, 200, 255);
         printf(" -> [MŨI TÊN PHẢI: PHÓNG VÈO BIẾN MẤT VÙÙÙ!]\r\n");
+        check_and_schedule_combo_reward();
         return true;
     }
 
@@ -131,17 +140,17 @@ static bool mode_cartoon_handle_key(uint8_t kc, uint8_t mod, char c) {
     else if (c == '-' || c == '_' || kc == 0x56) { audio_play_cartoon_sfx(SFX_GAME_PUNCH); led_effects_color_burst(255, 0, 0); printf(" -> [GAME [-]: CÚ ĐẤM ĐỐI KHÁNG K.O. BỐP!]\r\n"); }
     else if (c == '=' || c == '+' || kc == 0x57) { audio_play_cartoon_sfx(SFX_VICTORY_FANFARE); led_effects_celebration(); printf(" -> [GAME [+]: NHẠC QUA MÀN CHIẾN THẮNG FANFARE!]\r\n"); }
 
-    // 7. Hàng chữ QWERTY: SIÊU ANH HÙNG & HÀNH ĐỘNG
-    else if (upper == 'Q') { audio_play_cartoon_sfx(SFX_GAME_JUMP); led_effects_color_burst(50, 255, 100); printf(" -> [Q: MARIO NHẢY BỔNG BOING-UÝT!]\r\n"); }
-    else if (upper == 'W') { audio_play_cartoon_sfx(SFX_GAME_SONIC_DASH); led_effects_color_burst(0, 150, 255); printf(" -> [W: SONIC SPIN-DASH SIÊU TỐC!]\r\n"); }
-    else if (upper == 'E') { audio_play_cartoon_sfx(SFX_LASER); led_effects_color_burst(255, 30, 30); printf(" -> [E: SÚNG LASER BẮN TIA NĂNG LƯỢNG!]\r\n"); }
-    else if (upper == 'R') { audio_play_cartoon_sfx(SFX_GAME_FIREBALL); led_effects_color_burst(255, 80, 0); printf(" -> [R: QUẢ CẦU LỬA NẢY TƯNG BẮN PIU CHÍU!]\r\n"); }
-    else if (upper == 'T') { audio_play_cartoon_sfx(SFX_CT_TIMPANI_BOOM); led_effects_color_burst(255, 120, 0); printf(" -> [T: TRỐNG ĐỊNH ÂM TIMPANI BOOOOM!]\r\n"); }
-    else if (upper == 'Y') { audio_play_cartoon_sfx(SFX_MARIO_COIN); led_effects_color_burst(255, 215, 0); printf(" -> [Y: NHẶT ĐỒNG XU VÀNG TING KENG!]\r\n"); }
-    else if (upper == 'U') { audio_play_cartoon_sfx(SFX_GAME_POWERUP); led_effects_color_burst(255, 50, 255); printf(" -> [U: NÂNG CẤP NẤM BIẾN HÌNH POWER-UP!]\r\n"); }
-    else if (upper == 'I') { audio_play_cartoon_sfx(SFX_GAME_1UP); led_effects_color_burst(0, 255, 200); printf(" -> [I: 1-UP HỒI MẠNG NHẠC TƯNG BỪNG!]\r\n"); }
-    else if (upper == 'O') { audio_play_cartoon_sfx(SFX_GAME_BOMB); led_effects_color_burst(255, 255, 255); printf(" -> [O: BOM NỔ 8-BIT BÙM RẦM!]\r\n"); }
-    else if (upper == 'P') { audio_play_cartoon_sfx(SFX_GAME_PUNCH); led_effects_color_burst(255, 0, 0); printf(" -> [P: CÚ ĐẤM CHÍ MẠNG BỐP BẸP!]\r\n"); }
+    // 7. Hàng chữ QWERTY: SIÊU ANH HÙNG & HÀNH ĐỘNG (Biến tấu cao độ độc lập không trùng hàng số!)
+    else if (upper == 'Q') { audio_play_cartoon_sfx_ex(SFX_GAME_JUMP, 4, 0); led_effects_color_burst(50, 255, 100); printf(" -> [Q: ĐẠI NHẢY SIÊU ANH HÙNG DOUBLE-JUMP!]\r\n"); }
+    else if (upper == 'W') { audio_play_cartoon_sfx_ex(SFX_CT_RUN_AWAY, 2, 0); led_effects_color_burst(0, 150, 255); printf(" -> [W: TIA CHỚP PHÓNG VỤT SIÊU TỐC!]\r\n"); }
+    else if (upper == 'E') { audio_play_cartoon_sfx_ex(SFX_LASER, -3, 0); led_effects_color_burst(255, 30, 30); printf(" -> [E: ĐẠI PHÁO PLASMA HẠNG NẶNG!]\r\n"); }
+    else if (upper == 'R') { audio_play_cartoon_sfx_ex(SFX_GAME_FIREBALL, 3, 0); led_effects_color_burst(255, 80, 0); printf(" -> [R: LIÊN HOÀN CẦU LỬA SIÊU CẤP!]\r\n"); }
+    else if (upper == 'T') { audio_play_cartoon_sfx_ex(SFX_CT_TIMPANI_BOOM, 0, 0); led_effects_color_burst(255, 120, 0); printf(" -> [T: TRỐNG ĐỊNH ÂM TIMPANI BOOOOM!]\r\n"); }
+    else if (upper == 'Y') { audio_play_cartoon_sfx_ex(SFX_MARIO_COIN, 5, 0); led_effects_color_burst(255, 215, 0); printf(" -> [Y: ĂN KIM CƯƠNG BÁU VẬT TING-TING!]\r\n"); }
+    else if (upper == 'U') { audio_play_cartoon_sfx_ex(SFX_GAME_WARP, -2, 0); led_effects_color_burst(255, 50, 255); printf(" -> [U: DỊCH CHUYỂN TỨC THỜI TELEPORT!]\r\n"); }
+    else if (upper == 'I') { audio_play_cartoon_sfx_ex(SFX_CT_GHOST_BOO, 2, 0); led_effects_color_burst(0, 255, 200); printf(" -> [I: HỒN MA TINH NGHỊCH Ú ÒA!]\r\n"); }
+    else if (upper == 'O') { audio_play_cartoon_sfx_ex(SFX_GAME_BOMB, -3, 0); led_effects_color_burst(255, 255, 255); printf(" -> [O: SIÊU BOM NGUYÊN TỬ NỔ RỀN VANG!]\r\n"); }
+    else if (upper == 'P') { audio_play_cartoon_sfx_ex(SFX_GAME_PUNCH, 3, 0); led_effects_color_burst(255, 0, 0); printf(" -> [P: CÚ ĐẤM THƯỢNG ĐẲNG UPPERCUT!]\r\n"); }
 
     // 8. Hàng chữ ASDFGH: TOM & JERRY SLAPSTICK COMEDY
     else if (upper == 'A') { audio_play_cartoon_sfx(SFX_CT_BONGO_RUN); led_effects_color_burst(255, 180, 0); printf(" -> [A: GUỒNG CHÂN CHẠY TẠI CHỖ BONGO FEET!]\r\n"); }
@@ -178,6 +187,8 @@ static bool mode_cartoon_handle_key(uint8_t kc, uint8_t mod, char c) {
         led_effects_spark();
         printf(" -> [CARTOON: HIỆU ỨNG ÂM THANH HOẠT HÌNH (Combo: %d)]\r\n", s_cartoon_combo);
     }
+
+    check_and_schedule_combo_reward();
     return true;
 }
 

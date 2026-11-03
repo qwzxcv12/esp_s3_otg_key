@@ -1,5 +1,6 @@
 #include "led_effects.h"
 #include <string.h>
+#include <stdlib.h>
 #include <math.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -12,43 +13,28 @@ static const char *TAG = "LED_FX";
 static led_strip_handle_t s_led_strip = NULL;
 static SemaphoreHandle_t s_led_mutex = NULL;
 static uint32_t s_idle_step = 0;
+static uint32_t s_idle_elapsed_ms = 0;
 
-esp_err_t led_effects_init(void) {
-    ESP_LOGI(TAG, "Initializing WS2812B LED strip on GPIO %d (%d LEDs)", PIN_LED_STRIP, LED_STRIP_COUNT);
+typedef enum {
+    LED_ANIM_NONE = 0,
+    LED_ANIM_MODE_SWITCH,
+    LED_ANIM_CELEBRATION,
+    LED_ANIM_COUNTING
+} led_anim_type_t;
 
-    s_led_mutex = xSemaphoreCreateMutex();
+static volatile led_anim_type_t s_anim_type = LED_ANIM_NONE;
+static volatile uint16_t s_anim_step = 0;
+static volatile uint16_t s_anim_hue = 0;
+static volatile uint8_t  s_count_target = 0;
+static volatile uint8_t  s_count_current = 0;
+static volatile int32_t  s_count_wait_ms = 0;
+static volatile uint32_t s_count_step_ms = 200;
 
-    led_strip_config_t strip_config = {
-        .strip_gpio_num = PIN_LED_STRIP,
-        .max_leds = LED_STRIP_COUNT,
-        .led_pixel_format = LED_PIXEL_FORMAT_GRB,
-        .led_model = LED_MODEL_WS2812,
-        .flags.invert_out = false,
-    };
-
-    led_strip_rmt_config_t rmt_config = {
-        .clk_src = RMT_CLK_SRC_DEFAULT,
-        .resolution_hz = 10 * 1000 * 1000, // 10MHz
-        .flags.with_dma = false,
-    };
-
-    esp_err_t ret = led_strip_new_rmt_device(&strip_config, &rmt_config, &s_led_strip);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to create RMT device for LED strip: %s", esp_err_to_name(ret));
-        return ret;
+static inline void touch_led_activity(bool cancel_anim) {
+    if (cancel_anim && s_anim_type != LED_ANIM_CELEBRATION) {
+        s_anim_type = LED_ANIM_NONE;
     }
-
-    led_strip_clear(s_led_strip);
-    led_effects_mode_switch(0); // Startup ripple
-    ESP_LOGI(TAG, "WS2812B RMT driver initialized successfully!");
-    return ESP_OK;
-}
-
-void led_effects_clear(void) {
-    if (!s_led_strip || !s_led_mutex) return;
-    if (xSemaphoreTake(s_led_mutex, pdMS_TO_TICKS(2)) != pdTRUE) return;
-    led_strip_clear(s_led_strip);
-    xSemaphoreGive(s_led_mutex);
+    s_idle_elapsed_ms = 0;
 }
 
 // Convert HSV (0-360, 0-100, 0-100) to RGB
@@ -76,36 +62,158 @@ static void hsv_to_rgb(uint16_t h, uint8_t s, uint8_t v, uint8_t *r, uint8_t *g,
     *b = (uint8_t)(bf * 255.0f);
 }
 
-// Mode switch wave animation (non-blocking yield so USB HID keyboard never stutters)
-void led_effects_mode_switch(uint8_t mode_index) {
+esp_err_t led_effects_init(void) {
+    ESP_LOGI(TAG, "Initializing WS2812B LED strip on GPIO %d (%d LEDs)", PIN_LED_STRIP, LED_STRIP_COUNT);
+
+    s_led_mutex = xSemaphoreCreateMutex();
+
+    led_strip_config_t strip_config = {
+        .strip_gpio_num = PIN_LED_STRIP,
+        .max_leds = LED_STRIP_COUNT,
+        .led_pixel_format = LED_PIXEL_FORMAT_GRB,
+        .led_model = LED_MODEL_WS2812,
+        .flags.invert_out = false,
+    };
+
+    led_strip_rmt_config_t rmt_config = {
+        .clk_src = RMT_CLK_SRC_DEFAULT,
+        .resolution_hz = 10 * 1000 * 1000, // 10MHz
+        .flags.with_dma = false,
+    };
+
+    esp_err_t ret = led_strip_new_rmt_device(&strip_config, &rmt_config, &s_led_strip);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to create RMT device for LED strip: %s", esp_err_to_name(ret));
+        return ret;
+    }
+
+    led_strip_clear(s_led_strip);
+    led_effects_mode_switch(0); // Non-blocking startup ripple
+    ESP_LOGI(TAG, "WS2812B RMT driver initialized successfully!");
+    return ESP_OK;
+}
+
+void led_effects_clear(void) {
+    if (!s_led_strip || !s_led_mutex) return;
+    s_anim_type = LED_ANIM_NONE;
+    if (xSemaphoreTake(s_led_mutex, pdMS_TO_TICKS(5)) != pdTRUE) return;
+    led_strip_clear(s_led_strip);
+    xSemaphoreGive(s_led_mutex);
+}
+
+// Non-blocking periodic animation tick (called every 25ms by toy_background_task)
+void led_effects_tick(uint32_t delta_ms) {
     if (!s_led_strip || !s_led_mutex) return;
 
-    uint16_t base_hue = (mode_index * 40) % 360;
-    for (int step = 0; step < LED_STRIP_COUNT + 5; step++) {
-        if (xSemaphoreTake(s_led_mutex, pdMS_TO_TICKS(2)) == pdTRUE) {
-            for (int i = 0; i < LED_STRIP_COUNT; i++) {
-                if (i <= step && (step - i) < 6) {
-                    uint8_t r, g, b;
-                    hsv_to_rgb((base_hue + i * 8) % 360, 100, 80, &r, &g, &b);
-                    led_strip_set_pixel(s_led_strip, i, r, g, b);
-                } else {
-                    led_strip_set_pixel(s_led_strip, i, 0, 0, 0);
+    led_anim_type_t anim = s_anim_type;
+
+    if (anim == LED_ANIM_MODE_SWITCH) {
+        uint16_t step = s_anim_step;
+        uint16_t base_hue = s_anim_hue;
+        if (step < LED_STRIP_COUNT + 6) {
+            if (xSemaphoreTake(s_led_mutex, pdMS_TO_TICKS(5)) == pdTRUE) {
+                for (int i = 0; i < LED_STRIP_COUNT; i++) {
+                    if (i <= (int)step && ((int)step - i) < 7) {
+                        uint8_t r, g, b;
+                        hsv_to_rgb((base_hue + i * 8) % 360, 100, 80, &r, &g, &b);
+                        led_strip_set_pixel(s_led_strip, i, r, g, b);
+                    } else {
+                        led_strip_set_pixel(s_led_strip, i, 0, 0, 0);
+                    }
                 }
+                led_strip_refresh(s_led_strip);
+                xSemaphoreGive(s_led_mutex);
             }
-            led_strip_refresh(s_led_strip);
-            xSemaphoreGive(s_led_mutex);
+            s_anim_step = step + 2; // Fast smooth sweep across 30 LEDs
+        } else {
+            s_anim_type = LED_ANIM_NONE;
+            s_idle_elapsed_ms = 0;
         }
-        vTaskDelay(pdMS_TO_TICKS(10));
+        return;
     }
-    if (xSemaphoreTake(s_led_mutex, pdMS_TO_TICKS(2)) == pdTRUE) {
-        led_strip_clear(s_led_strip);
-        xSemaphoreGive(s_led_mutex);
+
+    if (anim == LED_ANIM_CELEBRATION) {
+        uint16_t step = s_anim_step;
+        if (step < 18) {
+            if (xSemaphoreTake(s_led_mutex, pdMS_TO_TICKS(5)) == pdTRUE) {
+                for (int i = 0; i < LED_STRIP_COUNT; i++) {
+                    uint8_t r, g, b;
+                    uint16_t hue = (step * 25 + i * 12) % 360;
+                    hsv_to_rgb(hue, 100, 85, &r, &g, &b);
+                    led_strip_set_pixel(s_led_strip, i, r, g, b);
+                }
+                led_strip_refresh(s_led_strip);
+                xSemaphoreGive(s_led_mutex);
+            }
+            s_anim_step = step + 1;
+        } else {
+            s_anim_type = LED_ANIM_NONE;
+            s_idle_elapsed_ms = 0;
+        }
+        return;
     }
+
+    if (anim == LED_ANIM_COUNTING) {
+        s_count_wait_ms -= (int32_t)delta_ms;
+        if (s_count_wait_ms <= 0) {
+            uint8_t cur = s_count_current + 1;
+            s_count_current = cur;
+            // Color progresses warmly along the strip
+            uint8_t r, g, b;
+            hsv_to_rgb((cur * 28) % 360, 95, 95, &r, &g, &b);
+            led_effects_count(cur, r, g, b);
+            if (cur >= s_count_target) {
+                s_anim_type = LED_ANIM_NONE;
+                s_idle_elapsed_ms = 0;
+            } else {
+                s_count_wait_ms = (int32_t)s_count_step_ms;
+            }
+        }
+        return;
+    }
+
+    // Gentle idle breathing glow after 4.5 seconds of inactivity so the toy stays inviting
+    s_idle_elapsed_ms += delta_ms;
+    if (s_idle_elapsed_ms >= 4500) {
+        led_effects_idle_step();
+    }
+}
+
+// Mode switch wave animation (100% non-blocking: zero delay in USB HID callback!)
+void led_effects_mode_switch(uint8_t mode_index) {
+    s_anim_hue = (mode_index * 40) % 360;
+    s_anim_step = 0;
+    s_anim_type = LED_ANIM_MODE_SWITCH;
+    s_idle_elapsed_ms = 0;
+}
+
+// Celebration rainbow fanfare (100% non-blocking: zero delay in USB HID callback!)
+void led_effects_celebration(void) {
+    s_anim_step = 0;
+    s_anim_type = LED_ANIM_CELEBRATION;
+    s_idle_elapsed_ms = 0;
+}
+
+// Non-blocking synchronized LED counting sequence for Mode 9
+void led_effects_start_counting(uint8_t target_count, uint32_t delay_ms, uint32_t step_ms) {
+    if (target_count == 0) {
+        s_anim_type = LED_ANIM_NONE;
+        led_effects_color_burst(0, 200, 255);
+        return;
+    }
+    if (target_count > LED_STRIP_COUNT) target_count = LED_STRIP_COUNT;
+    s_count_target = target_count;
+    s_count_current = 0;
+    s_count_wait_ms = (int32_t)delay_ms;
+    s_count_step_ms = (step_ms > 50) ? step_ms : 180;
+    s_anim_type = LED_ANIM_COUNTING;
+    s_idle_elapsed_ms = 0;
 }
 
 // Note hit visual: center around note_idx on the strip
 void led_effects_note(uint8_t note_idx, uint8_t total_notes, uint8_t r, uint8_t g, uint8_t b) {
     if (!s_led_strip || !s_led_mutex) return;
+    touch_led_activity(true);
     if (xSemaphoreTake(s_led_mutex, pdMS_TO_TICKS(2)) != pdTRUE) return;
 
     int center = (note_idx * (LED_STRIP_COUNT - 1)) / (total_notes > 0 ? total_notes : 1);
@@ -126,6 +234,7 @@ void led_effects_note(uint8_t note_idx, uint8_t total_notes, uint8_t r, uint8_t 
 // Drum beat strobe
 void led_effects_beat(void) {
     if (!s_led_strip || !s_led_mutex) return;
+    touch_led_activity(true);
     if (xSemaphoreTake(s_led_mutex, pdMS_TO_TICKS(2)) != pdTRUE) return;
 
     for (int i = 0; i < LED_STRIP_COUNT; i++) {
@@ -138,6 +247,7 @@ void led_effects_beat(void) {
 // Typewriter mechanical spark
 void led_effects_spark(void) {
     if (!s_led_strip || !s_led_mutex) return;
+    touch_led_activity(true);
     if (xSemaphoreTake(s_led_mutex, pdMS_TO_TICKS(2)) != pdTRUE) return;
 
     int pos = rand() % LED_STRIP_COUNT;
@@ -149,9 +259,38 @@ void led_effects_spark(void) {
     xSemaphoreGive(s_led_mutex);
 }
 
+// Typewriter paper carriage bar (moves left to right, glows orange-red near margin bell)
+void led_effects_carriage(uint8_t col, uint8_t max_col) {
+    if (!s_led_strip || !s_led_mutex) return;
+    touch_led_activity(true);
+    if (xSemaphoreTake(s_led_mutex, pdMS_TO_TICKS(2)) != pdTRUE) return;
+
+    if (max_col == 0) max_col = LED_STRIP_COUNT;
+    int pos = (col * (LED_STRIP_COUNT - 1)) / max_col;
+    if (pos >= LED_STRIP_COUNT) pos = LED_STRIP_COUNT - 1;
+
+    led_strip_clear(s_led_strip);
+    for (int i = 0; i <= pos; i++) {
+        if (i == pos) {
+            // Print head cursor: bright white-gold, or red-orange in margin bell warning zone
+            if (pos >= LED_STRIP_COUNT - 5) {
+                led_strip_set_pixel(s_led_strip, i, 255, 60, 0);
+            } else {
+                led_strip_set_pixel(s_led_strip, i, 255, 240, 180);
+            }
+        } else {
+            // Typed paper trail: soft warm vintage amber
+            led_strip_set_pixel(s_led_strip, i, 45, 30, 8);
+        }
+    }
+    led_strip_refresh(s_led_strip);
+    xSemaphoreGive(s_led_mutex);
+}
+
 // Full strip color burst
 void led_effects_color_burst(uint8_t r, uint8_t g, uint8_t b) {
     if (!s_led_strip || !s_led_mutex) return;
+    touch_led_activity(true);
     if (xSemaphoreTake(s_led_mutex, pdMS_TO_TICKS(2)) != pdTRUE) return;
 
     for (int i = 0; i < LED_STRIP_COUNT; i++) {
@@ -164,6 +303,7 @@ void led_effects_color_burst(uint8_t r, uint8_t g, uint8_t b) {
 // Matrix green trail for Morse / Robot
 void led_effects_matrix(void) {
     if (!s_led_strip || !s_led_mutex) return;
+    touch_led_activity(true);
     if (xSemaphoreTake(s_led_mutex, pdMS_TO_TICKS(2)) != pdTRUE) return;
 
     int pos = rand() % LED_STRIP_COUNT;
@@ -175,16 +315,17 @@ void led_effects_matrix(void) {
 // Cockpit police lights: left red, right blue alternating
 void led_effects_police(bool toggle) {
     if (!s_led_strip || !s_led_mutex) return;
+    touch_led_activity(false);
     if (xSemaphoreTake(s_led_mutex, pdMS_TO_TICKS(2)) != pdTRUE) return;
 
     int half = LED_STRIP_COUNT / 2;
     for (int i = 0; i < LED_STRIP_COUNT; i++) {
         if (toggle) {
-            if (i < half) led_strip_set_pixel(s_led_strip, i, 255, 0, 0); // Red
-            else led_strip_set_pixel(s_led_strip, i, 0, 0, 255);          // Blue
+            if (i < half) led_strip_set_pixel(s_led_strip, i, 220, 0, 0); // Red
+            else led_strip_set_pixel(s_led_strip, i, 0, 0, 220);          // Blue
         } else {
-            if (i < half) led_strip_set_pixel(s_led_strip, i, 0, 0, 255); // Blue
-            else led_strip_set_pixel(s_led_strip, i, 255, 0, 0);          // Red
+            if (i < half) led_strip_set_pixel(s_led_strip, i, 0, 0, 220); // Blue
+            else led_strip_set_pixel(s_led_strip, i, 220, 0, 0);          // Red
         }
     }
     led_strip_refresh(s_led_strip);
@@ -194,6 +335,7 @@ void led_effects_police(bool toggle) {
 // Fire truck water cannon spray: rushing cyan/blue water wave
 void led_effects_water_spray(void) {
     if (!s_led_strip || !s_led_mutex) return;
+    touch_led_activity(true);
     if (xSemaphoreTake(s_led_mutex, pdMS_TO_TICKS(5)) != pdTRUE) return;
     for (int i = 0; i < LED_STRIP_COUNT; i++) {
         uint8_t b = 180 + (rand() % 75);
@@ -207,6 +349,7 @@ void led_effects_water_spray(void) {
 // Fire truck turn signal: amber blink on left or right half
 void led_effects_turn_signal(bool left) {
     if (!s_led_strip || !s_led_mutex) return;
+    touch_led_activity(true);
     if (xSemaphoreTake(s_led_mutex, pdMS_TO_TICKS(5)) != pdTRUE) return;
     led_strip_clear(s_led_strip);
     int half = LED_STRIP_COUNT / 2;
@@ -222,6 +365,7 @@ void led_effects_turn_signal(bool left) {
 // Fire truck searchlight: blazing pure white beam
 void led_effects_searchlight(void) {
     if (!s_led_strip || !s_led_mutex) return;
+    touch_led_activity(true);
     if (xSemaphoreTake(s_led_mutex, pdMS_TO_TICKS(5)) != pdTRUE) return;
     for (int i = 0; i < LED_STRIP_COUNT; i++) {
         led_strip_set_pixel(s_led_strip, i, 255, 255, 255);
@@ -233,6 +377,7 @@ void led_effects_searchlight(void) {
 // Fire glow: flickering warm red-orange embers
 void led_effects_fire_glow(void) {
     if (!s_led_strip || !s_led_mutex) return;
+    touch_led_activity(true);
     if (xSemaphoreTake(s_led_mutex, pdMS_TO_TICKS(5)) != pdTRUE) return;
     for (int i = 0; i < LED_STRIP_COUNT; i++) {
         uint8_t r = 200 + (rand() % 55);
@@ -246,6 +391,7 @@ void led_effects_fire_glow(void) {
 // Rescue success: celebration rainbow wave
 void led_effects_rescue_success(void) {
     if (!s_led_strip || !s_led_mutex) return;
+    touch_led_activity(true);
     if (xSemaphoreTake(s_led_mutex, pdMS_TO_TICKS(5)) != pdTRUE) return;
     for (int i = 0; i < LED_STRIP_COUNT; i++) {
         uint8_t r, g, b;
@@ -262,12 +408,12 @@ void led_effects_idle_step(void) {
     if (xSemaphoreTake(s_led_mutex, pdMS_TO_TICKS(2)) != pdTRUE) return;
 
     s_idle_step++;
-    float rad = (float)s_idle_step * 0.05f;
-    float brightness = (sinf(rad) + 1.0f) * 0.5f * 35.0f + 5.0f; // 5% to 40%
+    float rad = (float)s_idle_step * 0.08f;
+    float brightness = (sinf(rad) + 1.0f) * 0.5f * 28.0f + 4.0f; // Soft 4% to 32% breathing
 
-    uint8_t r, g, b;
-    hsv_to_rgb((s_idle_step / 2) % 360, 80, (uint8_t)brightness, &r, &g, &b);
     for (int i = 0; i < LED_STRIP_COUNT; i++) {
+        uint8_t r, g, b;
+        hsv_to_rgb((s_idle_step * 2 + i * 6) % 360, 80, (uint8_t)brightness, &r, &g, &b);
         led_strip_set_pixel(s_led_strip, i, r, g, b);
     }
     led_strip_refresh(s_led_strip);
@@ -277,6 +423,7 @@ void led_effects_idle_step(void) {
 // Light up exactly N LEDs for counting
 void led_effects_count(uint8_t count, uint8_t r, uint8_t g, uint8_t b) {
     if (!s_led_strip || !s_led_mutex) return;
+    s_idle_elapsed_ms = 0;
     if (xSemaphoreTake(s_led_mutex, pdMS_TO_TICKS(2)) != pdTRUE) return;
 
     led_strip_clear(s_led_strip);
@@ -292,6 +439,7 @@ void led_effects_count(uint8_t count, uint8_t r, uint8_t g, uint8_t b) {
 // Volume bar indicator on LED strip
 void led_effects_volume(float volume) {
     if (!s_led_strip || !s_led_mutex) return;
+    touch_led_activity(true);
     if (xSemaphoreTake(s_led_mutex, pdMS_TO_TICKS(2)) != pdTRUE) return;
 
     led_strip_clear(s_led_strip);
@@ -314,10 +462,10 @@ void led_effects_volume(float volume) {
     xSemaphoreGive(s_led_mutex);
 }
 
-
 // Mozart pitch visualizer: maps musical pitch (C3..C6) across the LED strip with timbre colors
 void led_effects_mozart_note(float freq, float bass_freq, uint8_t timbre) {
     if (!s_led_strip || !s_led_mutex) return;
+    touch_led_activity(true);
     if (xSemaphoreTake(s_led_mutex, pdMS_TO_TICKS(2)) != pdTRUE) return;
 
     led_strip_clear(s_led_strip);
@@ -368,30 +516,6 @@ void led_effects_mozart_note(float freq, float bass_freq, uint8_t timbre) {
     xSemaphoreGive(s_led_mutex);
 }
 
-// Celebration rainbow fanfare when a Mozart piece is completed
-void led_effects_celebration(void) {
-    if (!s_led_strip || !s_led_mutex) return;
-
-    for (int step = 0; step < 16; step++) {
-        if (xSemaphoreTake(s_led_mutex, pdMS_TO_TICKS(5)) == pdTRUE) {
-            for (int i = 0; i < LED_STRIP_COUNT; i++) {
-                uint8_t r, g, b;
-                uint16_t hue = (step * 25 + i * 12) % 360;
-                hsv_to_rgb(hue, 100, 85, &r, &g, &b);
-                led_strip_set_pixel(s_led_strip, i, r, g, b);
-            }
-            led_strip_refresh(s_led_strip);
-            xSemaphoreGive(s_led_mutex);
-        }
-        vTaskDelay(pdMS_TO_TICKS(25));
-    }
-
-    if (xSemaphoreTake(s_led_mutex, pdMS_TO_TICKS(5)) == pdTRUE) {
-        led_strip_clear(s_led_strip);
-        xSemaphoreGive(s_led_mutex);
-    }
-}
-
 // ============================================================================
 // MODE 3: SPEED RUNNER (TACHOMETER & RACING VISUAL EFFECTS)
 // ============================================================================
@@ -399,6 +523,7 @@ void led_effects_celebration(void) {
 // Speedometer visualizer: Displays racing speed across 30 LEDs like a dynamic car tachometer
 void led_effects_speedometer(uint8_t speed_level, float speed_ratio) {
     if (!s_led_strip || !s_led_mutex) return;
+    touch_led_activity(true);
     if (xSemaphoreTake(s_led_mutex, pdMS_TO_TICKS(2)) != pdTRUE) return;
 
     static uint16_t s_speed_step = 0;
@@ -432,17 +557,13 @@ void led_effects_speedometer(uint8_t speed_level, float speed_ratio) {
             float pos = (float)i / (float)LED_STRIP_COUNT;
             uint8_t r = 0, g = 0, b = 0;
             if (pos < 0.40f) {
-                // Xanh la the thao (Green Cruising)
-                r = 0; g = 190; b = 40;
+                r = 0; g = 190; b = 40;   // Green Cruising
             } else if (pos < 0.75f) {
-                // Vang cam nang dong (Amber Sport)
-                r = 250; g = 160; b = 0;
+                r = 250; g = 160; b = 0;  // Amber Sport
             } else {
-                // Do ruc lua F1 (Racing Red)
-                r = 255; g = 20; b = 10;
+                r = 255; g = 20; b = 10;  // Racing Red
             }
 
-            // Dau kim toc do nhap nhay anh sang trang
             if (i == active_leds - 1) {
                 r = 255; g = 255; b = 255;
             }
@@ -454,9 +575,9 @@ void led_effects_speedometer(uint8_t speed_level, float speed_ratio) {
     xSemaphoreGive(s_led_mutex);
 }
 
-// Phanh khan cap: Den phanh do ruc ro
 void led_effects_speed_brake(void) {
     if (!s_led_strip || !s_led_mutex) return;
+    touch_led_activity(true);
     if (xSemaphoreTake(s_led_mutex, pdMS_TO_TICKS(5)) != pdTRUE) return;
 
     for (int i = 0; i < LED_STRIP_COUNT; i++) {
@@ -466,9 +587,9 @@ void led_effects_speed_brake(void) {
     xSemaphoreGive(s_led_mutex);
 }
 
-// Bom Nitro but toc: Chop xanh bang neon ruc ro
 void led_effects_speed_nitro(void) {
     if (!s_led_strip || !s_led_mutex) return;
+    touch_led_activity(true);
     if (xSemaphoreTake(s_led_mutex, pdMS_TO_TICKS(5)) != pdTRUE) return;
 
     for (int i = 0; i < LED_STRIP_COUNT; i++) {

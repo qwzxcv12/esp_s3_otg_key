@@ -103,10 +103,6 @@ static float s_siren_phase = 0.0f;
 static float s_siren_gain = 0.0f;
 static uint32_t s_siren_step = 0;
 
-// Speed runner timing
-static int64_t s_last_speed_key_time = 0;
-static uint32_t s_speed_melody_idx = 0;
-
 // ============================================================================
 // MOZART 20-SONG MASTER PLAYLIST & HARMONIC AUDIO ENGINE
 // ============================================================================
@@ -412,13 +408,22 @@ static bool s_mozart_autoplay = false;
 static int64_t s_mozart_last_tick_us = 0;
 static uint32_t s_mozart_next_delay_ms = 400;
 
-// (s_speed_notes moved to Speed Runner engine)
-
 // Thread-safe voice triggering
-static void trigger_voice_at(voice_mode_t mode, float freq, float start_f, float end_f,
-                             float amp, uint32_t dur_ms, uint8_t sub_type, uint32_t delay_ms) {
+static void trigger_voice_at_owned(voice_mode_t mode, float freq, float start_f, float end_f,
+                                   float amp, uint32_t dur_ms, uint8_t sub_type, uint32_t delay_ms, uint8_t owner) {
     if (!s_voice_mutex) return;
     if (xSemaphoreTake(s_voice_mutex, pdMS_TO_TICKS(25)) != pdTRUE) return;
+
+    if (owner != 0) {
+        for (int i = 0; i < MAX_POLY_VOICES; i++) {
+            voice_t *o = &s_voices[i];
+            if (o->active && o->owner == owner) {
+                o->owner = 0;
+                o->releasing = true;
+                o->rel_decay = 1.0f / ((float)(AUDIO_SAMPLE_RATE * 10) / 1000.0f);
+            }
+        }
+    }
 
     voice_t *chosen = NULL;
     for (int i = 0; i < MAX_POLY_VOICES; i++) {
@@ -452,15 +457,23 @@ static void trigger_voice_at(voice_mode_t mode, float freq, float start_f, float
     chosen->delay = (AUDIO_SAMPLE_RATE * delay_ms) / 1000;
     chosen->lp = 0.0f;
     chosen->pcm = NULL;
+    chosen->env = 1.0f;
+    chosen->rel_decay = 0.0f;
     chosen->releasing = false;
+    chosen->owner = owner;
     chosen->active = true;
 
     xSemaphoreGive(s_voice_mutex);
 }
 
+static inline void trigger_voice_at(voice_mode_t mode, float freq, float start_f, float end_f,
+                                    float amp, uint32_t dur_ms, uint8_t sub_type, uint32_t delay_ms) {
+    trigger_voice_at_owned(mode, freq, start_f, end_f, amp, dur_ms, sub_type, delay_ms, 0);
+}
+
 static inline void trigger_voice_internal(voice_mode_t mode, float freq, float start_f, float end_f,
                                           float amp, uint32_t dur_ms, uint8_t sub_type) {
-    trigger_voice_at(mode, freq, start_f, end_f, amp, dur_ms, sub_type, 0);
+    trigger_voice_at_owned(mode, freq, start_f, end_f, amp, dur_ms, sub_type, 0, 0);
 }
 
 // ---------------------------------------------------------------------------
@@ -475,10 +488,10 @@ int audio_sample_play(const pcm_asset_t *asset, float gain, float semitone, bool
     if (owner != 0) {
         for (int i = 0; i < MAX_POLY_VOICES; i++) {
             voice_t *o = &s_voices[i];
-            if (o->active && o->mode == VOICE_SAMPLE && o->owner == owner) {
-                o->owner = 0; // Release event from old press will no longer affect this
+            if (o->active && o->owner == owner) {
+                o->owner = 0;
                 o->releasing = true;
-                o->rel_decay = 1.0f / ((float)(AUDIO_SAMPLE_RATE * 8) / 1000.0f); // Fast 8ms fade
+                o->rel_decay = 1.0f / ((float)(AUDIO_SAMPLE_RATE * 8) / 1000.0f);
             }
         }
     }
@@ -535,7 +548,7 @@ void audio_sample_release_owner(uint8_t owner, uint32_t release_ms) {
     if (xSemaphoreTake(s_voice_mutex, pdMS_TO_TICKS(5)) != pdTRUE) return;
     for (int i = 0; i < MAX_POLY_VOICES; i++) {
         voice_t *v = &s_voices[i];
-        if (v->active && v->mode == VOICE_SAMPLE && v->owner == owner && !v->releasing) {
+        if (v->active && v->owner == owner && !v->releasing) {
             v->releasing = true;
             v->rel_decay = decay;
             v->owner = 0; // Disown so it won't be re-released
@@ -567,12 +580,10 @@ static void audio_synth_task(void *pvParameters) {
     float float_mix[CHUNK_SAMPLES];
 
     while (1) {
-        // Clear mix buffer
         memset(float_mix, 0, sizeof(float_mix));
 
         xSemaphoreTake(s_voice_mutex, portMAX_DELAY);
 
-        // Mix active voices using ultra-fast wavetable
         for (int v = 0; v < MAX_POLY_VOICES; v++) {
             voice_t *vc = &s_voices[v];
             if (!vc->active) continue;
@@ -602,21 +613,27 @@ static void audio_synth_task(void *pvParameters) {
                             float decay = 1.0f - progress;
                             env = decay * decay;
                         }
+                        if (vc->releasing) {
+                            vc->env -= vc->rel_decay;
+                            if (vc->env <= 0.0f) {
+                                vc->env = 0.0f;
+                                vc->active = false;
+                                break;
+                            }
+                            env *= vc->env;
+                        }
 
                         vc->phase += vc->phase_inc;
                         float s = fast_sin(vc->phase);
 
                         if (vc->sub_type == TIMBRE_PIANO) {
-                            // Piano: fundamental + 2nd harmonic
                             float s2 = fast_sin(vc->phase * 2.0f);
                             sample = (s + 0.35f * s2) * env * vc->amp;
                         } else if (vc->sub_type == TIMBRE_8BIT_MARIO) {
-                            // Band-limited square wave (1st+3rd+5th harmonics) - no harsh aliasing
                             float sq = (s + fast_sin(vc->phase * 3.0f) * 0.3333f + fast_sin(vc->phase * 5.0f) * 0.2f) * 0.55f;
                             sample = sq * env * vc->amp;
                         } else {
-                            // Music box: Pure bell with decay
-                            float bell_env = (1.0f - progress) * (1.0f - progress);
+                            float bell_env = (1.0f - progress) * (1.0f - progress) * vc->env;
                             float s3 = fast_sin(vc->phase * 2.75f);
                             sample = (s + 0.25f * s3) * bell_env * vc->amp;
                         }
@@ -629,11 +646,9 @@ static void audio_synth_task(void *pvParameters) {
                         float env = 1.0f - progress;
                         float s = fast_sin(vc->phase);
                         if (vc->sub_type >= 1) {
-                            // Rich: add harmonics so low thumps are audible on small speakers
                             s = (s + 0.45f * fast_sin(vc->phase * 2.0f) + 0.2f * fast_sin(vc->phase * 3.0f)) * 0.7f;
                         }
                         if (vc->sub_type == 2 && vc->pos < 220) {
-                            // Kick beater click (5 ms noise transient)
                             float click = ((float)(rand() % 2000) - 1000.0f) / 1000.0f;
                             s += click * 0.5f * (1.0f - (float)vc->pos / 220.0f);
                         }
@@ -645,13 +660,11 @@ static void audio_synth_task(void *pvParameters) {
                         float env = (1.0f - progress) * (1.0f - progress);
                         float white = ((float)(rand() % 2000) - 1000.0f) / 1000.0f;
                         if (vc->sub_type >= 1) {
-                            // High-pass (first difference): crisp hi-hat / cymbal / clap instead of dull static
                             float hp = (white - vc->lp) * 0.5f;
                             vc->lp = white;
                             white = hp * 1.4f;
                         }
                         if (vc->sub_type == 2) {
-                            // Clap: three quick pulses
                             float ph = fmodf(progress * 3.0f, 1.0f);
                             env *= (ph < 0.3f) ? 1.0f : 0.3f;
                         }
@@ -663,13 +676,12 @@ static void audio_synth_task(void *pvParameters) {
                         float env = 1.0f;
                         if (progress < 0.05f) env = progress / 0.05f;
                         else if (progress > 0.95f) env = (1.0f - progress) / 0.05f;
-                        vc->phase += (float)(SINE_TABLE_SIZE * 750.0f) / (float)AUDIO_SAMPLE_RATE;
+                        vc->phase += vc->phase_inc;
                         sample = fast_sin(vc->phase) * env * vc->amp;
                         break;
                     }
 
                     case VOICE_R2D2: {
-                        // Gliding chirp with soft attack/release (no clicks)
                         float f = vc->start_freq + (vc->end_freq - vc->start_freq) * progress;
                         float env = 1.0f;
                         if (progress < 0.1f) env = progress / 0.1f;
@@ -680,7 +692,6 @@ static void audio_synth_task(void *pvParameters) {
                     }
 
                     case VOICE_ENGINE_RUMBLE: {
-                        // 80 Hz firing pulse + harmonics + noise (55 Hz alone is inaudible on small speakers)
                         float env = 1.0f;
                         if (progress < 0.1f) env = progress / 0.1f;
                         else if (progress > 0.7f) env = (1.0f - progress) / 0.3f;
@@ -696,11 +707,9 @@ static void audio_synth_task(void *pvParameters) {
                         float f = vc->start_freq + (vc->end_freq - vc->start_freq) * progress;
                         vc->phase += (float)(SINE_TABLE_SIZE * f) / (float)AUDIO_SAMPLE_RATE;
                         float env = fast_sin(progress * (float)(SINE_TABLE_SIZE / 2));
-                        // Harmonically rich voice instead of a bare beep
                         float s = fast_sin(vc->phase) + 0.5f * fast_sin(vc->phase * 2.0f) + 0.3f * fast_sin(vc->phase * 3.0f);
                         s *= 0.55f;
                         if (vc->start_freq < 320.0f) {
-                            // Low animals: growl via ~35 Hz amplitude modulation
                             float gr = fast_sin((float)vc->pos * (float)(SINE_TABLE_SIZE * 35.0f) / (float)AUDIO_SAMPLE_RATE);
                             s *= (0.65f + 0.35f * gr);
                         }
@@ -722,7 +731,6 @@ static void audio_synth_task(void *pvParameters) {
                             }
                         }
 
-                        // Linear interpolation between adjacent samples
                         int16_t s0 = vc->pcm[vc->sidx];
                         int16_t s1 = (vc->sidx + 1 < vc->pcm_len) ? vc->pcm[vc->sidx + 1] : (vc->loop ? vc->pcm[0] : s0);
                         float raw_s = ((float)s0 + (float)(s1 - s0) * vc->sfrac) * (1.0f / 32768.0f);
@@ -745,7 +753,7 @@ static void audio_synth_task(void *pvParameters) {
 
                         if (vc->stop_at > 0 && vc->pos >= vc->stop_at && !vc->releasing) {
                             vc->releasing = true;
-                            vc->rel_decay = 1.0f / ((float)(AUDIO_SAMPLE_RATE * 15) / 1000.0f);
+                            vc->rel_decay = 1.0f / ((float)(AUDIO_SAMPLE_RATE * 18) / 1000.0f);
                         }
                         break;
                     }
@@ -760,7 +768,6 @@ static void audio_synth_task(void *pvParameters) {
         }
 
         // Handle cockpit siren (smooth fade in/out, phase wrapped to keep float precision)
-        // Only run algorithmic siren if the sample siren is NOT available on LittleFS
         if (!sb_has_siren() && (s_siren_on || s_siren_gain > 0.001f)) {
             s_siren_step += CHUNK_SAMPLES;
             float siren_t = (float)s_siren_step / (float)AUDIO_SAMPLE_RATE;
@@ -772,7 +779,7 @@ static void audio_synth_task(void *pvParameters) {
                 s_siren_phase += inc;
                 if (s_siren_phase >= (float)SINE_TABLE_SIZE) s_siren_phase -= (float)SINE_TABLE_SIZE;
                 float sw = fast_sin(s_siren_phase) + 0.3f * fast_sin(s_siren_phase * 3.0f);
-                float_mix[i] += sw * 0.4f * s_siren_gain;
+                float_mix[i] += sw * 0.35f * s_siren_gain;
             }
             if (s_siren_step > AUDIO_SAMPLE_RATE * 3600u) s_siren_step = 0;
         }
@@ -784,11 +791,10 @@ static void audio_synth_task(void *pvParameters) {
         for (int i = 0; i < CHUNK_SAMPLES; i++) {
             float val = soft_limit(float_mix[i] * MIX_PRE_GAIN * 1.6f);
             int32_t pcm = (int32_t)(val * max_int32);
-            mix_buffer[i * 2]     = pcm; // Left channel
-            mix_buffer[i * 2 + 1] = pcm; // Right channel
+            mix_buffer[i * 2]     = pcm;
+            mix_buffer[i * 2 + 1] = pcm;
         }
 
-        // Write directly to I2S DMA
         size_t written = 0;
         i2s_channel_write(s_tx_handle, mix_buffer, CHUNK_SAMPLES * 2 * sizeof(int32_t), &written, pdMS_TO_TICKS(50));
     }
@@ -802,7 +808,6 @@ esp_err_t audio_synth_init(void) {
     s_voice_mutex = xSemaphoreCreateMutex();
     memset(s_voices, 0, sizeof(s_voices));
 
-    // I2S Standard Master Channel
     i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_0, I2S_ROLE_MASTER);
     chan_cfg.auto_clear = true;
     chan_cfg.dma_desc_num = 6;
@@ -844,8 +849,6 @@ esp_err_t audio_synth_init(void) {
     }
 
     s_audio_ready = true;
-
-    // Launch synthesis task pinned to CPU Core 1 with normal priority (4) so IDLE1 can always run
     xTaskCreatePinnedToCore(audio_synth_task, "audio_synth", 6144, NULL, 4, NULL, 1);
 
     ESP_LOGI(TAG, "I2S Audio Engine ready at %d Hz!", AUDIO_SAMPLE_RATE);
@@ -871,11 +874,10 @@ void audio_synth_volume_down(void) {
     audio_synth_set_volume(s_master_volume - 0.05f);
 }
 
-// Audio feedback tick when volume changes (frequency scales with volume)
 void audio_play_volume_tick(float volume, bool is_up) {
     if (volume <= 0.01f) return;
     if (sb_play_tick(volume)) return;
-    float base_freq = 380.0f + (volume * 820.0f); // 380Hz - 1200Hz
+    float base_freq = 380.0f + (volume * 820.0f);
     trigger_voice_internal(VOICE_TONE_ADSR, base_freq, 0, 0, 0.70f, 50, TIMBRE_MUSIC_BOX);
 }
 
@@ -890,20 +892,34 @@ void audio_play_piano_note(float freq_hz, piano_timbre_t timbre) {
     trigger_voice_internal(VOICE_TONE_ADSR, freq_hz, 0, 0, 0.85f, 750, timbre);
 }
 
-void audio_play_piano_note_key(float freq_hz, piano_timbre_t timbre, uint8_t owner_key) {
-    if (!sb_play_piano(freq_hz, (uint8_t)timbre, owner_key)) {
-        audio_play_piano_note(freq_hz, timbre);
+void audio_play_piano_note_dur(float freq_hz, piano_timbre_t timbre, uint8_t owner_key, uint32_t max_ms) {
+    if (!sb_play_piano_dur(freq_hz, (uint8_t)timbre, owner_key, max_ms)) {
+        uint32_t dur = (max_ms > 0) ? max_ms : 750;
+        trigger_voice_at_owned(VOICE_TONE_ADSR, freq_hz, 0, 0, 0.85f, dur, timbre, 0, owner_key);
     }
 }
 
+void audio_play_piano_note_key(float freq_hz, piano_timbre_t timbre, uint8_t owner_key) {
+    audio_play_piano_note_dur(freq_hz, timbre, owner_key, 0);
+}
+
 void audio_piano_key_release(uint8_t owner_key) {
-    audio_sample_release_owner(owner_key, 350); // Natural piano damper release ~350ms (never clips or drops short taps)
+    audio_sample_release_owner(owner_key, 320); // Natural damper release for both sample and synth voices
 }
 
 void audio_play_praise(void) {
     if (!sb_play_praise()) {
         audio_play_cartoon_sfx(SFX_VICTORY_FANFARE);
     }
+}
+
+// Joyful C-major arpeggio + boing when a toddler slaps their whole palm on the keyboard (RollOver)
+void audio_play_slap_chord(void) {
+    sb_play_cartoon_ex(SFX_SPRING_BOING, 0.0f, 0);
+    trigger_voice_at(VOICE_TONE_ADSR, F_C5, 0, 0, 0.65f, 240, TIMBRE_MUSIC_BOX, 0);
+    trigger_voice_at(VOICE_TONE_ADSR, F_E5, 0, 0, 0.65f, 240, TIMBRE_MUSIC_BOX, 35);
+    trigger_voice_at(VOICE_TONE_ADSR, F_G5, 0, 0, 0.65f, 260, TIMBRE_MUSIC_BOX, 70);
+    trigger_voice_at(VOICE_TONE_ADSR, F_C6, 0, 0, 0.70f, 340, TIMBRE_MUSIC_BOX, 105);
 }
 
 // Mode change melodic chime
@@ -926,7 +942,9 @@ const char *audio_mozart_get_timbre_name(void) {
 }
 
 uint8_t audio_mozart_toggle_timbre(void) {
-    s_mozart_timbre = (s_mozart_timbre + 1) % 3; // 0=Grand Piano, 1=Music Box Bell, 2=8-bit Marimba
+    s_mozart_timbre = (s_mozart_timbre + 1) % 3;
+    // Play a gentle preview chord in the new timbre
+    audio_play_piano_note_dur(F_C5, s_mozart_timbre, 0, 260);
     return s_mozart_timbre;
 }
 
@@ -960,10 +978,9 @@ void audio_mozart_next_song(void) {
     s_mozart_note_idx = 0;
     s_mozart_last_tick_us = esp_timer_get_time();
     s_mozart_next_delay_ms = 400;
-    ESP_LOGI(TAG, "Switched Mozart song to: %s (%s)",
-             s_mozart_playlist[s_mozart_song_idx].name,
-             s_mozart_playlist[s_mozart_song_idx].artist);
-    audio_play_cartoon_sfx(SFX_MARIO_COIN);
+    const mozart_song_t *curr = &s_mozart_playlist[s_mozart_song_idx];
+    ESP_LOGI(TAG, "Switched Mozart song to: %s (%s)", curr->name, curr->artist);
+    audio_play_piano_note_dur(curr->notes[0].freq, s_mozart_timbre, 0, 260);
 }
 
 void audio_mozart_prev_song(void) {
@@ -972,10 +989,9 @@ void audio_mozart_prev_song(void) {
     s_mozart_note_idx = 0;
     s_mozart_last_tick_us = esp_timer_get_time();
     s_mozart_next_delay_ms = 400;
-    ESP_LOGI(TAG, "Switched Mozart song to: %s (%s)",
-             s_mozart_playlist[s_mozart_song_idx].name,
-             s_mozart_playlist[s_mozart_song_idx].artist);
-    audio_play_cartoon_sfx(SFX_MARIO_COIN);
+    const mozart_song_t *curr = &s_mozart_playlist[s_mozart_song_idx];
+    ESP_LOGI(TAG, "Switched Mozart song to: %s (%s)", curr->name, curr->artist);
+    audio_play_piano_note_dur(curr->notes[0].freq, s_mozart_timbre, 0, 260);
 }
 
 void audio_mozart_select_song(uint8_t song_index) {
@@ -985,10 +1001,9 @@ void audio_mozart_select_song(uint8_t song_index) {
     s_mozart_note_idx = 0;
     s_mozart_last_tick_us = esp_timer_get_time();
     s_mozart_next_delay_ms = 400;
-    ESP_LOGI(TAG, "Selected Mozart song: %s (%s)",
-             s_mozart_playlist[s_mozart_song_idx].name,
-             s_mozart_playlist[s_mozart_song_idx].artist);
-    audio_play_cartoon_sfx(SFX_MARIO_COIN);
+    const mozart_song_t *curr = &s_mozart_playlist[s_mozart_song_idx];
+    ESP_LOGI(TAG, "Selected Mozart song: %s (%s)", curr->name, curr->artist);
+    audio_play_piano_note_dur(curr->notes[0].freq, s_mozart_timbre, 0, 260);
 }
 
 bool audio_mozart_play_next_note(mozart_play_info_t *out_info) {
@@ -1013,8 +1028,6 @@ bool audio_mozart_play_next_note(mozart_play_info_t *out_info) {
     if (s_mozart_note_idx >= curr->count) {
         finished = true;
         s_mozart_note_idx = 0;
-        // Advance to next song (praise is played in main.c only when child plays manually)
-        // Advance to next song
         s_mozart_song_idx = (s_mozart_song_idx + 1) % (sizeof(s_mozart_playlist) / sizeof(s_mozart_playlist[0]));
     }
 
@@ -1071,7 +1084,6 @@ void audio_mozart_autoplay_tick(void) {
     led_effects_mozart_note(info.freq, info.bass_freq, info.timbre);
 
     if (finished) {
-        // Che do Hat Ru (Lullaby / Auto-Play): Khong phat am thanh hoan ho, chuyen bai em ai
         printf("\r\n>>> [LULLABY AUTO-PLAY: CHUYEN TIEP SANG BAI: \"%s\" (%s)] <<<\r\n",
                s_mozart_playlist[s_mozart_song_idx].name,
                s_mozart_playlist[s_mozart_song_idx].artist);
@@ -1166,28 +1178,23 @@ bool audio_speed_play_note(speed_note_info_t *out_info) {
         bpm = (uint32_t)(60000 / dt_ms);
     }
 
-    uint32_t note_dur_ms = 260;
-    if (dt_ms <= 180) {
+    // Dynamic articulation based on typing speed: crisp staccato when fast, warm legato when slow
+    uint32_t note_dur_ms = 280;
+    if (dt_ms <= 160) {
         note_dur_ms = 140;
     } else if (dt_ms > 380) {
-        note_dur_ms = 480;
+        note_dur_ms = 520;
     }
 
     const speed_song_def_t *curr = &s_speed_songs[s_speed_song_idx];
     speed_note_t n = curr->notes[s_speed_note_idx];
 
-    // Phát giai điệu chính
     if (n.freq > 20.0f) {
-        if (!sb_play_piano(n.freq, s_speed_timbre, 0)) {
-            trigger_voice_internal(VOICE_TONE_ADSR, n.freq, 0, 0, 0.90f, note_dur_ms, s_speed_timbre);
-        }
+        audio_play_piano_note_dur(n.freq, s_speed_timbre, 0, note_dur_ms);
     }
 
-    // Phát bè trầm hòa âm
     if (n.bass_freq > 20.0f) {
-        if (!sb_play_piano(n.bass_freq, s_speed_timbre, 0)) {
-            trigger_voice_internal(VOICE_TONE_ADSR, n.bass_freq, 0, 0, 0.65f, note_dur_ms + 80, s_speed_timbre);
-        }
+        audio_play_piano_note_dur(n.bass_freq, s_speed_timbre, 0, note_dur_ms + 90);
     }
 
     uint16_t current_played = s_speed_note_idx;
@@ -1196,7 +1203,7 @@ bool audio_speed_play_note(speed_note_info_t *out_info) {
     bool finished = false;
     if (s_speed_note_idx >= curr->count) {
         finished = true;
-        s_speed_note_idx = 0; // Lap lai lien mach tu dau bai hat hien tai, khong chen tieng noi gay roi
+        s_speed_note_idx = 0;
     }
 
     if (out_info) {
@@ -1216,24 +1223,27 @@ bool audio_speed_play_note(speed_note_info_t *out_info) {
 void audio_speed_next_song(void) {
     s_speed_song_idx = (s_speed_song_idx + 1) % SPEED_SONG_COUNT;
     s_speed_note_idx = 0;
-    audio_play_cartoon_sfx(SFX_MARIO_COIN);
+    const speed_song_def_t *curr = &s_speed_songs[s_speed_song_idx];
+    audio_play_piano_note_dur(curr->notes[0].freq, s_speed_timbre, 0, 260);
 }
 
 void audio_speed_prev_song(void) {
     s_speed_song_idx = (s_speed_song_idx + SPEED_SONG_COUNT - 1) % SPEED_SONG_COUNT;
     s_speed_note_idx = 0;
-    audio_play_cartoon_sfx(SFX_MARIO_COIN);
+    const speed_song_def_t *curr = &s_speed_songs[s_speed_song_idx];
+    audio_play_piano_note_dur(curr->notes[0].freq, s_speed_timbre, 0, 260);
 }
 
 void audio_speed_select_song(uint8_t song_idx) {
     s_speed_song_idx = song_idx % SPEED_SONG_COUNT;
     s_speed_note_idx = 0;
-    audio_play_cartoon_sfx(SFX_MARIO_COIN);
+    const speed_song_def_t *curr = &s_speed_songs[s_speed_song_idx];
+    audio_play_piano_note_dur(curr->notes[0].freq, s_speed_timbre, 0, 260);
 }
 
 uint8_t audio_speed_toggle_timbre(void) {
     s_speed_timbre = (s_speed_timbre + 1) % 3;
-    audio_play_cartoon_sfx(SFX_MARIO_COIN);
+    audio_play_piano_note_dur(F_C5, s_speed_timbre, 0, 260);
     return s_speed_timbre;
 }
 
@@ -1259,27 +1269,26 @@ void audio_speed_get_info(speed_note_info_t *out_info) {
     out_info->is_finished = false;
 }
 
-// Backward-compatible stubs
 void audio_speed_runner_keystroke(void) {
     audio_speed_play_note(NULL);
 }
 
 void audio_speed_runner_idle_check(void) {
-    // Không làm gì gây tiếng động lạ khi người dùng dừng tay
 }
 
-
-
-// Mode 4: Drum Kit
-void audio_play_drum(drum_type_t drum) {
-    if (sb_play_drum((int)drum)) return;
+// ============================================================================
+// Mode 4: Drum Kit (with Pitched Drum Variations)
+// ============================================================================
+void audio_play_drum_pitched(drum_type_t drum, float semitone) {
+    if (sb_play_drum_pitched((int)drum, semitone)) return;
+    float mult = (semitone == 0.0f) ? 1.0f : powf(2.0f, semitone / 12.0f);
     switch (drum) {
         case DRUM_KICK:
-            trigger_voice_internal(VOICE_PITCH_SWEEP, 0, 190.0f, 60.0f, 1.0f, 160, 2);
+            trigger_voice_internal(VOICE_PITCH_SWEEP, 0, 190.0f * mult, 60.0f * mult, 1.0f, 160, 2);
             break;
         case DRUM_SNARE:
             trigger_voice_internal(VOICE_NOISE_BURST, 0, 0, 0, 0.95f, 160, 1);
-            trigger_voice_internal(VOICE_TONE_ADSR, 190.0f, 0, 0, 0.65f, 80, TIMBRE_PIANO);
+            trigger_voice_internal(VOICE_TONE_ADSR, 190.0f * mult, 0, 0, 0.65f, 80, TIMBRE_PIANO);
             break;
         case DRUM_HIHAT:
             trigger_voice_internal(VOICE_NOISE_BURST, 0, 0, 0, 0.6f, 45, 1);
@@ -1288,7 +1297,7 @@ void audio_play_drum(drum_type_t drum) {
             trigger_voice_internal(VOICE_NOISE_BURST, 0, 0, 0, 0.7f, 450, 1);
             break;
         case DRUM_TOM:
-            trigger_voice_internal(VOICE_PITCH_SWEEP, 0, 300.0f, 140.0f, 0.9f, 200, 1);
+            trigger_voice_internal(VOICE_PITCH_SWEEP, 0, 300.0f * mult, 140.0f * mult, 0.9f, 200, 1);
             break;
         case DRUM_CLAP:
             trigger_voice_internal(VOICE_NOISE_BURST, 0, 0, 0, 0.9f, 140, 2);
@@ -1296,7 +1305,13 @@ void audio_play_drum(drum_type_t drum) {
     }
 }
 
+void audio_play_drum(drum_type_t drum) {
+    audio_play_drum_pitched(drum, 0.0f);
+}
+
+// ============================================================================
 // Mode 5: Vintage Typewriter
+// ============================================================================
 void audio_play_typewriter(typewriter_sound_t type) {
     if (sb_play_typewriter((int)type)) return;
     switch (type) {
@@ -1315,110 +1330,119 @@ void audio_play_typewriter(typewriter_sound_t type) {
     }
 }
 
-// Mode 6: Cartoon SFX
-void audio_play_cartoon_sfx(cartoon_sfx_t sfx) {
-    if (sb_play_cartoon((int)sfx)) return;
+// ============================================================================
+// Mode 6: Cartoon SFX (with pitch & non-blocking delay support)
+// ============================================================================
+void audio_play_cartoon_sfx_ex(cartoon_sfx_t sfx, float semitone, uint32_t delay_ms) {
+    if (sb_play_cartoon_ex((int)sfx, semitone, delay_ms)) return;
+    float mult = (semitone == 0.0f) ? 1.0f : powf(2.0f, semitone / 12.0f);
     switch (sfx) {
         case SFX_MARIO_COIN:
-            trigger_voice_internal(VOICE_TONE_ADSR, 987.77f, 0, 0, 0.85f, 80, TIMBRE_8BIT_MARIO);
-            trigger_voice_internal(VOICE_TONE_ADSR, 1318.51f, 0, 0, 0.95f, 320, TIMBRE_8BIT_MARIO);
+            trigger_voice_at(VOICE_TONE_ADSR, 987.77f * mult, 0, 0, 0.85f, 80, TIMBRE_8BIT_MARIO, delay_ms);
+            trigger_voice_at(VOICE_TONE_ADSR, 1318.51f * mult, 0, 0, 0.95f, 320, TIMBRE_8BIT_MARIO, delay_ms + 70);
             break;
         case SFX_SPRING_BOING:
-            trigger_voice_internal(VOICE_PITCH_SWEEP, 0, 220.0f, 680.0f, 0.9f, 280, 1);
+            trigger_voice_at(VOICE_PITCH_SWEEP, 0, 220.0f * mult, 680.0f * mult, 0.9f, 280, 1, delay_ms);
             break;
         case SFX_LASER:
-            trigger_voice_internal(VOICE_PITCH_SWEEP, 0, 2600.0f, 180.0f, 0.85f, 130, 0);
+            trigger_voice_at(VOICE_PITCH_SWEEP, 0, 2600.0f * mult, 180.0f * mult, 0.85f, 130, 0, delay_ms);
             break;
         case SFX_CAR_HORN:
-            trigger_voice_internal(VOICE_TONE_ADSR, 440.0f, 0, 0, 0.7f, 220, TIMBRE_8BIT_MARIO);
-            trigger_voice_internal(VOICE_TONE_ADSR, 554.37f, 0, 0, 0.7f, 220, TIMBRE_8BIT_MARIO);
+            trigger_voice_at(VOICE_TONE_ADSR, 440.0f * mult, 0, 0, 0.7f, 220, TIMBRE_8BIT_MARIO, delay_ms);
+            trigger_voice_at(VOICE_TONE_ADSR, 554.37f * mult, 0, 0, 0.7f, 220, TIMBRE_8BIT_MARIO, delay_ms);
             break;
         case SFX_VICTORY_FANFARE:
-            trigger_voice_internal(VOICE_TONE_ADSR, 523.25f, 0, 0, 0.85f, 150, TIMBRE_8BIT_MARIO);
-            trigger_voice_internal(VOICE_TONE_ADSR, 659.25f, 0, 0, 0.85f, 150, TIMBRE_8BIT_MARIO);
-            trigger_voice_internal(VOICE_TONE_ADSR, 783.99f, 0, 0, 0.85f, 150, TIMBRE_8BIT_MARIO);
-            trigger_voice_internal(VOICE_TONE_ADSR, 1046.50f, 0, 0, 0.95f, 400, TIMBRE_8BIT_MARIO);
+            trigger_voice_at(VOICE_TONE_ADSR, 523.25f * mult, 0, 0, 0.85f, 140, TIMBRE_8BIT_MARIO, delay_ms);
+            trigger_voice_at(VOICE_TONE_ADSR, 659.25f * mult, 0, 0, 0.85f, 140, TIMBRE_8BIT_MARIO, delay_ms + 120);
+            trigger_voice_at(VOICE_TONE_ADSR, 783.99f * mult, 0, 0, 0.85f, 140, TIMBRE_8BIT_MARIO, delay_ms + 240);
+            trigger_voice_at(VOICE_TONE_ADSR, 1046.50f * mult, 0, 0, 0.95f, 400, TIMBRE_8BIT_MARIO, delay_ms + 360);
             break;
         case SFX_WHISTLE_SLIDE:
-            trigger_voice_internal(VOICE_PITCH_SWEEP, 0, 1200.0f, 280.0f, 0.85f, 350, 0);
+            trigger_voice_at(VOICE_PITCH_SWEEP, 0, 1200.0f * mult, 280.0f * mult, 0.85f, 350, 0, delay_ms);
             break;
         case SFX_WATER_DROP:
-            trigger_voice_internal(VOICE_PITCH_SWEEP, 0, 600.0f, 1900.0f, 0.85f, 90, 0);
+            trigger_voice_at(VOICE_PITCH_SWEEP, 0, 600.0f * mult, 1900.0f * mult, 0.85f, 90, 0, delay_ms);
             break;
         case SFX_DOORBELL:
-            trigger_voice_internal(VOICE_TONE_ADSR, 783.99f, 0, 0, 0.9f, 300, TIMBRE_MUSIC_BOX);
-            trigger_voice_internal(VOICE_TONE_ADSR, 659.25f, 0, 0, 0.9f, 500, TIMBRE_MUSIC_BOX);
+            trigger_voice_at(VOICE_TONE_ADSR, 783.99f * mult, 0, 0, 0.9f, 300, TIMBRE_MUSIC_BOX, delay_ms);
+            trigger_voice_at(VOICE_TONE_ADSR, 659.25f * mult, 0, 0, 0.9f, 500, TIMBRE_MUSIC_BOX, delay_ms + 260);
             break;
         case SFX_FIRE_SIREN:
-            trigger_voice_internal(VOICE_PITCH_SWEEP, 0, 650.0f, 1100.0f, 0.85f, 500, 1);
+            trigger_voice_at(VOICE_PITCH_SWEEP, 0, 650.0f * mult, 1100.0f * mult, 0.85f, 500, 1, delay_ms);
             break;
         case SFX_SKID_STOP:
-            trigger_voice_internal(VOICE_PITCH_SWEEP, 0, 1800.0f, 400.0f, 0.8f, 200, 0);
+            trigger_voice_at(VOICE_PITCH_SWEEP, 0, 1800.0f * mult, 400.0f * mult, 0.8f, 200, 0, delay_ms);
             break;
         case SFX_GAME_JUMP:
-            trigger_voice_internal(VOICE_PITCH_SWEEP, 0, 140.0f, 520.0f, 0.9f, 220, 0);
+            trigger_voice_at(VOICE_PITCH_SWEEP, 0, 140.0f * mult, 520.0f * mult, 0.9f, 220, 0, delay_ms);
             break;
         case SFX_GAME_POWERUP:
         case SFX_GAME_1UP:
-            trigger_voice_internal(VOICE_TONE_ADSR, 659.25f, 0, 0, 0.85f, 100, TIMBRE_8BIT_MARIO);
-            trigger_voice_internal(VOICE_TONE_ADSR, 1046.50f, 0, 0, 0.90f, 250, TIMBRE_8BIT_MARIO);
+            trigger_voice_at(VOICE_TONE_ADSR, 659.25f * mult, 0, 0, 0.85f, 100, TIMBRE_8BIT_MARIO, delay_ms);
+            trigger_voice_at(VOICE_TONE_ADSR, 1046.50f * mult, 0, 0, 0.90f, 250, TIMBRE_8BIT_MARIO, delay_ms + 90);
             break;
         case SFX_GAME_FIREBALL:
-            trigger_voice_internal(VOICE_PITCH_SWEEP, 0, 950.0f, 180.0f, 0.85f, 100, 0);
+            trigger_voice_at(VOICE_PITCH_SWEEP, 0, 950.0f * mult, 180.0f * mult, 0.85f, 100, 0, delay_ms);
             break;
         case SFX_GAME_WARP:
-            trigger_voice_internal(VOICE_PITCH_SWEEP, 0, 380.0f, 110.0f, 0.85f, 300, 0);
+            trigger_voice_at(VOICE_PITCH_SWEEP, 0, 380.0f * mult, 110.0f * mult, 0.85f, 300, 0, delay_ms);
             break;
         case SFX_GAME_BOMB:
         case SFX_GAME_PUNCH:
         case SFX_CT_TIMPANI_BOOM:
-            trigger_voice_internal(VOICE_NOISE_BURST, 0, 0, 0, 0.95f, 280, DRUM_KICK);
+            trigger_voice_at(VOICE_NOISE_BURST, 0, 0, 0, 0.95f, 280, DRUM_KICK, delay_ms);
             break;
         case SFX_GAME_PACMAN:
         case SFX_CT_SQUEAK_DUCK:
-            trigger_voice_internal(VOICE_PITCH_SWEEP, 0, 420.0f, 140.0f, 0.85f, 120, 0);
+            trigger_voice_at(VOICE_PITCH_SWEEP, 0, 420.0f * mult, 140.0f * mult, 0.85f, 120, 0, delay_ms);
             break;
         case SFX_GAME_SONIC_DASH:
         case SFX_CT_RUN_AWAY:
-            trigger_voice_internal(VOICE_PITCH_SWEEP, 0, 220.0f, 1600.0f, 0.9f, 320, 0);
+            trigger_voice_at(VOICE_PITCH_SWEEP, 0, 220.0f * mult, 1600.0f * mult, 0.9f, 320, 0, delay_ms);
             break;
         case SFX_GAME_OVER_TROMBONE:
-            trigger_voice_internal(VOICE_PITCH_SWEEP, 0, 310.0f, 180.0f, 0.85f, 550, 0);
+            trigger_voice_at(VOICE_PITCH_SWEEP, 0, 310.0f * mult, 180.0f * mult, 0.85f, 550, 0, delay_ms);
             break;
         case SFX_CT_BONGO_RUN:
         case SFX_CT_SLAPSTICK:
-            trigger_voice_internal(VOICE_NOISE_BURST, 0, 0, 0, 0.85f, 90, DRUM_SNARE);
+            trigger_voice_at(VOICE_NOISE_BURST, 0, 0, 0, 0.85f, 90, DRUM_SNARE, delay_ms);
             break;
         case SFX_CT_SLIP_FALL:
-            trigger_voice_internal(VOICE_PITCH_SWEEP, 0, 1800.0f, 250.0f, 0.9f, 300, 0);
+            trigger_voice_at(VOICE_PITCH_SWEEP, 0, 1800.0f * mult, 250.0f * mult, 0.9f, 300, 0, delay_ms);
             break;
         case SFX_CT_ANVIL_CLANG:
         case SFX_CT_COWBELL:
-            trigger_voice_internal(VOICE_TONE_ADSR, 1174.66f, 0, 0, 0.95f, 400, TIMBRE_MUSIC_BOX);
+            trigger_voice_at(VOICE_TONE_ADSR, 1174.66f * mult, 0, 0, 0.95f, 400, TIMBRE_MUSIC_BOX, delay_ms);
             break;
         case SFX_CT_FLEXATONE:
         case SFX_CT_VIBRASLAP:
-            trigger_voice_internal(VOICE_PITCH_SWEEP, 0, 450.0f, 950.0f, 0.85f, 350, 1);
+            trigger_voice_at(VOICE_PITCH_SWEEP, 0, 450.0f * mult, 950.0f * mult, 0.85f, 350, 1, delay_ms);
             break;
         case SFX_CT_SPLAT:
-            trigger_voice_internal(VOICE_PITCH_SWEEP, 0, 450.0f, 120.0f, 0.8f, 160, 0);
+            trigger_voice_at(VOICE_PITCH_SWEEP, 0, 450.0f * mult, 120.0f * mult, 0.8f, 160, 0, delay_ms);
             break;
         case SFX_CT_BALL_WHISTLE:
-            trigger_voice_internal(VOICE_PITCH_SWEEP, 0, 2400.0f, 2200.0f, 0.85f, 200, 1);
+            trigger_voice_at(VOICE_PITCH_SWEEP, 0, 2400.0f * mult, 2200.0f * mult, 0.85f, 200, 1, delay_ms);
             break;
         case SFX_CT_MAGIC_WAND:
-            trigger_voice_internal(VOICE_TONE_ADSR, 1567.98f, 0, 0, 0.85f, 150, TIMBRE_MUSIC_BOX);
-            trigger_voice_internal(VOICE_TONE_ADSR, 2637.02f, 0, 0, 0.90f, 350, TIMBRE_MUSIC_BOX);
+            trigger_voice_at(VOICE_TONE_ADSR, 1567.98f * mult, 0, 0, 0.85f, 150, TIMBRE_MUSIC_BOX, delay_ms);
+            trigger_voice_at(VOICE_TONE_ADSR, 2637.02f * mult, 0, 0, 0.90f, 350, TIMBRE_MUSIC_BOX, delay_ms + 90);
             break;
         case SFX_CT_GHOST_BOO:
-            trigger_voice_internal(VOICE_PITCH_SWEEP, 0, 280.0f, 480.0f, 0.8f, 450, 1);
+            trigger_voice_at(VOICE_PITCH_SWEEP, 0, 280.0f * mult, 480.0f * mult, 0.8f, 450, 1, delay_ms);
             break;
         default:
             break;
     }
 }
 
-// Mode 7: Morse Code & Robot
+void audio_play_cartoon_sfx(cartoon_sfx_t sfx) {
+    audio_play_cartoon_sfx_ex(sfx, 0.0f, 0);
+}
+
+// ============================================================================
+// Mode 7: Morse Code & Robot (with Anti-Drone Voice Choking & Melodic Pitch)
+// ============================================================================
 static const char *s_morse_table[26] = {
     ".-",   "-...", "-.-.", "-..",  ".",    "..-.", "--.",  "....", "..",
     ".---", "-.-",  ".-..", "--",   "-.",   "---",  ".--.", "--.-", ".-.",
@@ -1432,16 +1456,32 @@ static const char *s_morse_digits_tbl[10] = {
 void audio_play_morse_char(char c) {
     if (c >= 'a' && c <= 'z') c -= 32;
     const char *morse = NULL;
-    if (c >= 'A' && c <= 'Z') morse = s_morse_table[c - 'A'];
-    else if (c >= '0' && c <= '9') morse = s_morse_digits_tbl[c - '0'];
-    else return;
+    float morse_freq = 750.0f;
+    if (c >= 'A' && c <= 'Z') {
+        morse = s_morse_table[c - 'A'];
+        morse_freq = 580.0f + (float)(c - 'A') * 18.0f; // Distinct musical pitch per letter (580..1030 Hz)
+    } else if (c >= '0' && c <= '9') {
+        morse = s_morse_digits_tbl[c - '0'];
+        morse_freq = 640.0f + (float)(c - '0') * 35.0f;
+    } else {
+        return;
+    }
 
-    // Non-blocking: every dit/dah is scheduled inside the audio engine
+    // Cancel any previously scheduled/active Morse dits/dahs so rapid typing never drones
+    if (s_voice_mutex && xSemaphoreTake(s_voice_mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+        for (int i = 0; i < MAX_POLY_VOICES; i++) {
+            if (s_voices[i].active && s_voices[i].mode == VOICE_MORSE) {
+                s_voices[i].active = false;
+            }
+        }
+        xSemaphoreGive(s_voice_mutex);
+    }
+
     uint32_t t = 0;
     while (*morse) {
-        uint32_t dur = (*morse == '.') ? 70 : 210;
-        trigger_voice_at(VOICE_MORSE, 750.0f, 0, 0, 0.8f, dur, 0, t);
-        t += dur + 70;
+        uint32_t dur = (*morse == '.') ? 65 : 195;
+        trigger_voice_at(VOICE_MORSE, morse_freq, 0, 0, 0.8f, dur, 0, t);
+        t += dur + 60;
         morse++;
     }
 }
@@ -1458,7 +1498,9 @@ void audio_play_robot_chirp(void) {
     }
 }
 
+// ============================================================================
 // Mode 8: Cockpit & Animals
+// ============================================================================
 void audio_cockpit_engine_start(void) {
     if (sb_play_cockpit_sfx(COCKPIT_SFX_ENGINE)) return;
     if (sb_play_engine()) return;
@@ -1539,8 +1581,12 @@ void audio_cockpit_helicopter(void) {
     trigger_voice_internal(VOICE_ENGINE_RUMBLE, 45.0f, 0, 0, 0.9f, 800, 0);
 }
 
+void audio_cockpit_play_sfx_delayed(int sfx_id, uint32_t delay_ms) {
+    sb_play_cockpit_sfx_delayed(sfx_id, delay_ms);
+}
+
 void audio_cockpit_play_sfx(int sfx_id) {
-    sb_play_cockpit_sfx(sfx_id);
+    sb_play_cockpit_sfx_delayed(sfx_id, 0);
 }
 
 void audio_play_animal_sound(char key) {
@@ -1548,28 +1594,28 @@ void audio_play_animal_sound(char key) {
     if (sb_play_animal(key)) return;
 
     switch (key) {
-        case 'D': // Dog
+        case 'D':
             trigger_voice_internal(VOICE_ANIMAL, 0, 280.0f, 150.0f, 0.9f, 160, 0);
             break;
-        case 'C': // Cat
+        case 'C':
             trigger_voice_internal(VOICE_ANIMAL, 0, 450.0f, 900.0f, 0.9f, 350, 0);
             break;
-        case 'B': // Bird
+        case 'B':
             trigger_voice_internal(VOICE_ANIMAL, 0, 2800.0f, 3800.0f, 0.9f, 100, 0);
             break;
-        case 'M': // Cow
+        case 'M':
             trigger_voice_internal(VOICE_ANIMAL, 0, 200.0f, 150.0f, 0.9f, 500, 0);
             break;
-        case 'Q': // Duck
+        case 'Q':
             trigger_voice_internal(VOICE_ANIMAL, 0, 340.0f, 260.0f, 0.9f, 200, 0);
             break;
-        case 'F': // Frog
+        case 'F':
             trigger_voice_internal(VOICE_ANIMAL, 0, 200.0f, 130.0f, 0.9f, 180, 0);
             break;
-        case 'L': // Lion
+        case 'L':
             trigger_voice_internal(VOICE_ANIMAL, 0, 240.0f, 100.0f, 0.9f, 600, 0);
             break;
-        case 'P': // Pig
+        case 'P':
             trigger_voice_internal(VOICE_ANIMAL, 0, 400.0f, 250.0f, 0.9f, 150, 0);
             break;
         default:
@@ -1578,35 +1624,35 @@ void audio_play_animal_sound(char key) {
     }
 }
 
-// Mode 9: Phonics & Counting Learning
-static void counting_led_task(void *arg) {
-    uint8_t num = (uint8_t)(uintptr_t)arg;
-    for (uint8_t i = 0; i < num; i++) {
-        led_effects_count(i + 1, 255, 180, 0);
-        if (i < num - 1) vTaskDelay(pdMS_TO_TICKS(160));
-    }
-    vTaskDelete(NULL);
-}
-
+// ============================================================================
+// Mode 9: Phonics & Counting Learning (Synchronized Speech + Drum Beats + LEDs)
+// ============================================================================
 void audio_play_counting_number(uint8_t num) {
     if (num > 10) num = 10;
 
-    if (sb_play_number(num, NULL)) {
-        if (num > 0) {
-            xTaskCreate(counting_led_task, "cnt_led", 3072, (void *)(uintptr_t)num, 3, NULL);
-        } else {
-            led_effects_color_burst(0, 200, 255);
-        }
+    uint32_t speech_dur_ms = 550;
+    bool has_speech = sb_play_number(num, &speech_dur_ms);
+    if (!has_speech) {
+        trigger_voice_internal(VOICE_TONE_ADSR, 261.63f + num * 32.0f, 0, 0, 0.9f, 280, TIMBRE_PIANO);
+        speech_dur_ms = 300;
+    }
+
+    if (num == 0) {
+        led_effects_color_burst(0, 200, 255);
         return;
     }
 
-    // Fallback synth
-    trigger_voice_internal(VOICE_TONE_ADSR, 261.63f + num * 32.0f, 0, 0, 0.9f, 280, TIMBRE_PIANO);
-    if (num > 0) {
-        xTaskCreate(counting_led_task, "cnt_led", 3072, (void *)(uintptr_t)num, 3, NULL);
-    } else {
-        led_effects_color_burst(0, 200, 255);
+    // Schedule rhythmic counting beats + synchronized LEDs right after spoken number finishes
+    uint32_t start_delay_ms = speech_dur_ms + 80;
+    uint32_t step_ms = 210;
+    for (uint8_t i = 0; i < num; i++) {
+        uint32_t beat_delay = start_delay_ms + (uint32_t)i * step_ms;
+        if (!sb_play_beat(beat_delay)) {
+            float f = 330.0f + (float)i * 40.0f;
+            trigger_voice_at(VOICE_TONE_ADSR, f, 0, 0, 0.70f, 110, TIMBRE_MUSIC_BOX, beat_delay);
+        }
     }
+    led_effects_start_counting(num, start_delay_ms, step_ms);
 }
 
 void audio_play_phonics_letter(char c) {
@@ -1617,27 +1663,25 @@ void audio_play_phonics_letter(char c) {
     float f2 = 1200.0f;
 
     switch (c) {
-        case 'A': f1 = 800.0f; f2 = 1250.0f; break; // "A"
-        case 'E': f1 = 530.0f; f2 = 1840.0f; break; // "E"
-        case 'I': f1 = 270.0f; f2 = 2290.0f; break; // "I"
-        case 'O': f1 = 510.0f; f2 = 840.0f;  break; // "O"
-        case 'U': f1 = 300.0f; f2 = 870.0f;  break; // "U"
-        case 'B': f1 = 300.0f; f2 = 1100.0f; break; // "Bờ"
-        case 'C': f1 = 400.0f; f2 = 1400.0f; break; // "Cờ"
-        case 'D': f1 = 350.0f; f2 = 1600.0f; break; // "Dờ"
-        case 'G': f1 = 380.0f; f2 = 1300.0f; break; // "Gờ"
-        case 'M': f1 = 280.0f; f2 = 1000.0f; break; // "Mờ"
-        case 'N': f1 = 320.0f; f2 = 1450.0f; break; // "Nờ"
-        case 'P': f1 = 340.0f; f2 = 1200.0f; break; // "Pờ"
-        case 'T': f1 = 400.0f; f2 = 1700.0f; break; // "Tờ"
-        case 'V': f1 = 320.0f; f2 = 1500.0f; break; // "Vờ"
+        case 'A': f1 = 800.0f; f2 = 1250.0f; break;
+        case 'E': f1 = 530.0f; f2 = 1840.0f; break;
+        case 'I': f1 = 270.0f; f2 = 2290.0f; break;
+        case 'O': f1 = 510.0f; f2 = 840.0f;  break;
+        case 'U': f1 = 300.0f; f2 = 870.0f;  break;
+        case 'B': f1 = 300.0f; f2 = 1100.0f; break;
+        case 'C': f1 = 400.0f; f2 = 1400.0f; break;
+        case 'D': f1 = 350.0f; f2 = 1600.0f; break;
+        case 'G': f1 = 380.0f; f2 = 1300.0f; break;
+        case 'M': f1 = 280.0f; f2 = 1000.0f; break;
+        case 'N': f1 = 320.0f; f2 = 1450.0f; break;
+        case 'P': f1 = 340.0f; f2 = 1200.0f; break;
+        case 'T': f1 = 400.0f; f2 = 1700.0f; break;
+        case 'V': f1 = 320.0f; f2 = 1500.0f; break;
         default:  f1 = 400.0f + (c % 7) * 60.0f; f2 = 1100.0f + (c % 9) * 80.0f; break;
     }
 
-    // Double formant vocal tract filter
     trigger_voice_internal(VOICE_TONE_ADSR, f1, 0, 0, 0.75f, 220, TIMBRE_PIANO);
     trigger_voice_internal(VOICE_TONE_ADSR, f2, 0, 0, 0.45f, 220, TIMBRE_PIANO);
-    // Plosive attack
     trigger_voice_internal(VOICE_NOISE_BURST, 0, 0, 0, 0.4f, 30, 0);
 }
 
@@ -1650,5 +1694,3 @@ void audio_play_symbol(char c) {
     if (sb_play_symbol(c)) return;
     trigger_voice_internal(VOICE_TONE_ADSR, 659.25f, 0, 0, 0.70f, 180, TIMBRE_MUSIC_BOX);
 }
-
-
