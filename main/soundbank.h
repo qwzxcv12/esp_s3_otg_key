@@ -29,6 +29,24 @@ esp_err_t soundbank_init(void);                  // mount LittleFS, start loader
 void      soundbank_set_mode(uint8_t mode_index); // async: load this mode's bank, free the old one
 bool      soundbank_available(void);              // LittleFS mounted
 
+typedef enum {
+    COCKPIT_SFX_SIREN = 0,
+    COCKPIT_SFX_HORN,
+    COCKPIT_SFX_ENGINE,
+    COCKPIT_SFX_WATER,
+    COCKPIT_SFX_FIRE,
+    COCKPIT_SFX_HELI,
+    COCKPIT_SFX_CHEER,
+    COCKPIT_SFX_BELL,
+    COCKPIT_SFX_SKID,
+    COCKPIT_SFX_ROCKET,
+    COCKPIT_SFX_REVERSE,
+    COCKPIT_SFX_TURN,
+    COCKPIT_SFX_RADIO,
+    COCKPIT_SFX_MISSION,
+    COCKPIT_SFX_SUCCESS,
+} cockpit_sfx_t;
+
 // Sample playback helpers (all non-blocking)
 bool sb_play_mode_name(uint8_t mode_index);                              // voice announcement: "Chế độ 1: Đàn Piano diệu kỳ!"
 bool sb_play_piano(float freq_hz, uint8_t timbre, uint8_t owner_key);   // real piano / bells, pitch shifted
@@ -39,6 +57,7 @@ bool sb_play_typewriter(int type);
 bool sb_play_cartoon(int sfx);
 bool sb_play_engine(void);
 bool sb_play_rocket(void);
+bool sb_play_cockpit_sfx(int sfx_id);
 bool sb_play_animal(char key);
 bool sb_play_letter(char c);
 bool sb_play_number(uint8_t num, uint32_t *duration_ms); // spoken number, returns its length

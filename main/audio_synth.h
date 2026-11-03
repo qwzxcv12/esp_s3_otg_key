@@ -152,7 +152,19 @@ void audio_cockpit_engine_start(void);
 void audio_cockpit_engine_stop(void);
 void audio_cockpit_siren_toggle(void);
 bool audio_cockpit_is_siren_on(void);
+void audio_cockpit_siren_set(bool on);
 void audio_cockpit_rocket_launch(void);
+void audio_cockpit_water_hose(void);
+void audio_cockpit_horn(void);
+void audio_cockpit_skid(void);
+void audio_cockpit_bell(void);
+void audio_cockpit_reverse(void);
+void audio_cockpit_turn(void);
+void audio_cockpit_radio(void);
+void audio_cockpit_cheer(void);
+void audio_cockpit_fire(void);
+void audio_cockpit_helicopter(void);
+void audio_cockpit_play_sfx(int sfx_id);
 void audio_play_animal_sound(char key);
 
 // Mode 9: Phonics, Counting & Full-Keyboard Voice

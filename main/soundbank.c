@@ -37,11 +37,24 @@ typedef enum {
     SND_CT_FLEXATONE, SND_CT_VIBRASLAP, SND_CT_SQUEAK_DUCK, SND_CT_SPLAT,
     SND_CT_BALL_WHISTLE, SND_CT_COWBELL, SND_CT_MAGIC_WAND, SND_CT_GHOST,
     SND_CT_TIMPANI, SND_CT_RUN_AWAY,
-    SND_ENGINE, SND_ROCKET,
-    SND_ANIMAL_DOG, SND_ANIMAL_CAT, SND_ANIMAL_BIRD, SND_ANIMAL_COW, SND_ANIMAL_DUCK,
-    SND_ANIMAL_FROG, SND_ANIMAL_LION, SND_ANIMAL_PIG, SND_ANIMAL_ELEPHANT, SND_ANIMAL_GOAT,
-    SND_ANIMAL_ROOSTER, SND_ANIMAL_OWL, SND_ANIMAL_WOLF, SND_ANIMAL_TIGER, SND_ANIMAL_HORSE,
-    SND_ANIMAL_SHEEP,
+    // Mode 8: Cockpit SFX & 26 Animals
+    SND_COCKPIT_SIREN,
+    SND_COCKPIT_HORN,
+    SND_COCKPIT_ENGINE,
+    SND_COCKPIT_WATER,
+    SND_COCKPIT_FIRE,
+    SND_COCKPIT_HELI,
+    SND_COCKPIT_CHEER,
+    SND_COCKPIT_BELL,
+    SND_COCKPIT_SKID,
+    SND_COCKPIT_ROCKET,
+    SND_COCKPIT_REVERSE,
+    SND_COCKPIT_TURN,
+    SND_COCKPIT_RADIO,
+    SND_COCKPIT_MISSION,
+    SND_COCKPIT_SUCCESS,
+    SND_M8_ANIMAL_A,
+    SND_M8_ANIMAL_Z = SND_M8_ANIMAL_A + 25,
     SND_LETTER_A,                       // 26 letters follow
     SND_NUM_0 = SND_LETTER_A + 26,      // 11 numbers follow (0..10)
     SND_PRAISE = SND_NUM_0 + 11,
@@ -161,14 +174,27 @@ static void build_table(void) {
     reg(SND_CT_TIMPANI,       "mode6/timpani.wav",       M(5));
     reg(SND_CT_RUN_AWAY,      "mode6/run_away.wav",      M(5));
 
-    reg(SND_ENGINE, "mode8/engine.wav", M(7));
-    reg(SND_ROCKET, "mode8/rocket.wav", M(7));
-    static const char *animals[16] = {"dog", "cat", "bird", "cow", "duck", "frog", "lion", "pig",
-                                      "elephant", "goat", "rooster", "owl", "wolf", "tiger", "horse", "sheep"};
-    for (int i = 0; i < 16; i++) {
+    // Mode 8: Cockpit & 26 Animals
+    reg(SND_COCKPIT_SIREN,   "mode8/siren.wav",      M(7));
+    reg(SND_COCKPIT_HORN,    "mode8/horn.wav",       M(7));
+    reg(SND_COCKPIT_ENGINE,  "mode8/engine.wav",     M(7));
+    reg(SND_COCKPIT_WATER,   "mode8/water.wav",      M(7));
+    reg(SND_COCKPIT_FIRE,    "mode8/fire.wav",       M(7));
+    reg(SND_COCKPIT_HELI,    "mode8/helicopter.wav", M(7));
+    reg(SND_COCKPIT_CHEER,   "mode8/cheer.wav",      M(7));
+    reg(SND_COCKPIT_BELL,    "mode8/bell.wav",       M(7));
+    reg(SND_COCKPIT_SKID,    "mode8/skid.wav",       M(7));
+    reg(SND_COCKPIT_ROCKET,  "mode8/rocket.wav",     M(7));
+    reg(SND_COCKPIT_REVERSE, "mode8/reverse.wav",    M(7));
+    reg(SND_COCKPIT_TURN,    "mode8/turn.wav",       M(7));
+    reg(SND_COCKPIT_RADIO,   "mode8/radio.wav",      M(7));
+    reg(SND_COCKPIT_MISSION, "mode8/mission.wav",    M(7));
+    reg(SND_COCKPIT_SUCCESS, "mode8/success.wav",    M(7));
+
+    for (int i = 0; i < 26; i++) {
         char p[40];
-        snprintf(p, sizeof(p), "mode8/animal_%s.wav", animals[i]);
-        reg((snd_id_t)(SND_ANIMAL_DOG + i), p, M(7));
+        snprintf(p, sizeof(p), "mode8/animal_%c.wav", 'a' + i);
+        reg((snd_id_t)(SND_M8_ANIMAL_A + i), p, M(7));
     }
 
     for (int i = 0; i < 26; i++) {
@@ -538,31 +564,43 @@ bool sb_play_cartoon(int sfx) {
     return false;
 }
 
-bool sb_play_engine(void) { return play_id(SND_ENGINE, 1.25f, 0, false, CHOKE_NONE, 0, 0, 0); }
-bool sb_play_rocket(void) { return play_id(SND_ROCKET, 1.25f, 0, false, CHOKE_NONE, 0, 0, 0); }
+bool sb_play_engine(void) {
+    if (is_loaded(SND_COCKPIT_ENGINE)) return play_id(SND_COCKPIT_ENGINE, 1.25f, 0, false, CHOKE_NONE, 0, 0, 0);
+    return false;
+}
+bool sb_play_rocket(void) {
+    if (is_loaded(SND_COCKPIT_ROCKET)) return play_id(SND_COCKPIT_ROCKET, 1.25f, 0, false, CHOKE_NONE, 0, 0, 0);
+    return false;
+}
+
+bool sb_play_cockpit_sfx(int sfx_id) {
+    snd_id_t id;
+    float gain = 1.25f;
+    switch ((cockpit_sfx_t)sfx_id) {
+        case COCKPIT_SFX_SIREN:   id = SND_COCKPIT_SIREN;   gain = 1.20f; break;
+        case COCKPIT_SFX_HORN:    id = SND_COCKPIT_HORN;    gain = 1.35f; break;
+        case COCKPIT_SFX_ENGINE:  id = SND_COCKPIT_ENGINE;  gain = 1.25f; break;
+        case COCKPIT_SFX_WATER:   id = SND_COCKPIT_WATER;   gain = 1.30f; break;
+        case COCKPIT_SFX_FIRE:    id = SND_COCKPIT_FIRE;    gain = 1.20f; break;
+        case COCKPIT_SFX_HELI:    id = SND_COCKPIT_HELI;    gain = 1.25f; break;
+        case COCKPIT_SFX_CHEER:   id = SND_COCKPIT_CHEER;   gain = 1.35f; break;
+        case COCKPIT_SFX_BELL:    id = SND_COCKPIT_BELL;    gain = 1.30f; break;
+        case COCKPIT_SFX_SKID:    id = SND_COCKPIT_SKID;    gain = 1.25f; break;
+        case COCKPIT_SFX_ROCKET:  id = SND_COCKPIT_ROCKET;  gain = 1.25f; break;
+        case COCKPIT_SFX_REVERSE: id = SND_COCKPIT_REVERSE; gain = 1.25f; break;
+        case COCKPIT_SFX_TURN:    id = SND_COCKPIT_TURN;    gain = 1.20f; break;
+        case COCKPIT_SFX_RADIO:   id = SND_COCKPIT_RADIO;   gain = 1.40f; break;
+        case COCKPIT_SFX_MISSION: id = SND_COCKPIT_MISSION; gain = 1.40f; break;
+        case COCKPIT_SFX_SUCCESS: id = SND_COCKPIT_SUCCESS; gain = 1.40f; break;
+        default: return false;
+    }
+    return play_id(id, gain, 0, false, CHOKE_NONE, 0, 0, 0);
+}
 
 bool sb_play_animal(char key) {
     if (key >= 'a' && key <= 'z') key -= 32;
-    snd_id_t id;
-    switch (key) {
-        case 'D': id = SND_ANIMAL_DOG; break;
-        case 'C': id = SND_ANIMAL_CAT; break;
-        case 'B': id = SND_ANIMAL_BIRD; break;
-        case 'M': id = SND_ANIMAL_COW; break;
-        case 'Q': id = SND_ANIMAL_DUCK; break;
-        case 'F': id = SND_ANIMAL_FROG; break;
-        case 'L': id = SND_ANIMAL_LION; break;
-        case 'P': id = SND_ANIMAL_PIG; break;
-        case 'E': id = SND_ANIMAL_ELEPHANT; break;
-        case 'G': id = SND_ANIMAL_GOAT; break;
-        case 'R': id = SND_ANIMAL_ROOSTER; break;
-        case 'O': id = SND_ANIMAL_OWL; break;
-        case 'W': id = SND_ANIMAL_WOLF; break;
-        case 'T': id = SND_ANIMAL_TIGER; break;
-        case 'H': id = SND_ANIMAL_HORSE; break;
-        case 'S': id = SND_ANIMAL_SHEEP; break;
-        default: return false;
-    }
+    if (key < 'A' || key > 'Z') return false;
+    snd_id_t id = (snd_id_t)(SND_M8_ANIMAL_A + (key - 'A'));
     return play_id(id, 1.25f, 0, false, CHOKE_ANIMAL, 0, 0, 0);
 }
 
@@ -671,12 +709,15 @@ bool sb_play_beat(uint32_t delay_ms) {
     return play_id(SND_TOM, 1.15f, 0, false, CHOKE_NONE, 0, delay_ms, 0);
 }
 
-bool sb_has_siren(void) { return s_mounted && is_loaded(SND_CT_SIREN); }
+bool sb_has_siren(void) {
+    return s_mounted && (is_loaded(SND_COCKPIT_SIREN) || is_loaded(SND_CT_SIREN));
+}
 
 #define SIREN_OWNER 0xFE
 bool sb_siren_loop(bool on) {
     if (!sb_has_siren()) return false;
-    if (on) return play_id(SND_CT_SIREN, 0.6f, 0, true, CHOKE_NONE, SIREN_OWNER, 0, 0);
+    snd_id_t sid = is_loaded(SND_COCKPIT_SIREN) ? SND_COCKPIT_SIREN : SND_CT_SIREN;
+    if (on) return play_id(sid, 0.85f, 0, true, CHOKE_NONE, SIREN_OWNER, 0, 0);
     audio_sample_release_owner(SIREN_OWNER, 120);
     return true;
 }

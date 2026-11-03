@@ -191,6 +191,71 @@ void led_effects_police(bool toggle) {
     xSemaphoreGive(s_led_mutex);
 }
 
+// Fire truck water cannon spray: rushing cyan/blue water wave
+void led_effects_water_spray(void) {
+    if (!s_led_strip || !s_led_mutex) return;
+    if (xSemaphoreTake(s_led_mutex, pdMS_TO_TICKS(5)) != pdTRUE) return;
+    for (int i = 0; i < LED_STRIP_COUNT; i++) {
+        uint8_t b = 180 + (rand() % 75);
+        uint8_t g = 120 + (rand() % 100);
+        led_strip_set_pixel(s_led_strip, i, 0, g, b);
+    }
+    led_strip_refresh(s_led_strip);
+    xSemaphoreGive(s_led_mutex);
+}
+
+// Fire truck turn signal: amber blink on left or right half
+void led_effects_turn_signal(bool left) {
+    if (!s_led_strip || !s_led_mutex) return;
+    if (xSemaphoreTake(s_led_mutex, pdMS_TO_TICKS(5)) != pdTRUE) return;
+    led_strip_clear(s_led_strip);
+    int half = LED_STRIP_COUNT / 2;
+    int start = left ? 0 : half;
+    int end = left ? half : LED_STRIP_COUNT;
+    for (int i = start; i < end; i++) {
+        led_strip_set_pixel(s_led_strip, i, 255, 130, 0); // Amber
+    }
+    led_strip_refresh(s_led_strip);
+    xSemaphoreGive(s_led_mutex);
+}
+
+// Fire truck searchlight: blazing pure white beam
+void led_effects_searchlight(void) {
+    if (!s_led_strip || !s_led_mutex) return;
+    if (xSemaphoreTake(s_led_mutex, pdMS_TO_TICKS(5)) != pdTRUE) return;
+    for (int i = 0; i < LED_STRIP_COUNT; i++) {
+        led_strip_set_pixel(s_led_strip, i, 255, 255, 255);
+    }
+    led_strip_refresh(s_led_strip);
+    xSemaphoreGive(s_led_mutex);
+}
+
+// Fire glow: flickering warm red-orange embers
+void led_effects_fire_glow(void) {
+    if (!s_led_strip || !s_led_mutex) return;
+    if (xSemaphoreTake(s_led_mutex, pdMS_TO_TICKS(5)) != pdTRUE) return;
+    for (int i = 0; i < LED_STRIP_COUNT; i++) {
+        uint8_t r = 200 + (rand() % 55);
+        uint8_t g = 30 + (rand() % 70);
+        led_strip_set_pixel(s_led_strip, i, r, g, 0);
+    }
+    led_strip_refresh(s_led_strip);
+    xSemaphoreGive(s_led_mutex);
+}
+
+// Rescue success: celebration rainbow wave
+void led_effects_rescue_success(void) {
+    if (!s_led_strip || !s_led_mutex) return;
+    if (xSemaphoreTake(s_led_mutex, pdMS_TO_TICKS(5)) != pdTRUE) return;
+    for (int i = 0; i < LED_STRIP_COUNT; i++) {
+        uint8_t r, g, b;
+        hsv_to_rgb((i * 360 / LED_STRIP_COUNT + 120) % 360, 100, 100, &r, &g, &b);
+        led_strip_set_pixel(s_led_strip, i, r, g, b);
+    }
+    led_strip_refresh(s_led_strip);
+    xSemaphoreGive(s_led_mutex);
+}
+
 // Gentle breathing animation when idle
 void led_effects_idle_step(void) {
     if (!s_led_strip || !s_led_mutex) return;

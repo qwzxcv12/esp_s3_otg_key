@@ -19,9 +19,20 @@ ESP32-S3 Soundbank Audio Asset Credits & Licenses
    - Engine: Microsoft Edge Neural Text-to-Speech
    - Features: High-fidelity natural human speech, clear pedagogical pronunciation ("Chữ A", "Chữ B", "Số 1"...), 24kHz 16-bit Mono PCM.
 
-4. Physically Modeled SFX & Animal Vocalizations
+4. Mode 8: High-Fidelity 26 Animals & Fire Engine Rescue Cockpit
+   - Source 1: ESC-50 Dataset (CC-BY 4.0, Karol J. Piczak)
+     * Real studio environmental recordings: Dog, Cat, Cow, Frog, Pig, Rooster, Sheep, Chirping Birds, Crickets, Crow,
+       Fire Siren, Car Horn, Engine, Pouring Water/Hose, Crackling Fire, Helicopter, Applause/Cheering, Church Bells.
+   - Source 2: AlfaKidz Educational Audio (MIT License, Prashant Andani)
+     * Authentic recordings: Horse, Elephant, Goat, Lion, Monkey, Tiger, Zebra, Jaguar.
+   - Source 3: Animal Soundboard (Public/Open Dataset, Ridhurshan)
+     * Alligator, Koala, Owl, Duck, Hawk, Wolf, Cheetah, Parrot.
+   - Source 4: Vietnamese 114 Rescue Radio & Mission Voice
+     * Piper Neural TTS (offline vi_VN-vais1000-medium voice model) + walkie-talkie audio framing.
+
+5. Physically Modeled SFX (Mode 6 & Fallbacks)
    - Source: Algorithmic acoustic physical modeling via Python NumPy/SciPy
    - License: Creative Commons Zero (CC0 1.0 Universal - Public Domain Dedication)
-   - Includes: Boing, Laser, Car horn, Brass fanfare, Water drop, Ambulance siren, Tire skid, V8 Engine, Rocket launch, 16 Animal voices.
+   - Includes: Boing, Laser, Fanfare, Water drop, Tire skid, Nitro Rocket launch.
 
 All files are pre-processed and normalized to 16-bit Mono PCM WAV at 24000 Hz.

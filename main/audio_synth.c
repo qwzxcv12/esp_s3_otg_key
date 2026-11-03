@@ -1290,17 +1290,22 @@ void audio_play_robot_chirp(void) {
 
 // Mode 8: Cockpit & Animals
 void audio_cockpit_engine_start(void) {
+    if (sb_play_cockpit_sfx(COCKPIT_SFX_ENGINE)) return;
     if (sb_play_engine()) return;
     trigger_voice_internal(VOICE_ENGINE_RUMBLE, 80.0f, 0, 0, 0.95f, 700, 0);
 }
 
 void audio_cockpit_engine_stop(void) {}
 
-void audio_cockpit_siren_toggle(void) {
-    s_siren_on = !s_siren_on;
+void audio_cockpit_siren_set(bool on) {
+    s_siren_on = on;
     if (sb_has_siren()) {
         sb_siren_loop(s_siren_on);
     }
+}
+
+void audio_cockpit_siren_toggle(void) {
+    audio_cockpit_siren_set(!s_siren_on);
     ESP_LOGI(TAG, "Cockpit Siren: %s", s_siren_on ? "ON" : "OFF");
 }
 
@@ -1309,9 +1314,63 @@ bool audio_cockpit_is_siren_on(void) {
 }
 
 void audio_cockpit_rocket_launch(void) {
+    if (sb_play_cockpit_sfx(COCKPIT_SFX_ROCKET)) return;
     if (sb_play_rocket()) return;
     trigger_voice_internal(VOICE_TONE_ADSR, 880.0f, 0, 0, 0.9f, 250, TIMBRE_8BIT_MARIO);
     trigger_voice_internal(VOICE_PITCH_SWEEP, 0, 120.0f, 700.0f, 1.0f, 800, 1);
+}
+
+void audio_cockpit_water_hose(void) {
+    if (sb_play_cockpit_sfx(COCKPIT_SFX_WATER)) return;
+    trigger_voice_internal(VOICE_PITCH_SWEEP, 0, 600.0f, 1800.0f, 0.9f, 600, 0);
+}
+
+void audio_cockpit_horn(void) {
+    if (sb_play_cockpit_sfx(COCKPIT_SFX_HORN)) return;
+    audio_play_cartoon_sfx(SFX_CAR_HORN);
+}
+
+void audio_cockpit_skid(void) {
+    if (sb_play_cockpit_sfx(COCKPIT_SFX_SKID)) return;
+    audio_play_cartoon_sfx(SFX_SKID_STOP);
+}
+
+void audio_cockpit_bell(void) {
+    if (sb_play_cockpit_sfx(COCKPIT_SFX_BELL)) return;
+    trigger_voice_internal(VOICE_TONE_ADSR, 1200.0f, 0, 0, 0.9f, 400, TIMBRE_BELLS);
+}
+
+void audio_cockpit_reverse(void) {
+    if (sb_play_cockpit_sfx(COCKPIT_SFX_REVERSE)) return;
+    trigger_voice_internal(VOICE_TONE_ADSR, 1250.0f, 0, 0, 0.8f, 200, TIMBRE_8BIT_MARIO);
+}
+
+void audio_cockpit_turn(void) {
+    if (sb_play_cockpit_sfx(COCKPIT_SFX_TURN)) return;
+    trigger_voice_internal(VOICE_TONE_ADSR, 2200.0f, 0, 0, 0.6f, 40, TIMBRE_PIANO);
+}
+
+void audio_cockpit_radio(void) {
+    if (sb_play_cockpit_sfx(COCKPIT_SFX_RADIO)) return;
+    audio_play_robot_chirp();
+}
+
+void audio_cockpit_cheer(void) {
+    if (sb_play_cockpit_sfx(COCKPIT_SFX_CHEER)) return;
+    audio_play_cartoon_sfx(SFX_BRASS_FANFARE);
+}
+
+void audio_cockpit_fire(void) {
+    if (sb_play_cockpit_sfx(COCKPIT_SFX_FIRE)) return;
+}
+
+void audio_cockpit_helicopter(void) {
+    if (sb_play_cockpit_sfx(COCKPIT_SFX_HELI)) return;
+    trigger_voice_internal(VOICE_ENGINE_RUMBLE, 45.0f, 0, 0, 0.9f, 800, 0);
+}
+
+void audio_cockpit_play_sfx(int sfx_id) {
+    sb_play_cockpit_sfx(sfx_id);
 }
 
 void audio_play_animal_sound(char key) {
