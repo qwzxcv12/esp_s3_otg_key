@@ -508,6 +508,7 @@ bool sb_play_cartoon(int sfx) {
         case SFX_WHISTLE_SLIDE:       return play_id(SND_CT_WHISTLE,      1.20f, 0, false, CHOKE_NONE, 0, 0, 0);
         case SFX_WATER_DROP:          return play_id(SND_CT_DROP,         1.30f, 0, false, CHOKE_NONE, 0, 0, 0);
         case SFX_DOORBELL:            return play_id(SND_CT_DOORBELL,     1.25f, 0, false, CHOKE_NONE, 0, 0, 0);
+        case SFX_FIRE_SIREN:          return play_id(SND_CT_SIREN,        1.25f, 0, false, CHOKE_NONE, 0, 0, 0);
         case SFX_SKID_STOP:           return play_id(SND_CT_SKID,         1.20f, 0, false, CHOKE_NONE, 0, 0, 0);
         case SFX_GAME_JUMP:           return play_id(SND_CT_JUMP,         1.25f, 0, false, CHOKE_NONE, 0, 0, 0);
         case SFX_GAME_POWERUP:        return play_id(SND_CT_POWERUP,      1.25f, 0, false, CHOKE_NONE, 0, 0, 0);
@@ -534,7 +535,7 @@ bool sb_play_cartoon(int sfx) {
         case SFX_CT_TIMPANI_BOOM:     return play_id(SND_CT_TIMPANI,      1.30f, 0, false, CHOKE_NONE, 0, 0, 0);
         case SFX_CT_RUN_AWAY:         return play_id(SND_CT_RUN_AWAY,     1.25f, 0, false, CHOKE_NONE, 0, 0, 0);
     }
-    return false;   // SFX_FIRE_SIREN is a toggle: see sb_siren_loop()
+    return false;
 }
 
 bool sb_play_engine(void) { return play_id(SND_ENGINE, 1.25f, 0, false, CHOKE_NONE, 0, 0, 0); }

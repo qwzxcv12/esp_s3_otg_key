@@ -1180,7 +1180,7 @@ void audio_play_cartoon_sfx(cartoon_sfx_t sfx) {
             trigger_voice_internal(VOICE_TONE_ADSR, 659.25f, 0, 0, 0.9f, 500, TIMBRE_MUSIC_BOX);
             break;
         case SFX_FIRE_SIREN:
-            audio_cockpit_siren_toggle();
+            trigger_voice_internal(VOICE_PITCH_SWEEP, 0, 650.0f, 1100.0f, 0.85f, 500, 1);
             break;
         case SFX_SKID_STOP:
             trigger_voice_internal(VOICE_PITCH_SWEEP, 0, 1800.0f, 400.0f, 0.8f, 200, 0);

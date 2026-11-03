@@ -728,7 +728,7 @@ static void handle_toy_mode_key(uint8_t kc, uint8_t mod, char c) {
             else if (upper == 'Z') { audio_play_cartoon_sfx(SFX_CT_MAGIC_WAND); led_effects_color_burst(200, 50, 255); printf(" -> [Z: ĐŨA THẦN BÀ TIÊN LẤP LÁNH TING TING!]\r\n"); }
             else if (upper == 'X') { audio_play_cartoon_sfx(SFX_WATER_DROP); led_effects_color_burst(30, 150, 255); printf(" -> [X: GIỌT NƯỚC TÍ TÁCH RƠI TONG TONG!]\r\n"); }
             else if (upper == 'C') { audio_play_cartoon_sfx(SFX_CAR_HORN); led_effects_color_burst(255, 160, 0); printf(" -> [C: CÒI XE Ô TÔ HOẠT HÌNH BIM BIM!]\r\n"); }
-            else if (upper == 'V') { audio_play_cartoon_sfx(SFX_FIRE_SIREN); printf(" -> [V: CÒI CỨU HỎA HOẠT HÌNH %s]\r\n", audio_cockpit_is_siren_on() ? "BẬT" : "TẮT"); }
+            else if (upper == 'V') { audio_play_cartoon_sfx(SFX_FIRE_SIREN); led_effects_color_burst(255, 30, 30); printf(" -> [V: CÒI HỤ HOẠT HÌNH ACME SIREN!]\r\n"); }
             else if (upper == 'B') { audio_play_cartoon_sfx(SFX_CT_COWBELL); led_effects_color_burst(255, 180, 50); printf(" -> [B: CHUÔNG BÒ GÕ VUI NHỘN COWBELL!]\r\n"); }
             else if (upper == 'N') { audio_play_cartoon_sfx(SFX_CT_BALL_WHISTLE); led_effects_color_burst(0, 220, 255); printf(" -> [N: CÒI TRỌNG TÀI TUÝT TUÝT GẤP GÁP!]\r\n"); }
             else if (upper == 'M') { audio_play_cartoon_sfx(SFX_DOORBELL); led_effects_color_burst(200, 50, 255); printf(" -> [M: CHUÔNG CỬA ĐING ĐOONG NGÂN NGA!]\r\n"); }
