@@ -251,19 +251,9 @@ def build_mode5():
 # 5. MODE 6: CARTOON SFX (VCSL & CC0 WHISTLE/BELLS)
 # ============================================================================
 def build_mode6():
-    print("\n=== Building Mode 6: Cartoon SFX ===")
-    VCSL_BASE = "https://raw.githubusercontent.com/sgossner/VCSL/master/"
-    
-    cartoon_samples = [
-        ("coin",     "Idiophones/Struck Idiophones/Glockenspiel/glock_loud_C7_01.wav", 0.4, 0.0),
-        ("whistle",  "Aerophones/Edge-blown Aerophones/Train Whistle, Toy/Main_TrainLow_Double-001.wav", 1.2, 0.0),
-        ("doorbell", "Idiophones/Struck Idiophones/Glockenspiel/glock_loud_C5_01.wav", 0.7, 0.0),
-    ]
-    for dest_name, rel_path, dur, shift in cartoon_samples:
-        url = VCSL_BASE + urllib.parse.quote(rel_path)
-        cached_file = download_cache(url, f"ct_{os.path.basename(rel_path)}")
-        data, sr = sf.read(cached_file)
-        export_wav(f"{OUT_DIR}/mode6/{dest_name}.wav", data, sr, max_dur=dur, semitone_shift=shift)
+    print("\n=== Building Mode 6: Full High-Definition Cartoon & Retro SFX ===")
+    from tools.build_mode6_assets import main as build_m6
+    build_m6()
 
 def main():
     print("==================================================")

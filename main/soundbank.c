@@ -30,6 +30,13 @@ typedef enum {
     SND_TW_CLICK, SND_TW_SPACE, SND_TW_BELL, SND_TW_BACK,
     SND_CT_BOING, SND_CT_LASER, SND_CT_HORN, SND_CT_FANFARE, SND_CT_WHISTLE,
     SND_CT_DROP, SND_CT_DOORBELL, SND_CT_SIREN, SND_CT_SKID,
+    SND_CT_COIN_M6,
+    SND_CT_JUMP, SND_CT_POWERUP, SND_CT_1UP, SND_CT_FIREBALL, SND_CT_WARP,
+    SND_CT_BOMB, SND_CT_PACMAN, SND_CT_SONIC, SND_CT_PUNCH, SND_CT_SAD_TROMBONE,
+    SND_CT_BONGO_RUN, SND_CT_SLIP_FALL, SND_CT_ANVIL, SND_CT_SLAPSTICK,
+    SND_CT_FLEXATONE, SND_CT_VIBRASLAP, SND_CT_SQUEAK_DUCK, SND_CT_SPLAT,
+    SND_CT_BALL_WHISTLE, SND_CT_COWBELL, SND_CT_MAGIC_WAND, SND_CT_GHOST,
+    SND_CT_TIMPANI, SND_CT_RUN_AWAY,
     SND_ENGINE, SND_ROCKET,
     SND_ANIMAL_DOG, SND_ANIMAL_CAT, SND_ANIMAL_BIRD, SND_ANIMAL_COW, SND_ANIMAL_DUCK,
     SND_ANIMAL_FROG, SND_ANIMAL_LION, SND_ANIMAL_PIG, SND_ANIMAL_ELEPHANT, SND_ANIMAL_GOAT,
@@ -119,15 +126,40 @@ static void build_table(void) {
     reg(SND_TW_BELL,  "mode5/bell.wav",      M(4));
     reg(SND_TW_BACK,  "mode5/backspace.wav", M(4) | M(8));
 
-    reg(SND_CT_BOING,    "mode6/boing.wav",    M(5) | M(8));
-    reg(SND_CT_LASER,    "mode6/laser.wav",    M(5) | M(7));
-    reg(SND_CT_HORN,     "mode6/horn.wav",     M(5) | M(7));
-    reg(SND_CT_FANFARE,  "mode6/fanfare.wav",  M(5) | M(8));
-    reg(SND_CT_WHISTLE,  "mode6/whistle.wav",  M(5));
-    reg(SND_CT_DROP,     "mode6/drop.wav",     M(5) | M(8));
-    reg(SND_CT_DOORBELL, "mode6/doorbell.wav", M(5));
-    reg(SND_CT_SIREN,    "mode6/siren.wav",    M(5) | M(7));
-    reg(SND_CT_SKID,     "mode6/skid.wav",     M(5) | M(7));
+    reg(SND_CT_BOING,         "mode6/boing.wav",         M(5) | M(8));
+    reg(SND_CT_LASER,         "mode6/laser.wav",         M(5) | M(7));
+    reg(SND_CT_HORN,          "mode6/horn.wav",          M(5) | M(7));
+    reg(SND_CT_FANFARE,       "mode6/fanfare.wav",       M(5) | M(8));
+    reg(SND_CT_WHISTLE,       "mode6/whistle.wav",       M(5));
+    reg(SND_CT_DROP,          "mode6/water_drop.wav",    M(5) | M(8));
+    reg(SND_CT_DOORBELL,      "mode6/doorbell.wav",      M(5));
+    reg(SND_CT_SIREN,         "mode6/siren.wav",         M(5) | M(7));
+    reg(SND_CT_SKID,          "mode6/skid.wav",          M(5) | M(7));
+    reg(SND_CT_COIN_M6,       "mode6/coin.wav",          M(5));
+    reg(SND_CT_JUMP,          "mode6/jump.wav",          M(5));
+    reg(SND_CT_POWERUP,       "mode6/powerup.wav",       M(5));
+    reg(SND_CT_1UP,           "mode6/1up.wav",           M(5));
+    reg(SND_CT_FIREBALL,      "mode6/fireball.wav",      M(5));
+    reg(SND_CT_WARP,          "mode6/warp.wav",          M(5));
+    reg(SND_CT_BOMB,          "mode6/bomb.wav",          M(5));
+    reg(SND_CT_PACMAN,        "mode6/pacman.wav",        M(5));
+    reg(SND_CT_SONIC,         "mode6/sonic.wav",         M(5));
+    reg(SND_CT_PUNCH,         "mode6/punch.wav",         M(5));
+    reg(SND_CT_SAD_TROMBONE,  "mode6/sad_trombone.wav",  M(5));
+    reg(SND_CT_BONGO_RUN,     "mode6/bongo_run.wav",     M(5));
+    reg(SND_CT_SLIP_FALL,     "mode6/slip_fall.wav",     M(5));
+    reg(SND_CT_ANVIL,         "mode6/anvil.wav",         M(5));
+    reg(SND_CT_SLAPSTICK,     "mode6/slapstick.wav",     M(5));
+    reg(SND_CT_FLEXATONE,     "mode6/flexatone.wav",     M(5));
+    reg(SND_CT_VIBRASLAP,     "mode6/vibraslap.wav",     M(5));
+    reg(SND_CT_SQUEAK_DUCK,   "mode6/squeak_duck.wav",   M(5));
+    reg(SND_CT_SPLAT,         "mode6/splat.wav",         M(5));
+    reg(SND_CT_BALL_WHISTLE,  "mode6/ball_whistle.wav",  M(5));
+    reg(SND_CT_COWBELL,       "mode6/cowbell.wav",       M(5));
+    reg(SND_CT_MAGIC_WAND,    "mode6/magic_wand.wav",    M(5));
+    reg(SND_CT_GHOST,         "mode6/ghost.wav",         M(5));
+    reg(SND_CT_TIMPANI,       "mode6/timpani.wav",       M(5));
+    reg(SND_CT_RUN_AWAY,      "mode6/run_away.wav",      M(5));
 
     reg(SND_ENGINE, "mode8/engine.wav", M(7));
     reg(SND_ROCKET, "mode8/rocket.wav", M(7));
@@ -468,15 +500,39 @@ bool sb_play_typewriter(int type) {
 
 bool sb_play_cartoon(int sfx) {
     switch (sfx) {
-        case SFX_MARIO_COIN:       return play_id(SND_COIN,        1.20f, 0, false, CHOKE_NONE, 0, 0, 0);
-        case SFX_SPRING_BOING:     return play_id(SND_CT_BOING,    1.20f, 0, false, CHOKE_NONE, 0, 0, 0);
-        case SFX_LASER:            return play_id(SND_CT_LASER,    1.20f, 0, false, CHOKE_NONE, 0, 0, 0);
-        case SFX_CAR_HORN:         return play_id(SND_CT_HORN,     1.20f, 0, false, CHOKE_NONE, 0, 0, 0);
-        case SFX_VICTORY_FANFARE:  return play_id(SND_CT_FANFARE,  1.25f, 0, false, CHOKE_NONE, 0, 0, 0);
-        case SFX_WHISTLE_SLIDE:    return play_id(SND_CT_WHISTLE,  1.20f, 0, false, CHOKE_NONE, 0, 0, 0);
-        case SFX_WATER_DROP:       return play_id(SND_CT_DROP,     1.25f, 0, false, CHOKE_NONE, 0, 0, 0);
-        case SFX_DOORBELL:         return play_id(SND_CT_DOORBELL, 1.25f, 0, false, CHOKE_NONE, 0, 0, 0);
-        case SFX_SKID_STOP:        return play_id(SND_CT_SKID,     1.20f, 0, false, CHOKE_NONE, 0, 0, 0);
+        case SFX_MARIO_COIN:          return play_id(SND_CT_COIN_M6,      1.25f, 0, false, CHOKE_NONE, 0, 0, 0) || play_id(SND_COIN, 1.25f, 0, false, CHOKE_NONE, 0, 0, 0);
+        case SFX_SPRING_BOING:        return play_id(SND_CT_BOING,        1.25f, 0, false, CHOKE_NONE, 0, 0, 0);
+        case SFX_LASER:               return play_id(SND_CT_LASER,        1.20f, 0, false, CHOKE_NONE, 0, 0, 0);
+        case SFX_CAR_HORN:            return play_id(SND_CT_HORN,         1.25f, 0, false, CHOKE_NONE, 0, 0, 0);
+        case SFX_VICTORY_FANFARE:     return play_id(SND_CT_FANFARE,      1.30f, 0, false, CHOKE_NONE, 0, 0, 0);
+        case SFX_WHISTLE_SLIDE:       return play_id(SND_CT_WHISTLE,      1.20f, 0, false, CHOKE_NONE, 0, 0, 0);
+        case SFX_WATER_DROP:          return play_id(SND_CT_DROP,         1.30f, 0, false, CHOKE_NONE, 0, 0, 0);
+        case SFX_DOORBELL:            return play_id(SND_CT_DOORBELL,     1.25f, 0, false, CHOKE_NONE, 0, 0, 0);
+        case SFX_SKID_STOP:           return play_id(SND_CT_SKID,         1.20f, 0, false, CHOKE_NONE, 0, 0, 0);
+        case SFX_GAME_JUMP:           return play_id(SND_CT_JUMP,         1.25f, 0, false, CHOKE_NONE, 0, 0, 0);
+        case SFX_GAME_POWERUP:        return play_id(SND_CT_POWERUP,      1.25f, 0, false, CHOKE_NONE, 0, 0, 0);
+        case SFX_GAME_1UP:            return play_id(SND_CT_1UP,          1.25f, 0, false, CHOKE_NONE, 0, 0, 0);
+        case SFX_GAME_FIREBALL:       return play_id(SND_CT_FIREBALL,     1.20f, 0, false, CHOKE_NONE, 0, 0, 0);
+        case SFX_GAME_WARP:           return play_id(SND_CT_WARP,         1.25f, 0, false, CHOKE_NONE, 0, 0, 0);
+        case SFX_GAME_BOMB:           return play_id(SND_CT_BOMB,         1.35f, 0, false, CHOKE_NONE, 0, 0, 0);
+        case SFX_GAME_PACMAN:         return play_id(SND_CT_PACMAN,       1.25f, 0, false, CHOKE_NONE, 0, 0, 0);
+        case SFX_GAME_SONIC_DASH:     return play_id(SND_CT_SONIC,        1.25f, 0, false, CHOKE_NONE, 0, 0, 0);
+        case SFX_GAME_PUNCH:          return play_id(SND_CT_PUNCH,        1.30f, 0, false, CHOKE_NONE, 0, 0, 0);
+        case SFX_GAME_OVER_TROMBONE:  return play_id(SND_CT_SAD_TROMBONE, 1.30f, 0, false, CHOKE_NONE, 0, 0, 0);
+        case SFX_CT_BONGO_RUN:        return play_id(SND_CT_BONGO_RUN,    1.30f, 0, false, CHOKE_NONE, 0, 0, 0);
+        case SFX_CT_SLIP_FALL:        return play_id(SND_CT_SLIP_FALL,    1.30f, 0, false, CHOKE_NONE, 0, 0, 0);
+        case SFX_CT_ANVIL_CLANG:      return play_id(SND_CT_ANVIL,        1.30f, 0, false, CHOKE_NONE, 0, 0, 0);
+        case SFX_CT_SLAPSTICK:        return play_id(SND_CT_SLAPSTICK,    1.25f, 0, false, CHOKE_NONE, 0, 0, 0);
+        case SFX_CT_FLEXATONE:        return play_id(SND_CT_FLEXATONE,    1.25f, 0, false, CHOKE_NONE, 0, 0, 0);
+        case SFX_CT_VIBRASLAP:        return play_id(SND_CT_VIBRASLAP,    1.25f, 0, false, CHOKE_NONE, 0, 0, 0);
+        case SFX_CT_SQUEAK_DUCK:      return play_id(SND_CT_SQUEAK_DUCK,  1.25f, 0, false, CHOKE_NONE, 0, 0, 0);
+        case SFX_CT_SPLAT:            return play_id(SND_CT_SPLAT,        1.25f, 0, false, CHOKE_NONE, 0, 0, 0);
+        case SFX_CT_BALL_WHISTLE:     return play_id(SND_CT_BALL_WHISTLE, 1.25f, 0, false, CHOKE_NONE, 0, 0, 0);
+        case SFX_CT_COWBELL:          return play_id(SND_CT_COWBELL,      1.25f, 0, false, CHOKE_NONE, 0, 0, 0);
+        case SFX_CT_MAGIC_WAND:       return play_id(SND_CT_MAGIC_WAND,   1.30f, 0, false, CHOKE_NONE, 0, 0, 0);
+        case SFX_CT_GHOST_BOO:        return play_id(SND_CT_GHOST,        1.25f, 0, false, CHOKE_NONE, 0, 0, 0);
+        case SFX_CT_TIMPANI_BOOM:     return play_id(SND_CT_TIMPANI,      1.30f, 0, false, CHOKE_NONE, 0, 0, 0);
+        case SFX_CT_RUN_AWAY:         return play_id(SND_CT_RUN_AWAY,     1.25f, 0, false, CHOKE_NONE, 0, 0, 0);
     }
     return false;   // SFX_FIRE_SIREN is a toggle: see sb_siren_loop()
 }

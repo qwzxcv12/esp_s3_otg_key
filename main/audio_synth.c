@@ -1185,6 +1185,66 @@ void audio_play_cartoon_sfx(cartoon_sfx_t sfx) {
         case SFX_SKID_STOP:
             trigger_voice_internal(VOICE_PITCH_SWEEP, 0, 1800.0f, 400.0f, 0.8f, 200, 0);
             break;
+        case SFX_GAME_JUMP:
+            trigger_voice_internal(VOICE_PITCH_SWEEP, 0, 140.0f, 520.0f, 0.9f, 220, 0);
+            break;
+        case SFX_GAME_POWERUP:
+        case SFX_GAME_1UP:
+            trigger_voice_internal(VOICE_TONE_ADSR, 659.25f, 0, 0, 0.85f, 100, TIMBRE_8BIT_MARIO);
+            trigger_voice_internal(VOICE_TONE_ADSR, 1046.50f, 0, 0, 0.90f, 250, TIMBRE_8BIT_MARIO);
+            break;
+        case SFX_GAME_FIREBALL:
+            trigger_voice_internal(VOICE_PITCH_SWEEP, 0, 950.0f, 180.0f, 0.85f, 100, 0);
+            break;
+        case SFX_GAME_WARP:
+            trigger_voice_internal(VOICE_PITCH_SWEEP, 0, 380.0f, 110.0f, 0.85f, 300, 0);
+            break;
+        case SFX_GAME_BOMB:
+        case SFX_GAME_PUNCH:
+        case SFX_CT_TIMPANI_BOOM:
+            trigger_voice_internal(VOICE_NOISE_BURST, 0, 0, 0, 0.95f, 280, DRUM_KICK);
+            break;
+        case SFX_GAME_PACMAN:
+        case SFX_CT_SQUEAK_DUCK:
+            trigger_voice_internal(VOICE_PITCH_SWEEP, 0, 420.0f, 140.0f, 0.85f, 120, 0);
+            break;
+        case SFX_GAME_SONIC_DASH:
+        case SFX_CT_RUN_AWAY:
+            trigger_voice_internal(VOICE_PITCH_SWEEP, 0, 220.0f, 1600.0f, 0.9f, 320, 0);
+            break;
+        case SFX_GAME_OVER_TROMBONE:
+            trigger_voice_internal(VOICE_PITCH_SWEEP, 0, 310.0f, 180.0f, 0.85f, 550, 0);
+            break;
+        case SFX_CT_BONGO_RUN:
+        case SFX_CT_SLAPSTICK:
+            trigger_voice_internal(VOICE_NOISE_BURST, 0, 0, 0, 0.85f, 90, DRUM_SNARE);
+            break;
+        case SFX_CT_SLIP_FALL:
+            trigger_voice_internal(VOICE_PITCH_SWEEP, 0, 1800.0f, 250.0f, 0.9f, 300, 0);
+            break;
+        case SFX_CT_ANVIL_CLANG:
+        case SFX_CT_COWBELL:
+            trigger_voice_internal(VOICE_TONE_ADSR, 1174.66f, 0, 0, 0.95f, 400, TIMBRE_MUSIC_BOX);
+            break;
+        case SFX_CT_FLEXATONE:
+        case SFX_CT_VIBRASLAP:
+            trigger_voice_internal(VOICE_PITCH_SWEEP, 0, 450.0f, 950.0f, 0.85f, 350, 1);
+            break;
+        case SFX_CT_SPLAT:
+            trigger_voice_internal(VOICE_PITCH_SWEEP, 0, 450.0f, 120.0f, 0.8f, 160, 0);
+            break;
+        case SFX_CT_BALL_WHISTLE:
+            trigger_voice_internal(VOICE_PITCH_SWEEP, 0, 2400.0f, 2200.0f, 0.85f, 200, 1);
+            break;
+        case SFX_CT_MAGIC_WAND:
+            trigger_voice_internal(VOICE_TONE_ADSR, 1567.98f, 0, 0, 0.85f, 150, TIMBRE_MUSIC_BOX);
+            trigger_voice_internal(VOICE_TONE_ADSR, 2637.02f, 0, 0, 0.90f, 350, TIMBRE_MUSIC_BOX);
+            break;
+        case SFX_CT_GHOST_BOO:
+            trigger_voice_internal(VOICE_PITCH_SWEEP, 0, 280.0f, 480.0f, 0.8f, 450, 1);
+            break;
+        default:
+            break;
     }
 }
 

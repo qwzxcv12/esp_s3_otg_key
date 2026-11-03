@@ -39,7 +39,34 @@ typedef enum {
     SFX_WATER_DROP,
     SFX_DOORBELL,
     SFX_FIRE_SIREN,
-    SFX_SKID_STOP
+    SFX_SKID_STOP,
+    // Expanded Arcade & Retro Game SFX
+    SFX_GAME_JUMP,
+    SFX_GAME_POWERUP,
+    SFX_GAME_1UP,
+    SFX_GAME_FIREBALL,
+    SFX_GAME_WARP,
+    SFX_GAME_BOMB,
+    SFX_GAME_PACMAN,
+    SFX_GAME_SONIC_DASH,
+    SFX_GAME_PUNCH,
+    SFX_GAME_OVER_TROMBONE,
+    // Expanded Cartoon Slapstick & Comedy SFX
+    SFX_CT_BONGO_RUN,
+    SFX_CT_SLIP_FALL,
+    SFX_CT_ANVIL_CLANG,
+    SFX_CT_SLAPSTICK,
+    SFX_CT_FLEXATONE,
+    SFX_CT_VIBRASLAP,
+    SFX_CT_SQUEAK_DUCK,
+    SFX_CT_SPLAT,
+    SFX_CT_BALL_WHISTLE,
+    SFX_CT_COWBELL,
+    SFX_CT_MAGIC_WAND,
+    SFX_CT_GHOST_BOO,
+    SFX_CT_TIMPANI_BOOM,
+    SFX_CT_RUN_AWAY,
+    SFX_CARTOON_COUNT
 } cartoon_sfx_t;
 
 typedef enum {
