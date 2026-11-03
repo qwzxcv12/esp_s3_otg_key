@@ -130,47 +130,32 @@ bool audio_mozart_is_autoplay(void);
 void audio_mozart_autoplay_tick(void);
 void audio_mozart_get_info(mozart_play_info_t *out_info);
 
-// Mode 3: Speed Runner (Sonic Speed Track & Audio Engine)
+// Mode 3: Nhạc Chạy Theo Tốc Độ Gõ Phím (Speed Melody Player)
 typedef struct {
     float freq;
     float bass_freq;
-    uint16_t dur_ms;
 } speed_note_t;
 
 typedef struct {
     const char *name;
-    const char *theme;
-    uint8_t track_idx;
-    uint8_t total_tracks;
+    const char *title_vi;
+    uint8_t song_idx;
+    uint8_t total_songs;
     uint16_t note_idx;
     uint16_t total_notes;
     float freq;
-    float current_speed_kmh;
-    uint8_t speed_level; // 0=Stop, 1=Walk, 2=Sport, 3=F1, 4=Nitro
-    uint16_t combo;
-    uint32_t total_notes_played;
+    uint32_t speed_bpm;
     bool is_finished;
-} speed_play_info_t;
+} speed_note_info_t;
 
-void audio_speed_engine_init(void);
-void audio_speed_engine_reset(void);
-void audio_speed_tap_pedal(void);
-bool audio_speed_engine_tick(uint32_t delta_ms, speed_play_info_t *out_info, bool *out_note_played);
-bool audio_speed_step_note(speed_play_info_t *out_info);
-void audio_speed_next_track(void);
-void audio_speed_prev_track(void);
-void audio_speed_select_track(uint8_t track_idx);
-void audio_speed_restart_track(void);
+void audio_speed_reset(void);
+bool audio_speed_play_note(speed_note_info_t *out_info);
+void audio_speed_next_song(void);
+void audio_speed_prev_song(void);
+void audio_speed_select_song(uint8_t song_idx);
 uint8_t audio_speed_toggle_timbre(void);
 const char *audio_speed_get_timbre_name(void);
-void audio_speed_nitro_boost(void);
-void audio_speed_brake(void);
-void audio_speed_honk(void);
-void audio_speed_get_info(speed_play_info_t *out_info);
-float audio_speed_get_current_kmh(void);
-uint8_t audio_speed_get_level(void);
-void audio_speed_set_auto_pedal(bool enable);
-bool audio_speed_is_auto_pedal(void);
+void audio_speed_get_info(speed_note_info_t *out_info);
 
 // Backward-compatible stubs
 void audio_speed_runner_keystroke(void);

@@ -1080,276 +1080,155 @@ void audio_mozart_autoplay_tick(void) {
 }
 
 // ============================================================================
-// MODE 3: SPEED RUNNER (SONIC SPEED TRACK & AUDIO ENGINE)
+// MODE 3: NHẠC CHẠY THEO TỐC ĐỘ GÕ PHÍM (SPEED MELODY PLAYER)
 // ============================================================================
 
 typedef struct {
     const speed_note_t *notes;
     size_t count;
     const char *name;
-    const char *theme;
-} speed_track_def_t;
+    const char *title_vi;
+} speed_song_def_t;
 
-// Track 1: Super Mario Bros Theme (Overworld)
-static const speed_note_t s_track_mario[] = {
-    {F_E5, F_C3, 140}, {F_E5, F_C3, 140}, {0, 0, 140}, {F_E5, F_C3, 140}, {0, 0, 140},
-    {F_C5, F_C3, 140}, {F_E5, F_C3, 140}, {F_G5, F_G3, 280}, {0, 0, 140}, {F_G4, F_G2, 280},
-    {0, 0, 140},
-    {F_C5, F_E3, 220}, {0, 0, 80}, {F_G4, F_C3, 220}, {0, 0, 80}, {F_E4, F_G2, 220}, {0, 0, 80},
-    {F_A4, F_A2, 200}, {F_B4, F_B2, 200}, {F_AS4, F_AS2, 160}, {F_A4, F_A2, 200},
-    {F_G4, F_E3, 180}, {F_E5, F_G3, 180}, {F_G5, F_C4, 180}, {F_A5, F_F3, 220},
-    {F_F5, F_D3, 160}, {F_G5, F_E3, 160}, {F_E5, F_C3, 200}, {F_C5, F_A2, 160},
-    {F_D5, F_B2, 160}, {F_B4, F_G2, 280}
+// 1. Baby Shark (Cá Mập Con)
+static const speed_note_t s_song_babyshark[] = {
+    {F_D4, F_G2}, {F_E4, 0},
+    {F_G4, F_G3}, {F_G4, 0}, {F_G4, F_G3}, {F_G4, 0}, {F_G4, F_G3}, {F_G4, 0}, {F_G4, F_G3},
+    {F_D4, F_G2}, {F_E4, 0},
+    {F_G4, F_G3}, {F_G4, 0}, {F_G4, F_G3}, {F_G4, 0}, {F_G4, F_G3}, {F_G4, 0}, {F_G4, F_G3},
+    {F_D4, F_G2}, {F_E4, 0},
+    {F_G4, F_G3}, {F_G4, 0}, {F_G4, F_G3}, {F_G4, 0}, {F_G4, F_G3}, {F_G4, 0}, {F_G4, F_G3},
+    {F_G4, F_G3}, {F_G4, 0}, {F_FS4, F_D3}
 };
 
-// Track 2: Baby Shark (Cá Mập Săn Mồi Thần Tốc)
-static const speed_note_t s_track_babyshark[] = {
-    {F_D4, F_G2, 250}, {F_E4, 0, 250},
-    {F_G4, F_G3, 170}, {F_G4, 0, 170}, {F_G4, F_G3, 170}, {0, 0, 70},
-    {F_G4, 0, 170}, {F_G4, 0, 170}, {F_G4, F_G3, 170}, {0, 0, 70}, {F_G4, 0, 170},
-    {F_D4, F_G2, 250}, {F_E4, 0, 250},
-    {F_G4, F_G3, 170}, {F_G4, 0, 170}, {F_G4, F_G3, 170}, {0, 0, 70},
-    {F_G4, 0, 170}, {F_G4, 0, 170}, {F_G4, F_G3, 170}, {0, 0, 70}, {F_G4, 0, 170},
-    {F_D4, F_G2, 250}, {F_E4, 0, 250},
-    {F_G4, F_G3, 170}, {F_G4, 0, 170}, {F_G4, F_G3, 170}, {0, 0, 70},
-    {F_G4, 0, 170}, {F_G4, 0, 170}, {F_G4, F_G3, 170}, {0, 0, 70}, {F_G4, 0, 170},
-    {F_G4, F_G3, 250}, {F_G4, 0, 250}, {F_FS4, F_D3, 450}
+// 2. Kìa Con Bướm Vàng (Frère Jacques)
+static const speed_note_t s_song_butterfly[] = {
+    {F_C4, F_C3}, {F_D4, 0}, {F_E4, F_C3}, {F_C4, 0},
+    {F_C4, F_C3}, {F_D4, 0}, {F_E4, F_C3}, {F_C4, 0},
+    {F_E4, F_C3}, {F_F4, 0}, {F_G4, F_G3},
+    {F_E4, F_C3}, {F_F4, 0}, {F_G4, F_G3},
+    {F_G4, F_E3}, {F_A4, 0}, {F_G4, 0}, {F_F4, 0}, {F_E4, F_C3}, {F_C4, 0},
+    {F_G4, F_E3}, {F_A4, 0}, {F_G4, 0}, {F_F4, 0}, {F_E4, F_C3}, {F_C4, 0},
+    {F_C4, F_C3}, {F_G3, F_G2}, {F_C4, F_C3},
+    {F_C4, F_C3}, {F_G3, F_G2}, {F_C4, F_C3}
 };
 
-// Track 3: Kìa Con Bướm Vàng (Frère Jacques)
-static const speed_note_t s_track_butterfly[] = {
-    {F_C4, F_C3, 250}, {F_D4, 0, 250}, {F_E4, F_C3, 250}, {F_C4, 0, 250},
-    {F_C4, F_C3, 250}, {F_D4, 0, 250}, {F_E4, F_C3, 250}, {F_C4, 0, 250},
-    {F_E4, F_C3, 250}, {F_F4, 0, 250}, {F_G4, F_G3, 450},
-    {F_E4, F_C3, 250}, {F_F4, 0, 250}, {F_G4, F_G3, 450},
-    {F_G4, F_E3, 150}, {F_A4, 0, 150}, {F_G4, 0, 150}, {F_F4, 0, 150}, {F_E4, F_C3, 250}, {F_C4, 0, 250},
-    {F_G4, F_E3, 150}, {F_A4, 0, 150}, {F_G4, 0, 150}, {F_F4, 0, 150}, {F_E4, F_C3, 250}, {F_C4, 0, 250},
-    {F_C4, F_C3, 250}, {F_G3, F_G2, 250}, {F_C4, F_C3, 500},
-    {F_C4, F_C3, 250}, {F_G3, F_G2, 250}, {F_C4, F_C3, 500}
+// 3. Một Con Vịt (Vịt Xòe Hai Cánh)
+static const speed_note_t s_song_duck[] = {
+    {F_G4, F_C3}, {F_E4, 0}, {F_G4, F_C3}, {F_E4, 0}, {F_G4, F_C3}, {F_A4, 0}, {F_G4, F_C3},
+    {F_G4, F_F3}, {F_A4, 0}, {F_C5, F_F3}, {F_A4, 0}, {F_G4, F_C3}, {F_E4, 0}, {F_D4, F_G2},
+    {F_D4, F_G2}, {F_E4, 0}, {F_G4, F_C3}, {F_A4, 0}, {F_G4, F_C3}, {F_E4, 0},
+    {F_G4, F_C3}, {F_A4, 0}, {F_G4, F_C3}, {F_E4, 0}, {F_D4, F_G2}, {F_D4, 0}, {F_C4, F_C3}
 };
 
-// Track 4: Tetris Korobeiniki (Bản Dân Ca Tăng Tốc Huyền Thoại)
-static const speed_note_t s_track_tetris[] = {
-    {F_E5, F_A2, 250}, {F_B4, 0, 150}, {F_C5, 0, 150}, {F_D5, F_D3, 250}, {F_C5, 0, 150}, {F_B4, 0, 150},
-    {F_A4, F_A2, 250}, {F_A4, 0, 150}, {F_C5, 0, 150}, {F_E5, F_A2, 250}, {F_D5, 0, 150}, {F_C5, 0, 150},
-    {F_B4, F_E3, 300}, {F_C5, 0, 150}, {F_D5, F_E3, 250}, {F_E5, 0, 250},
-    {F_C5, F_A2, 250}, {F_A4, 0, 250}, {F_A4, F_A2, 450},
-    {F_D5, F_D3, 250}, {F_F5, 0, 150}, {F_A5, F_D3, 250}, {F_G5, 0, 150}, {F_F5, 0, 150},
-    {F_E5, F_C3, 350}, {F_C5, 0, 150}, {F_E5, F_C3, 250}, {F_D5, 0, 150}, {F_C5, 0, 150},
-    {F_B4, F_E3, 250}, {F_C5, 0, 150}, {F_D5, F_E3, 250}, {F_E5, 0, 250},
-    {F_C5, F_A2, 250}, {F_A4, 0, 250}, {F_A4, F_A2, 450}
+// 4. Chúc Mừng Sinh Nhật (Happy Birthday)
+static const speed_note_t s_song_birthday[] = {
+    {F_C4, F_C3}, {F_C4, 0}, {F_D4, 0}, {F_C4, F_C3}, {F_F4, F_F3}, {F_E4, 0},
+    {F_C4, F_C3}, {F_C4, 0}, {F_D4, 0}, {F_C4, F_C3}, {F_G4, F_C3}, {F_F4, 0},
+    {F_C4, F_C3}, {F_C4, 0}, {F_C5, F_F3}, {F_A4, 0}, {F_F4, F_F3}, {F_E4, 0}, {F_D4, F_AS2},
+    {F_AS4, F_AS2}, {F_AS4, 0}, {F_A4, 0}, {F_F4, F_F3}, {F_G4, F_C3}, {F_F4, F_F3}
 };
 
-// Track 5: Một Con Vịt (Vịt Xòe Hai Cánh)
-static const speed_note_t s_track_duck[] = {
-    {F_G4, F_C3, 220}, {F_E4, 0, 220}, {F_G4, F_C3, 220}, {F_E4, 0, 220},
-    {F_G4, F_C3, 220}, {F_A4, 0, 220}, {F_G4, F_C3, 380},
-    {F_G4, F_F3, 220}, {F_A4, 0, 220}, {F_C5, F_F3, 220}, {F_A4, 0, 220},
-    {F_G4, F_C3, 220}, {F_E4, 0, 220}, {F_D4, F_G2, 380},
-    {F_D4, F_G2, 220}, {F_E4, 0, 220}, {F_G4, F_C3, 220}, {F_A4, 0, 220},
-    {F_G4, F_C3, 220}, {F_E4, 0, 380},
-    {F_G4, F_C3, 220}, {F_A4, 0, 220}, {F_G4, F_C3, 220}, {F_E4, 0, 220},
-    {F_D4, F_G2, 220}, {F_D4, 0, 220}, {F_C4, F_C3, 500}
+// 5. Super Mario Bros (Game Rộn Ràng)
+static const speed_note_t s_song_mario[] = {
+    {F_E5, F_C3}, {F_E5, F_C3}, {F_E5, F_C3}, {F_C5, F_C3}, {F_E5, F_C3}, {F_G5, F_G3}, {F_G4, F_G2},
+    {F_C5, F_E3}, {F_G4, F_C3}, {F_E4, F_G2}, {F_A4, F_A2}, {F_B4, F_B2}, {F_AS4, F_AS2}, {F_A4, F_A2},
+    {F_G4, F_E3}, {F_E5, F_G3}, {F_G5, F_C4}, {F_A5, F_F3}, {F_F5, F_D3}, {F_G5, F_E3}, {F_E5, F_C3},
+    {F_C5, F_A2}, {F_D5, F_B2}, {F_B4, F_G2}
 };
 
-static const speed_track_def_t s_speed_tracks[] = {
-    { s_track_mario,     sizeof(s_track_mario)/sizeof(s_track_mario[0]),         "Super Mario Bros",     "Thế Giới Nấm Siêu Tốc" },
-    { s_track_babyshark, sizeof(s_track_babyshark)/sizeof(s_track_babyshark[0]), "Baby Shark",           "Cá Mập Săn Mồi Thần Tốc" },
-    { s_track_butterfly, sizeof(s_track_butterfly)/sizeof(s_track_butterfly[0]), "Kìa Con Bướm Vàng",   "Bướm Bay Thần Tốc" },
-    { s_track_tetris,    sizeof(s_track_tetris)/sizeof(s_track_tetris[0]),       "Tetris Korobeiniki",   "Dân Ca Tăng Tốc Huyền Thoại" },
-    { s_track_duck,      sizeof(s_track_duck)/sizeof(s_track_duck[0]),           "Một Con Vịt",          "Vịt Xòe Hai Cánh Tung Tăng" }
+static const speed_song_def_t s_speed_songs[] = {
+    { s_song_babyshark, sizeof(s_song_babyshark)/sizeof(s_song_babyshark[0]), "Baby Shark",         "Cá Mập Con (Doo doo doo...)" },
+    { s_song_butterfly, sizeof(s_song_butterfly)/sizeof(s_song_butterfly[0]), "Kìa Con Bướm Vàng", "Bướm Bay Tung Tăng" },
+    { s_song_duck,      sizeof(s_song_duck)/sizeof(s_song_duck[0]),           "Một Con Vịt",        "Vịt Xòe Hai Cánh" },
+    { s_song_birthday,  sizeof(s_song_birthday)/sizeof(s_song_birthday[0]),   "Happy Birthday",     "Chúc Mừng Sinh Nhật" },
+    { s_song_mario,     sizeof(s_song_mario)/sizeof(s_song_mario[0]),         "Super Mario",        "Thế Giới Nấm Rộn Rã" }
 };
-#define SPEED_TRACK_COUNT (sizeof(s_speed_tracks)/sizeof(s_speed_tracks[0]))
+#define SPEED_SONG_COUNT (sizeof(s_speed_songs)/sizeof(s_speed_songs[0]))
 
-static uint8_t  s_speed_track_idx = 0;
+static uint8_t  s_speed_song_idx = 0;
 static uint16_t s_speed_note_idx = 0;
 static int64_t  s_speed_last_key_us = 0;
-static int64_t  s_speed_last_note_us = 0;
-static float    s_speed_kmh = 0.0f;
-static uint16_t s_speed_combo = 0;
-static uint32_t s_speed_total_notes_played = 0;
-static bool     s_speed_was_running = false;
-static uint8_t  s_speed_timbre = TIMBRE_8BIT_MARIO;
-static bool     s_speed_auto_pedal = true; // true: Auto cruise, false: Step runner
+static uint8_t  s_speed_timbre = TIMBRE_PIANO;
 
-static uint8_t calc_speed_level(float kmh) {
-    if (kmh < 15.0f) return 0;       // Stop / Parked
-    if (kmh < 75.0f) return 1;       // Walk / Slow (🐢)
-    if (kmh < 135.0f) return 2;      // Cruising / Sport (🚗)
-    if (kmh < 205.0f) return 3;      // Racing F1 (🏎️)
-    return 4;                        // NITRO TURBO MAX (🚀)
-}
-
-void audio_speed_engine_init(void) {
-    s_speed_track_idx = 0;
+void audio_speed_reset(void) {
     s_speed_note_idx = 0;
     s_speed_last_key_us = 0;
-    s_speed_last_note_us = 0;
-    s_speed_kmh = 0.0f;
-    s_speed_combo = 0;
-    s_speed_total_notes_played = 0;
-    s_speed_was_running = false;
-    s_speed_timbre = TIMBRE_8BIT_MARIO;
-    s_speed_auto_pedal = true;
 }
 
-void audio_speed_engine_reset(void) {
-    s_speed_kmh = 0.0f;
-    s_speed_combo = 0;
-    s_speed_was_running = false;
-    s_speed_last_key_us = 0;
-}
-
-void audio_speed_tap_pedal(void) {
+bool audio_speed_play_note(speed_note_info_t *out_info) {
     int64_t now = esp_timer_get_time();
-    int64_t dt = (s_speed_last_key_us > 0) ? (now - s_speed_last_key_us) : 1000000;
+    int64_t dt_ms = (s_speed_last_key_us > 0) ? ((now - s_speed_last_key_us) / 1000) : 500;
     s_speed_last_key_us = now;
 
-    if (dt > 25000 && dt < 1500000) {
-        float cps = 1000000.0f / (float)dt;
-        float target = cps * 45.0f;
-        if (target > 300.0f) target = 300.0f;
-        s_speed_kmh = s_speed_kmh * 0.35f + target * 0.65f + 16.0f;
-    } else if (dt >= 1500000) {
-        // Nổ máy khởi động xe ngay từ 45 km/h
-        s_speed_kmh = 45.0f;
+    uint32_t bpm = 120;
+    if (dt_ms > 20 && dt_ms < 2000) {
+        bpm = (uint32_t)(60000 / dt_ms);
     }
 
-    if (s_speed_kmh < 35.0f) s_speed_kmh = 35.0f;
-    if (s_speed_kmh > 300.0f) s_speed_kmh = 300.0f;
-
-    s_speed_combo++;
-
-    // Thưởng âm thanh khi đạt combo
-    if (s_speed_combo == 10) {
-        audio_play_cartoon_sfx(SFX_MARIO_COIN);
-    } else if (s_speed_combo == 25) {
-        audio_play_cartoon_sfx(SFX_GAME_POWERUP);
-    } else if (s_speed_combo == 50) {
-        audio_play_cartoon_sfx(SFX_GAME_1UP);
+    uint32_t note_dur_ms = 260;
+    if (dt_ms <= 180) {
+        note_dur_ms = 140;
+    } else if (dt_ms > 380) {
+        note_dur_ms = 480;
     }
-}
 
-static bool play_speed_current_note(speed_play_info_t *out_info) {
-    const speed_track_def_t *curr = &s_speed_tracks[s_speed_track_idx];
+    const speed_song_def_t *curr = &s_speed_songs[s_speed_song_idx];
     speed_note_t n = curr->notes[s_speed_note_idx];
 
     // Phát giai điệu chính
     if (n.freq > 20.0f) {
-        trigger_voice_internal(VOICE_TONE_ADSR, n.freq, 0, 0, 0.90f, n.dur_ms * 2 + 60, s_speed_timbre);
+        if (!sb_play_piano(n.freq, s_speed_timbre, 0)) {
+            trigger_voice_internal(VOICE_TONE_ADSR, n.freq, 0, 0, 0.90f, note_dur_ms, s_speed_timbre);
+        }
     }
-    // Phát âm trầm bass hòa thanh
+
+    // Phát bè trầm hòa âm
     if (n.bass_freq > 20.0f) {
-        trigger_voice_internal(VOICE_TONE_ADSR, n.bass_freq, 0, 0, 0.65f, n.dur_ms * 2 + 100, s_speed_timbre);
+        if (!sb_play_piano(n.bass_freq, s_speed_timbre, 0)) {
+            trigger_voice_internal(VOICE_TONE_ADSR, n.bass_freq, 0, 0, 0.65f, note_dur_ms + 80, s_speed_timbre);
+        }
     }
 
-    // Ở cấp độ F1 hoặc Nitro: chêm nhịp hi-hat nhẹ rộn ràng
-    uint8_t lvl = calc_speed_level(s_speed_kmh);
-    if (lvl >= 3 && (s_speed_note_idx % 2 == 0)) {
-        trigger_voice_internal(VOICE_NOISE_BURST, 0, 0, 0, 0.30f, 35, 1);
-    }
-
-    s_speed_total_notes_played++;
-    uint16_t played_note = s_speed_note_idx;
+    uint16_t current_played = s_speed_note_idx;
     s_speed_note_idx++;
 
     bool finished = false;
     if (s_speed_note_idx >= curr->count) {
         finished = true;
         s_speed_note_idx = 0;
-        audio_play_cartoon_sfx(SFX_VICTORY_FANFARE);
         audio_play_praise();
-        s_speed_track_idx = (s_speed_track_idx + 1) % SPEED_TRACK_COUNT;
+        s_speed_song_idx = (s_speed_song_idx + 1) % SPEED_SONG_COUNT;
     }
 
     if (out_info) {
-        out_info->name = curr->name;
-        out_info->theme = curr->theme;
-        out_info->track_idx = s_speed_track_idx;
-        out_info->total_tracks = SPEED_TRACK_COUNT;
-        out_info->note_idx = played_note + 1;
+        out_info->song_name = curr->name;
+        out_info->title_vi = curr->title_vi;
+        out_info->song_idx = s_speed_song_idx;
+        out_info->total_songs = SPEED_SONG_COUNT;
+        out_info->note_idx = current_played + 1;
         out_info->total_notes = curr->count;
         out_info->freq = n.freq;
-        out_info->current_speed_kmh = s_speed_kmh;
-        out_info->speed_level = lvl;
-        out_info->combo = s_speed_combo;
-        out_info->total_notes_played = s_speed_total_notes_played;
+        out_info->speed_bpm = bpm;
         out_info->is_finished = finished;
     }
     return finished;
 }
 
-bool audio_speed_step_note(speed_play_info_t *out_info) {
-    audio_speed_tap_pedal();
-    s_speed_was_running = true;
-    s_speed_last_note_us = esp_timer_get_time();
-    return play_speed_current_note(out_info);
-}
-
-bool audio_speed_engine_tick(uint32_t delta_ms, speed_play_info_t *out_info, bool *out_note_played) {
-    if (out_note_played) *out_note_played = false;
-
-    int64_t now = esp_timer_get_time();
-    int64_t idle_ms = (s_speed_last_key_us > 0) ? ((now - s_speed_last_key_us) / 1000) : 9999;
-
-    // Quán tính giảm tốc khi bé nhả tay
-    if (idle_ms > 450) {
-        s_speed_kmh *= 0.88f;
-        if (s_speed_kmh < 15.0f) {
-            if (s_speed_was_running) {
-                audio_play_cartoon_sfx(SFX_SKID_STOP);
-                s_speed_was_running = false;
-                s_speed_combo = 0;
-            }
-            s_speed_kmh = 0.0f;
-        }
-    }
-
-    bool finished = false;
-    if (s_speed_kmh >= 18.0f) {
-        s_speed_was_running = true;
-        if (s_speed_auto_pedal) {
-            float tempo_ratio = s_speed_kmh / 115.0f;
-            if (tempo_ratio < 0.50f) tempo_ratio = 0.50f;
-            if (tempo_ratio > 2.60f) tempo_ratio = 2.60f;
-
-            const speed_track_def_t *curr = &s_speed_tracks[s_speed_track_idx];
-            uint32_t dur = (uint32_t)((float)curr->notes[s_speed_note_idx].dur_ms / tempo_ratio);
-            if (dur < 70) dur = 70;
-
-            if ((now - s_speed_last_note_us) >= (int64_t)dur * 1000) {
-                s_speed_last_note_us = now;
-                finished = play_speed_current_note(out_info);
-                if (out_note_played) *out_note_played = true;
-            }
-        }
-    }
-
-    if (out_info && (!out_note_played || !(*out_note_played))) {
-        audio_speed_get_info(out_info);
-    }
-    return finished;
-}
-
-void audio_speed_next_track(void) {
-    s_speed_track_idx = (s_speed_track_idx + 1) % SPEED_TRACK_COUNT;
+void audio_speed_next_song(void) {
+    s_speed_song_idx = (s_speed_song_idx + 1) % SPEED_SONG_COUNT;
     s_speed_note_idx = 0;
     audio_play_cartoon_sfx(SFX_MARIO_COIN);
 }
 
-void audio_speed_prev_track(void) {
-    s_speed_track_idx = (s_speed_track_idx + SPEED_TRACK_COUNT - 1) % SPEED_TRACK_COUNT;
+void audio_speed_prev_song(void) {
+    s_speed_song_idx = (s_speed_song_idx + SPEED_SONG_COUNT - 1) % SPEED_SONG_COUNT;
     s_speed_note_idx = 0;
     audio_play_cartoon_sfx(SFX_MARIO_COIN);
 }
 
-void audio_speed_select_track(uint8_t track_idx) {
-    s_speed_track_idx = track_idx % SPEED_TRACK_COUNT;
-    s_speed_note_idx = 0;
-    audio_play_cartoon_sfx(SFX_MARIO_COIN);
-}
-
-void audio_speed_restart_track(void) {
+void audio_speed_select_song(uint8_t song_idx) {
+    s_speed_song_idx = song_idx % SPEED_SONG_COUNT;
     s_speed_note_idx = 0;
     audio_play_cartoon_sfx(SFX_MARIO_COIN);
 }
@@ -1362,74 +1241,35 @@ uint8_t audio_speed_toggle_timbre(void) {
 
 const char *audio_speed_get_timbre_name(void) {
     switch (s_speed_timbre) {
-        case TIMBRE_8BIT_MARIO: return "Đàn 8-Bit Điện Tử Game";
         case TIMBRE_MUSIC_BOX:  return "Hộp Nhạc Chuông Ngân";
-        default:                return "Đàn Grand Piano Siêu Tốc";
+        case TIMBRE_8BIT_MARIO: return "Đàn Điện Tử 8-Bit Mario";
+        default:                return "Đàn Grand Piano Diệu Kỳ";
     }
 }
 
-void audio_speed_nitro_boost(void) {
-    s_speed_kmh = 280.0f;
-    s_speed_last_key_us = esp_timer_get_time();
-    s_speed_was_running = true;
-    audio_play_cartoon_sfx(SFX_GAME_SONIC_DASH);
-}
-
-void audio_speed_brake(void) {
-    s_speed_kmh = 0.0f;
-    s_speed_combo = 0;
-    s_speed_was_running = false;
-    s_speed_last_key_us = 0;
-    audio_play_cartoon_sfx(SFX_SKID_STOP);
-}
-
-void audio_speed_honk(void) {
-    audio_play_cartoon_sfx(SFX_CAR_HORN);
-}
-
-void audio_speed_get_info(speed_play_info_t *out_info) {
+void audio_speed_get_info(speed_note_info_t *out_info) {
     if (!out_info) return;
-    const speed_track_def_t *curr = &s_speed_tracks[s_speed_track_idx];
-    out_info->name = curr->name;
-    out_info->theme = curr->theme;
-    out_info->track_idx = s_speed_track_idx;
-    out_info->total_tracks = SPEED_TRACK_COUNT;
+    const speed_song_def_t *curr = &s_speed_songs[s_speed_song_idx];
+    out_info->song_name = curr->name;
+    out_info->title_vi = curr->title_vi;
+    out_info->song_idx = s_speed_song_idx;
+    out_info->total_songs = SPEED_SONG_COUNT;
     out_info->note_idx = s_speed_note_idx + 1;
     out_info->total_notes = curr->count;
     out_info->freq = curr->notes[s_speed_note_idx].freq;
-    out_info->current_speed_kmh = s_speed_kmh;
-    out_info->speed_level = calc_speed_level(s_speed_kmh);
-    out_info->combo = s_speed_combo;
-    out_info->total_notes_played = s_speed_total_notes_played;
+    out_info->speed_bpm = 120;
     out_info->is_finished = false;
 }
 
-float audio_speed_get_current_kmh(void) {
-    return s_speed_kmh;
-}
-
-uint8_t audio_speed_get_level(void) {
-    return calc_speed_level(s_speed_kmh);
-}
-
-void audio_speed_set_auto_pedal(bool enable) {
-    s_speed_auto_pedal = enable;
-}
-
-bool audio_speed_is_auto_pedal(void) {
-    return s_speed_auto_pedal;
-}
-
-// Stubs for backward compatibility
+// Backward-compatible stubs
 void audio_speed_runner_keystroke(void) {
-    audio_speed_tap_pedal();
+    audio_speed_play_note(NULL);
 }
 
 void audio_speed_runner_idle_check(void) {
-    speed_play_info_t info;
-    bool note_played = false;
-    audio_speed_engine_tick(50, &info, &note_played);
+    // Không làm gì gây tiếng động lạ khi người dùng dừng tay
 }
+
 
 
 // Mode 4: Drum Kit
