@@ -104,13 +104,12 @@ static bool mode_speed_handle_key(uint8_t kc, uint8_t mod, char c) {
                info.song_name, (unsigned int)info.speed_bpm);
     } else {
         led_effects_speedometer(s_speed_led_level, ratio);
-        printf(" -> [\"%s\" | Nốt %u/%u (%.1f Hz) | Tốc độ: %u BPM (%u ms) | %s]\r\n",
+        printf(" -> [\"%s\" | Nốt %u/%u (%.1f Hz) | Tốc độ: %u BPM | %s]\r\n",
                info.song_name,
                (unsigned int)info.note_idx,
                (unsigned int)info.total_notes,
                info.freq,
                (unsigned int)info.speed_bpm,
-               (unsigned int)info.note_dur_ms,
                audio_speed_get_timbre_name());
     }
     return true;
