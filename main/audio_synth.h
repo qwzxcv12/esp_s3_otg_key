@@ -61,7 +61,7 @@ int  audio_sample_play(const pcm_asset_t *asset, float gain, float semitone, boo
 void audio_sample_release_owner(uint8_t owner, uint32_t release_ms);
 void audio_sample_invalidate(const int16_t *pcm);   // stop every voice that reads this buffer
 void audio_play_piano_note_key(float freq_hz, piano_timbre_t timbre, uint8_t owner_key);
-void audio_piano_key_release(uint8_t owner_key);    // key up -> natural 220 ms release
+void audio_piano_key_release(uint8_t owner_key);    // key up -> fast natural 70 ms damper felt release
 void audio_play_praise(void);
 void audio_synth_set_volume(float vol);
 float audio_synth_get_volume(void);

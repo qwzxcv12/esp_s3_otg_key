@@ -632,7 +632,7 @@ void audio_play_piano_note_key(float freq_hz, piano_timbre_t timbre, uint8_t own
 }
 
 void audio_piano_key_release(uint8_t owner_key) {
-    audio_sample_release_owner(owner_key, 220);
+    audio_sample_release_owner(owner_key, 70);
 }
 
 void audio_play_praise(void) {
