@@ -10,3 +10,4 @@ __pycache__/
 telnet_dump*.txt
 esp32_firmware_temp.zip
 tools/_cache/
+tools/test_session_log.txt
