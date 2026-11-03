@@ -214,9 +214,9 @@ static void switch_toy_mode(toy_mode_t new_mode) {
     if (s_current_mode == MODE_2_BABY_MOZART) {
         mozart_play_info_t info;
         audio_mozart_get_info(&info);
-        printf("\r\n🎼 [BABY MOZART READY: 20 Tuyệt Phẩm Cổ Điển & Thiếu Nhi]\r\n");
-        printf("🎼 [Bài mở đầu: \"%s\" - %s (%d nốt)]\r\n", info.name, info.artist, info.total_notes);
-        printf("🎼 [Phím tắt: Space/Mũi tên = Đổi bài | Tab/T = Đổi nhạc cụ | Enter/P = Hát Ru Auto-Play | 1..9 = Chọn bài]\r\n\r\n");
+        printf("\r\n>>> [BABY MOZART READY: 20 Tuyệt Phẩm Cổ Điển & Thiếu Nhi] <<<\r\n");
+        printf(">>> [Bài mở đầu: \"%s\" - %s (%d nốt)] <<<\r\n", info.name, info.artist, (int)info.total_notes);
+        printf(">>> [Phím tắt: Space/Mũi tên = Đổi bài | Tab/T = Đổi nhạc cụ | Enter/P = Hát Ru Auto-Play | 1..9 = Chọn bài] <<<\r\n\r\n");
     }
 }
 
@@ -426,7 +426,7 @@ static void handle_toy_mode_key(uint8_t kc, uint8_t mod, char c) {
                 mozart_play_info_t info;
                 audio_mozart_get_info(&info);
                 printf("\r\n>>> [BABY MOZART - BÀI HÁT KẾ TIẾP (%d/%d): \"%s\" - %s (%d nốt)] <<<\r\n",
-                       info.song_idx + 1, info.total_songs, info.name, info.artist, info.total_notes);
+                       (int)(info.song_idx + 1), (int)info.total_songs, info.name, info.artist, (int)info.total_notes);
                 led_effects_mode_switch(1);
             }
             // 3. Phím Mũi tên Trái: Lùi bài trước
@@ -435,7 +435,7 @@ static void handle_toy_mode_key(uint8_t kc, uint8_t mod, char c) {
                 mozart_play_info_t info;
                 audio_mozart_get_info(&info);
                 printf("\r\n>>> [BABY MOZART - BÀI TRƯỚC (%d/%d): \"%s\" - %s (%d nốt)] <<<\r\n",
-                       info.song_idx + 1, info.total_songs, info.name, info.artist, info.total_notes);
+                       (int)(info.song_idx + 1), (int)info.total_songs, info.name, info.artist, (int)info.total_notes);
                 led_effects_mode_switch(1);
             }
             // 4. Phím Tab hoặc 'T': Đổi âm sắc nhạc cụ
@@ -460,7 +460,7 @@ static void handle_toy_mode_key(uint8_t kc, uint8_t mod, char c) {
                 mozart_play_info_t info;
                 audio_mozart_get_info(&info);
                 printf("\r\n>>> [BABY MOZART - CHỌN BÀI %d/%d: \"%s\" - %s] <<<\r\n",
-                       info.song_idx + 1, info.total_songs, info.name, info.artist);
+                       (int)(info.song_idx + 1), (int)info.total_songs, info.name, info.artist);
                 led_effects_mode_switch(1);
             }
             else if (c == '0') {
@@ -468,7 +468,7 @@ static void handle_toy_mode_key(uint8_t kc, uint8_t mod, char c) {
                 mozart_play_info_t info;
                 audio_mozart_get_info(&info);
                 printf("\r\n>>> [BABY MOZART - CHỌN BÀI 10/%d: \"%s\" - %s] <<<\r\n",
-                       info.song_idx + 1, info.total_songs, info.name, info.artist);
+                       (int)info.total_songs, info.name, info.artist);
                 led_effects_mode_switch(1);
             }
             // 7. Tất cả các phím còn lại: Bé chơi nốt tiếp theo (One-Key-One-Note)!
@@ -479,11 +479,11 @@ static void handle_toy_mode_key(uint8_t kc, uint8_t mod, char c) {
 
                 if (finished) {
                     led_effects_celebration();
-                    printf(" -> ⭐⭐⭐ [XUẤT SẮC! BÉ VỪA HOÀN THÀNH BÀI: \"%s\" (%s)!] ⭐⭐⭐\r\n",
+                    printf(" -> [XUẤT SẮC! BÉ VỪA HOÀN THÀNH BÀI: \"%s\" (%s)!]\r\n",
                            info.name, info.artist);
                 } else {
                     printf(" -> [BABY MOZART: \"%s\" | Nốt %d/%d: %.1f Hz %s| Đàn %s]\r\n",
-                           info.name, info.note_idx, info.total_notes, info.freq,
+                           info.name, (int)info.note_idx, (int)info.total_notes, info.freq,
                            (info.bass_freq > 20.0f) ? "+ Bass hòa thanh " : "",
                            audio_mozart_get_timbre_name());
                 }

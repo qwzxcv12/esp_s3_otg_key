@@ -1076,9 +1076,7 @@ void audio_mozart_autoplay_tick(void) {
 
     if (finished) {
         led_effects_celebration();
-        printf("
-🎉🎉🎉 [AUTO-PLAY: BE VUA HOAN THANH: "%s" (%s)!] 🎉🎉🎉
-", info.name, info.artist);
+        printf("\r\n>>> [AUTO-PLAY: BE VUA HOAN THANH: \"%s\" (%s)!] <<<\r\n", info.name, info.artist);
         s_mozart_next_delay_ms = 1200;
     }
 }
