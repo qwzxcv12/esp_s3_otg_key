@@ -21,8 +21,8 @@ static const char *TAG = "SOUNDBANK";
 typedef enum {
     SND_CHIME, SND_COIN,
     SND_PIANO_C2, SND_PIANO_FS2, SND_PIANO_C3, SND_PIANO_FS3, SND_PIANO_C4,
-    SND_PIANO_FS4, SND_PIANO_C5, SND_PIANO_FS5, SND_PIANO_C6,
-    SND_BELL_C4, SND_BELL_C5, SND_BELL_C6,
+    SND_PIANO_FS4, SND_PIANO_C5, SND_PIANO_FS5, SND_PIANO_C6, SND_PIANO_C7,
+    SND_BELL_C4, SND_BELL_C5, SND_BELL_C6, SND_BELL_C7,
     SND_KICK, SND_SNARE, SND_HIHAT, SND_CYMBAL, SND_TOM, SND_CLAP,
     SND_TW_CLICK, SND_TW_SPACE, SND_TW_BELL, SND_TW_BACK,
     SND_CT_BOING, SND_CT_LASER, SND_CT_HORN, SND_CT_FANFARE, SND_CT_WHISTLE,
@@ -83,8 +83,8 @@ static void build_table(void) {
     reg(SND_CHIME, "common/chime.wav", ALWAYS);
     reg(SND_COIN,  "common/coin.wav",  ALWAYS);
 
-    static const char *piano_names[9] = {"c2", "fs2", "c3", "fs3", "c4", "fs4", "c5", "fs5", "c6"};
-    for (int i = 0; i < 9; i++) {
+    static const char *piano_names[10] = {"c2", "fs2", "c3", "fs3", "c4", "fs4", "c5", "fs5", "c6", "c7"};
+    for (int i = 0; i < 10; i++) {
         char p[40];
         snprintf(p, sizeof(p), "mode1/piano_%s.wav", piano_names[i]);
         reg((snd_id_t)(SND_PIANO_C2 + i), p, M(0) | M(1));   // Piano + Baby Mozart
@@ -92,6 +92,7 @@ static void build_table(void) {
     reg(SND_BELL_C4, "mode1/bell_c4.wav", M(0) | M(8));
     reg(SND_BELL_C5, "mode1/bell_c5.wav", M(0) | M(8));
     reg(SND_BELL_C6, "mode1/bell_c6.wav", M(0) | M(8));
+    reg(SND_BELL_C7, "mode1/bell_c7.wav", M(0) | M(8));
 
     reg(SND_KICK,   "mode4/kick.wav",   M(3));
     reg(SND_SNARE,  "mode4/snare.wav",  M(3));
@@ -376,8 +377,8 @@ static bool is_loaded(snd_id_t id) { return s_snd[id].asset.pcm != NULL; }
 
 bool sb_play_piano(float freq_hz, uint8_t timbre, uint8_t owner_key) {
     if (!s_mounted || freq_hz < 20.0f) return false;
-    static const int piano_midi[9] = {36, 42, 48, 54, 60, 66, 72, 78, 84};
-    static const int bell_midi[3]  = {60, 72, 84};
+    static const int piano_midi[10] = {36, 42, 48, 54, 60, 66, 72, 78, 84, 96};
+    static const int bell_midi[4]   = {60, 72, 84, 96};
     float midi = 69.0f + 12.0f * log2f(freq_hz / 440.0f);
 
     snd_id_t first;
@@ -385,9 +386,9 @@ bool sb_play_piano(float freq_hz, uint8_t timbre, uint8_t owner_key) {
     int count;
     float max_shift, gain;
     if (timbre == TIMBRE_PIANO) {
-        first = SND_PIANO_C2; roots = piano_midi; count = 9; max_shift = 15.0f; gain = 1.15f;
+        first = SND_PIANO_C2; roots = piano_midi; count = 10; max_shift = 15.0f; gain = 1.15f;
     } else if (timbre == TIMBRE_MUSIC_BOX) {
-        first = SND_BELL_C4; roots = bell_midi; count = 3; max_shift = 14.0f; gain = 1.15f;
+        first = SND_BELL_C4; roots = bell_midi; count = 4; max_shift = 15.0f; gain = 1.15f;
     } else {
         return false;   // 8-bit chiptune timbre stays synthesised on purpose
     }

@@ -24,8 +24,8 @@ def download_cache(url, filename):
         out.write(resp.read())
     return filepath
 
-def export_wav(dest_path, audio_arr, sr, max_dur=None, semitone_shift=0.0):
-    if os.path.exists(dest_path) and os.path.getsize(dest_path) > 100:
+def export_wav(dest_path, audio_arr, sr, max_dur=None, semitone_shift=0.0, overwrite=False, peak_gain=0.84):
+    if not overwrite and os.path.exists(dest_path) and os.path.getsize(dest_path) > 100:
         return
     os.makedirs(os.path.dirname(dest_path), exist_ok=True)
     if audio_arr.ndim > 1:
@@ -34,41 +34,45 @@ def export_wav(dest_path, audio_arr, sr, max_dur=None, semitone_shift=0.0):
     # Pitch shift if needed via resampling
     if semitone_shift != 0.0:
         ratio = 2.0 ** (-semitone_shift / 12.0)
-        new_len = int(len(audio_arr) * ratio)
-        audio_arr = sps.resample(audio_arr, new_len)
+        up = int(np.round(1000 * ratio))
+        down = 1000
+        audio_arr = sps.resample_poly(audio_arr, up, down)
 
     # Resample to 24000 Hz
     if sr != TARGET_SR:
         audio_arr = sps.resample_poly(audio_arr, TARGET_SR, sr)
+    
+    # Trim leading silence gracefully without chopping transient
+    thresh = 0.005
+    start_idx = 0
+    for idx, val in enumerate(audio_arr[:TARGET_SR]):
+        if abs(val) > thresh:
+            start_idx = max(0, idx - int(TARGET_SR * 0.015)) # 15ms headroom
+            break
+    audio_arr = audio_arr[start_idx:]
     
     # Trim duration if requested
     if max_dur:
         max_samples = int(TARGET_SR * max_dur)
         if len(audio_arr) > max_samples:
             audio_arr = audio_arr[:max_samples]
+            # Smooth musical fade-out of 180ms at end
+            fo = min(len(audio_arr), int(TARGET_SR * 0.180))
+            if fo > 0:
+                audio_arr[-fo:] *= np.linspace(1.0, 0.0, fo)
             
-    # Trim leading silence (< -40dB)
-    thresh = 0.01
-    start_idx = 0
-    for idx, val in enumerate(audio_arr[:TARGET_SR]):
-        if abs(val) > thresh:
-            start_idx = max(0, idx - 50)
-            break
-    audio_arr = audio_arr[start_idx:]
-    
-    # Normalize peak to -2 dBFS (0.80)
-    pk = np.max(np.abs(audio_arr))
-    if pk > 0.001:
-        audio_arr = audio_arr * (0.80 / pk)
-        
-    # Apply soft 5ms fade-in and 20ms fade-out
+    # Apply soft 5ms fade-in
     fade_in = min(len(audio_arr), int(TARGET_SR * 0.005))
     if fade_in > 0:
         audio_arr[:fade_in] *= np.linspace(0, 1, fade_in)
         
-    fade_out = min(len(audio_arr), int(TARGET_SR * 0.020))
-    if fade_out > 0:
-        audio_arr[-fade_out:] *= np.linspace(1, 0, fade_out)
+    # Remove DC offset
+    audio_arr -= np.mean(audio_arr)
+    
+    # Normalize peak to peak_gain
+    pk = np.max(np.abs(audio_arr))
+    if pk > 0.001:
+        audio_arr = audio_arr * (peak_gain / pk)
         
     pcm16 = (np.clip(audio_arr, -1.0, 1.0) * 32767.0).astype(np.int16)
     sf.write(dest_path, pcm16, TARGET_SR, subtype="PCM_16")
@@ -115,44 +119,46 @@ def build_mode9():
         export_wav(f"{OUT_DIR}/mode9/letter_{char}.wav", arr, v.config.sample_rate)
 
 # ============================================================================
-# 2. MODE 1: AKAI SPLENDID GRAND PIANO (CC0 / PUBLIC DOMAIN)
+# 2. MODE 1: KAWAI GRAND PIANO & HAND CHIMES / GLOCKENSPIEL (VCSL CC0)
 # ============================================================================
 def build_mode1():
-    print("\n=== Building Mode 1: Piano (AKAI Splendid Grand Piano) ===")
-    BASE_URL = "https://raw.githubusercontent.com/sfzinstruments/SplendidGrandPiano/master/Samples/"
-    
-    # 9 Root Notes: C2(36), F#2(42), C3(48), F#3(54), C4(60), F#4(66), C5(72), F#5(78), C6(84)
-    # Mapping to available Splendid Grand Piano flac samples + shift
-    roots = [
-        ("piano_c2",  "Mp C#1.flac", -1.0),
-        ("piano_fs2", "Mp F1.flac",  +1.0),
-        ("piano_c3",  "Mp C2.flac",   0.0),
-        ("piano_fs3", "Mp F2.flac",  +1.0),
-        ("piano_c4",  "Mp C3.flac",   0.0),
-        ("piano_fs4", "Mp F3.flac",  +1.0),
-        ("piano_c5",  "Mp C4.flac",   0.0),
-        ("piano_fs5", "Mp F4.flac",  +1.0),
-        ("piano_c6",  "Mp C#5.flac", -1.0),
-    ]
-    
-    for dest_name, src_file, shift in roots:
-        url = BASE_URL + urllib.parse.quote(src_file)
-        cached_file = download_cache(url, f"piano_{src_file}")
-        data, sr = sf.read(cached_file)
-        export_wav(f"{OUT_DIR}/mode1/{dest_name}.wav", data, sr, max_dur=2.2, semitone_shift=shift)
-
-    # Bells / Glockenspiel (C4, C5, C6)
+    print("\n=== Building Mode 1: Kawai Grand Piano & Music Box Bells (VCSL CC0) ===")
     VCSL_BASE = "https://raw.githubusercontent.com/sgossner/VCSL/master/"
-    bell_samples = [
-        ("bell_c4", "Idiophones/Struck Idiophones/Glockenspiel/glock_loud_C5_01.wav", -12.0),
-        ("bell_c5", "Idiophones/Struck Idiophones/Glockenspiel/glock_loud_C5_01.wav", 0.0),
-        ("bell_c6", "Idiophones/Struck Idiophones/Glockenspiel/glock_loud_C6_01.wav", 0.0),
+    
+    # 10 Root Notes: C2(36), F#2(42), C3(48), F#3(54), C4(60), F#4(66), C5(72), F#5(78), C6(84), C7(96)
+    # Direct authentic recordings from Kawai Grand Piano (Player perspective) - 0.0 semitone shift!
+    piano_roots = [
+        ("piano_c2",  "Chordophones/Zithers/Grand Piano, Kawai/Sustains/GPiano_sus_C1_v3_rr1_Player.wav"),
+        ("piano_fs2", "Chordophones/Zithers/Grand Piano, Kawai/Sustains/GPiano_sus_F#1_v3_rr1_Player.wav"),
+        ("piano_c3",  "Chordophones/Zithers/Grand Piano, Kawai/Sustains/GPiano_sus_C2_v3_rr1_Player.wav"),
+        ("piano_fs3", "Chordophones/Zithers/Grand Piano, Kawai/Sustains/GPiano_sus_F#2_v3_rr1_Player.wav"),
+        ("piano_c4",  "Chordophones/Zithers/Grand Piano, Kawai/Sustains/GPiano_sus_C3_v3_rr1_Player.wav"),
+        ("piano_fs4", "Chordophones/Zithers/Grand Piano, Kawai/Sustains/GPiano_sus_F#3_v3_rr1_Player.wav"),
+        ("piano_c5",  "Chordophones/Zithers/Grand Piano, Kawai/Sustains/GPiano_sus_C4_v3_rr1_Player.wav"),
+        ("piano_fs5", "Chordophones/Zithers/Grand Piano, Kawai/Sustains/GPiano_sus_F#4_v3_rr1_Player.wav"),
+        ("piano_c6",  "Chordophones/Zithers/Grand Piano, Kawai/Sustains/GPiano_sus_C5_v3_rr1_Player.wav"),
+        ("piano_c7",  "Chordophones/Zithers/Grand Piano, Kawai/Sustains/GPiano_sus_C6_v3_rr1_Player.wav"),
     ]
-    for dest_name, rel_path, shift in bell_samples:
+    
+    for dest_name, rel_path in piano_roots:
         url = VCSL_BASE + urllib.parse.quote(rel_path)
         cached_file = download_cache(url, os.path.basename(rel_path))
         data, sr = sf.read(cached_file)
-        export_wav(f"{OUT_DIR}/mode1/{dest_name}.wav", data, sr, max_dur=1.5, semitone_shift=shift)
+        export_wav(f"{OUT_DIR}/mode1/{dest_name}.wav", data, sr, max_dur=2.6, semitone_shift=0.0, overwrite=True)
+
+    # 4 Music Box / Bell Root Notes: C4(60), C5(72), C6(84), C7(96)
+    # Direct authentic recordings verified by FFT pitch analysis - 0.0 semitone shift!
+    bell_samples = [
+        ("bell_c4", "Idiophones/Struck Idiophones/Hand Chimes/sus_C3_r01_main.wav", 0.45),       # Hand Chimes C4 (261.6 Hz, MIDI 60)
+        ("bell_c5", "Idiophones/Struck Idiophones/Hand Chimes/sus_C4_r01_main.wav", 0.45),       # Hand Chimes C5 (523.2 Hz, MIDI 72)
+        ("bell_c6", "Idiophones/Struck Idiophones/Glockenspiel/glock_loud_C5_01.wav", 0.84),     # Glockenspiel C6 (1046.5 Hz, MIDI 84)
+        ("bell_c7", "Idiophones/Struck Idiophones/Glockenspiel/glock_loud_C6_01.wav", 0.84),     # Glockenspiel C7 (2093.0 Hz, MIDI 96)
+    ]
+    for dest_name, rel_path, pk_gain in bell_samples:
+        url = VCSL_BASE + urllib.parse.quote(rel_path)
+        cached_file = download_cache(url, os.path.basename(rel_path))
+        data, sr = sf.read(cached_file)
+        export_wav(f"{OUT_DIR}/mode1/{dest_name}.wav", data, sr, max_dur=2.0, semitone_shift=0.0, overwrite=True, peak_gain=pk_gain)
 
 # ============================================================================
 # 3. COMMON & MODE 4: DRUMS & PERCUSSION (VCSL CC0)

@@ -1,10 +1,11 @@
 ESP32-S3 Soundbank Audio Asset Credits & Licenses
 =====================================================
 
-1. AKAI Splendid Grand Piano
-   - Source: https://github.com/sfzinstruments/SplendidGrandPiano
-   - License: Public Domain
-   - Author: AKAI Company (released as Public Domain in early 2000s).
+1. Kawai Grand Piano & VCSL Idiophones
+   - Source: https://github.com/sgossner/VCSL (Versilian Community Sample Library)
+   - License: Creative Commons Zero (CC0 1.0 Universal - Public Domain Dedication)
+   - Recorded: Studio microphone recordings (Player perspective) of a real Kawai Grand Piano and Hand Chimes / Glockenspiel bells.
+   - Includes: 10 authentic unshifted root notes for Piano (C2..C7) and 4 authentic root notes for Bells (C4..C7).
 
 2. VCSL (Versilian Community Sample Library)
    - Source: https://github.com/sgossner/VCSL

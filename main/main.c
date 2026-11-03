@@ -268,9 +268,9 @@ static void handle_toy_mode_key(uint8_t kc, uint8_t mod, char c) {
                 led_effects_color_burst(255, 215, 0);
                 return;
             }
-            if (c == '1') { s_piano_timbre = TIMBRE_PIANO; printf(" -> [ĐỔI ÂM SẮC: ĐÀN PIANO TRẦM ẤM]\r\n"); fflush(stdout); audio_play_piano_note(523.25f, s_piano_timbre); return; }
-            if (c == '2') { s_piano_timbre = TIMBRE_8BIT_MARIO; printf(" -> [ĐỔI ÂM SẮC: RETRO GAME 8-BIT MARIO]\r\n"); fflush(stdout); audio_play_piano_note(523.25f, s_piano_timbre); return; }
-            if (c == '3') { s_piano_timbre = TIMBRE_MUSIC_BOX; printf(" -> [ĐỔI ÂM SẮC: CHUÔNG GIÓ MUSIC BOX]\r\n"); fflush(stdout); audio_play_piano_note(523.25f, s_piano_timbre); return; }
+            if (c == '1') { s_piano_timbre = TIMBRE_PIANO; printf(" -> [ĐỔI ÂM SẮC: ĐÀN PIANO TRẦM ẤM]\r\n"); fflush(stdout); audio_play_piano_note_key(523.25f, s_piano_timbre, 0); return; }
+            if (c == '2') { s_piano_timbre = TIMBRE_8BIT_MARIO; printf(" -> [ĐỔI ÂM SẮC: RETRO GAME 8-BIT MARIO]\r\n"); fflush(stdout); audio_play_piano_note_key(523.25f, s_piano_timbre, 0); return; }
+            if (c == '3') { s_piano_timbre = TIMBRE_MUSIC_BOX; printf(" -> [ĐỔI ÂM SẮC: CHUÔNG GIÓ MUSIC BOX]\r\n"); fflush(stdout); audio_play_piano_note_key(523.25f, s_piano_timbre, 0); return; }
 
             float freq = 0.0f;
             int led_idx = 0;
