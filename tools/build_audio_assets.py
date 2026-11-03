@@ -45,10 +45,9 @@ def export_wav(dest_path, audio_arr, sr, max_dur=None, semitone_shift=0.0, overw
     # Trim leading silence gracefully without chopping transient
     thresh = 0.005
     start_idx = 0
-    for idx, val in enumerate(audio_arr[:TARGET_SR]):
-        if abs(val) > thresh:
-            start_idx = max(0, idx - int(TARGET_SR * 0.008)) # 8ms headroom
-            break
+    active_indices = np.where(np.abs(audio_arr) > thresh)[0]
+    if len(active_indices) > 0:
+        start_idx = max(0, active_indices[0] - int(TARGET_SR * 0.008)) # 8ms headroom
     audio_arr = audio_arr[start_idx:]
     
     # Apply exponential decay if requested (acoustic damping)
