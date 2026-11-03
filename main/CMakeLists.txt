@@ -1,5 +1,20 @@
-idf_component_register(SRCS "main.c" "audio_synth.c" "soundbank.c" "led_effects.c" "rotary_encoder.c"
-                    INCLUDE_DIRS "."
+idf_component_register(SRCS "main.c"
+                            "audio_synth.c"
+                            "soundbank.c"
+                            "led_effects.c"
+                            "rotary_encoder.c"
+                            "modes/mode_manager.c"
+                            "modes/mode_registry.c"
+                            "modes/mode_piano.c"
+                            "modes/mode_mozart.c"
+                            "modes/mode_speed.c"
+                            "modes/mode_drum.c"
+                            "modes/mode_typewriter.c"
+                            "modes/mode_cartoon.c"
+                            "modes/mode_agent.c"
+                            "modes/mode_cockpit.c"
+                            "modes/mode_phonics.c"
+                    INCLUDE_DIRS "." "modes"
                     REQUIRES usb_host_hid esp_driver_gpio esp_driver_i2s esp_driver_rmt led_strip esp_psram esp_timer littlefs)
 
 target_compile_options(${COMPONENT_LIB} PRIVATE -Wno-format-truncation)
