@@ -137,7 +137,7 @@ typedef struct {
 } speed_note_t;
 
 typedef struct {
-    const char *name;
+    const char *song_name;
     const char *title_vi;
     uint8_t song_idx;
     uint8_t total_songs;
