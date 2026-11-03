@@ -391,3 +391,89 @@ void led_effects_celebration(void) {
         xSemaphoreGive(s_led_mutex);
     }
 }
+
+// ============================================================================
+// MODE 3: SPEED RUNNER (TACHOMETER & RACING VISUAL EFFECTS)
+// ============================================================================
+
+// Speedometer visualizer: Displays racing speed across 30 LEDs like a dynamic car tachometer
+void led_effects_speedometer(uint8_t speed_level, float speed_ratio) {
+    if (!s_led_strip || !s_led_mutex) return;
+    if (xSemaphoreTake(s_led_mutex, pdMS_TO_TICKS(2)) != pdTRUE) return;
+
+    static uint16_t s_speed_step = 0;
+    s_speed_step = (s_speed_step + 1) % 360;
+
+    led_strip_clear(s_led_strip);
+
+    if (speed_level == 0) {
+        // Xe dung: 2 bong LED do nhe o 2 dau duoi xe (Tail lights)
+        led_strip_set_pixel(s_led_strip, 0, 40, 0, 0);
+        led_strip_set_pixel(s_led_strip, 1, 15, 0, 0);
+        led_strip_set_pixel(s_led_strip, LED_STRIP_COUNT - 2, 15, 0, 0);
+        led_strip_set_pixel(s_led_strip, LED_STRIP_COUNT - 1, 40, 0, 0);
+    } else if (speed_level >= 4) {
+        // CAP 4 (NITRO TURBO BOOST): Dai cau vong cuon song sieu toc ruc ro
+        for (int i = 0; i < LED_STRIP_COUNT; i++) {
+            uint8_t r, g, b;
+            uint16_t hue = (s_speed_step * 20 + i * 12) % 360;
+            hsv_to_rgb(hue, 100, 95, &r, &g, &b);
+            led_strip_set_pixel(s_led_strip, i, r, g, b);
+        }
+    } else {
+        // CAP 1..3: Thanh do toc do leo dan tu trai qua phai (Tachometer bar)
+        if (speed_ratio < 0.05f) speed_ratio = 0.05f;
+        if (speed_ratio > 1.0f) speed_ratio = 1.0f;
+        int active_leds = (int)(speed_ratio * (float)LED_STRIP_COUNT + 0.5f);
+        if (active_leds < 2) active_leds = 2;
+        if (active_leds > LED_STRIP_COUNT) active_leds = LED_STRIP_COUNT;
+
+        for (int i = 0; i < active_leds; i++) {
+            float pos = (float)i / (float)LED_STRIP_COUNT;
+            uint8_t r = 0, g = 0, b = 0;
+            if (pos < 0.40f) {
+                // Xanh la the thao (Green Cruising)
+                r = 0; g = 190; b = 40;
+            } else if (pos < 0.75f) {
+                // Vang cam nang dong (Amber Sport)
+                r = 250; g = 160; b = 0;
+            } else {
+                // Do ruc lua F1 (Racing Red)
+                r = 255; g = 20; b = 10;
+            }
+
+            // Dau kim toc do nhap nhay anh sang trang
+            if (i == active_leds - 1) {
+                r = 255; g = 255; b = 255;
+            }
+            led_strip_set_pixel(s_led_strip, i, r, g, b);
+        }
+    }
+
+    led_strip_refresh(s_led_strip);
+    xSemaphoreGive(s_led_mutex);
+}
+
+// Phanh khan cap: Den phanh do ruc ro
+void led_effects_speed_brake(void) {
+    if (!s_led_strip || !s_led_mutex) return;
+    if (xSemaphoreTake(s_led_mutex, pdMS_TO_TICKS(5)) != pdTRUE) return;
+
+    for (int i = 0; i < LED_STRIP_COUNT; i++) {
+        led_strip_set_pixel(s_led_strip, i, 255, 0, 0);
+    }
+    led_strip_refresh(s_led_strip);
+    xSemaphoreGive(s_led_mutex);
+}
+
+// Bom Nitro but toc: Chop xanh bang neon ruc ro
+void led_effects_speed_nitro(void) {
+    if (!s_led_strip || !s_led_mutex) return;
+    if (xSemaphoreTake(s_led_mutex, pdMS_TO_TICKS(5)) != pdTRUE) return;
+
+    for (int i = 0; i < LED_STRIP_COUNT; i++) {
+        led_strip_set_pixel(s_led_strip, i, 120, 240, 255);
+    }
+    led_strip_refresh(s_led_strip);
+    xSemaphoreGive(s_led_mutex);
+}

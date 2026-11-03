@@ -3,7 +3,7 @@
 // Khai báo các Driver chế độ chuẩn hóa
 extern const toy_mode_driver_t g_mode_piano_driver;       // Mode 1: Đàn Piano Diệu Kỳ & Ngũ Cung
 extern const toy_mode_driver_t g_mode_mozart_driver;      // Mode 2: Nghệ Sĩ Nhí Baby Mozart
-extern const toy_mode_driver_t g_mode_speed_driver;       // Mode 3: Nhạc Chạy Theo Tốc Độ Tay
+extern const toy_mode_driver_t g_mode_speed_driver;       // Mode 3: Đường Đua Âm Nhạc Thần Tốc (Sonic Speed Runner)
 extern const toy_mode_driver_t g_mode_drum_driver;        // Mode 4: Dàn Trống Beat-Maker & DJ
 extern const toy_mode_driver_t g_mode_typewriter_driver;  // Mode 5: Máy Gõ Chữ Cổ Điển
 extern const toy_mode_driver_t g_mode_cartoon_driver;     // Mode 6: Hộp Âm Thanh Hoạt Hình & Game SFX

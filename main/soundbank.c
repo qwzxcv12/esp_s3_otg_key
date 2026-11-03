@@ -141,17 +141,17 @@ static void build_table(void) {
 
     reg(SND_CT_BOING,         "mode6/boing.wav",         M(5) | M(8));
     reg(SND_CT_LASER,         "mode6/laser.wav",         M(5) | M(7));
-    reg(SND_CT_HORN,          "mode6/horn.wav",          M(5) | M(7));
-    reg(SND_CT_FANFARE,       "mode6/fanfare.wav",       M(5) | M(8));
+    reg(SND_CT_HORN,          "mode6/horn.wav",          M(2) | M(5) | M(7));
+    reg(SND_CT_FANFARE,       "mode6/fanfare.wav",       M(2) | M(5) | M(8));
     reg(SND_CT_WHISTLE,       "mode6/whistle.wav",       M(5));
     reg(SND_CT_DROP,          "mode6/water_drop.wav",    M(5) | M(8));
     reg(SND_CT_DOORBELL,      "mode6/doorbell.wav",      M(5));
     reg(SND_CT_SIREN,         "mode6/siren.wav",         M(5) | M(7));
-    reg(SND_CT_SKID,          "mode6/skid.wav",          M(5) | M(7));
+    reg(SND_CT_SKID,          "mode6/skid.wav",          M(2) | M(5) | M(7));
     reg(SND_CT_COIN_M6,       "mode6/coin.wav",          M(5));
     reg(SND_CT_JUMP,          "mode6/jump.wav",          M(5));
-    reg(SND_CT_POWERUP,       "mode6/powerup.wav",       M(5));
-    reg(SND_CT_1UP,           "mode6/1up.wav",           M(5));
+    reg(SND_CT_POWERUP,       "mode6/powerup.wav",       M(2) | M(5));
+    reg(SND_CT_1UP,           "mode6/1up.wav",           M(2) | M(5));
     reg(SND_CT_FIREBALL,      "mode6/fireball.wav",      M(5));
     reg(SND_CT_WARP,          "mode6/warp.wav",          M(5));
     reg(SND_CT_BOMB,          "mode6/bomb.wav",          M(5));
@@ -207,7 +207,7 @@ static void build_table(void) {
         snprintf(p, sizeof(p), "mode9/num_%d.wav", i);
         reg((snd_id_t)(SND_NUM_0 + i), p, M(8));
     }
-    reg(SND_PRAISE, "mode9/praise.wav", M(1) | M(8));
+    reg(SND_PRAISE, "mode9/praise.wav", M(1) | M(2) | M(8));
 
     // Phím chức năng & điều hướng
     reg(SND_KEY_SPACE,      "mode9/key_space.wav",      M(8));

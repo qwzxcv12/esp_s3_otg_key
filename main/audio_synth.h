@@ -130,7 +130,49 @@ bool audio_mozart_is_autoplay(void);
 void audio_mozart_autoplay_tick(void);
 void audio_mozart_get_info(mozart_play_info_t *out_info);
 
-// Mode 3: Speed Runner
+// Mode 3: Speed Runner (Sonic Speed Track & Audio Engine)
+typedef struct {
+    float freq;
+    float bass_freq;
+    uint16_t dur_ms;
+} speed_note_t;
+
+typedef struct {
+    const char *name;
+    const char *theme;
+    uint8_t track_idx;
+    uint8_t total_tracks;
+    uint16_t note_idx;
+    uint16_t total_notes;
+    float freq;
+    float current_speed_kmh;
+    uint8_t speed_level; // 0=Stop, 1=Walk, 2=Sport, 3=F1, 4=Nitro
+    uint16_t combo;
+    uint32_t total_notes_played;
+    bool is_finished;
+} speed_play_info_t;
+
+void audio_speed_engine_init(void);
+void audio_speed_engine_reset(void);
+void audio_speed_tap_pedal(void);
+bool audio_speed_engine_tick(uint32_t delta_ms, speed_play_info_t *out_info, bool *out_note_played);
+bool audio_speed_step_note(speed_play_info_t *out_info);
+void audio_speed_next_track(void);
+void audio_speed_prev_track(void);
+void audio_speed_select_track(uint8_t track_idx);
+void audio_speed_restart_track(void);
+uint8_t audio_speed_toggle_timbre(void);
+const char *audio_speed_get_timbre_name(void);
+void audio_speed_nitro_boost(void);
+void audio_speed_brake(void);
+void audio_speed_honk(void);
+void audio_speed_get_info(speed_play_info_t *out_info);
+float audio_speed_get_current_kmh(void);
+uint8_t audio_speed_get_level(void);
+void audio_speed_set_auto_pedal(bool enable);
+bool audio_speed_is_auto_pedal(void);
+
+// Backward-compatible stubs
 void audio_speed_runner_keystroke(void);
 void audio_speed_runner_idle_check(void);
 

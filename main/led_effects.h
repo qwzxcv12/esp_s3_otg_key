@@ -29,5 +29,8 @@ void led_effects_count(uint8_t count, uint8_t r, uint8_t g, uint8_t b);
 void led_effects_volume(float volume);
 void led_effects_mozart_note(float freq, float bass_freq, uint8_t timbre);
 void led_effects_celebration(void);
+void led_effects_speedometer(uint8_t speed_level, float speed_ratio);
+void led_effects_speed_brake(void);
+void led_effects_speed_nitro(void);
 
 #endif // LED_EFFECTS_H
