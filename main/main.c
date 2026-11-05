@@ -660,7 +660,7 @@ void app_main(void)
     // 3. Initialize WS2812B RGB LED Strip (GPIO 4 via RMT)
     ESP_ERROR_CHECK(led_effects_init());
 
-    // 4. Initialize 6 Push Buttons (BTN 1..6 on GPIO 41, 21, 48, 42, 15, 47)
+    // 4. Initialize 6 Push Buttons (BTN 1..6 on GPIO 41, 21, 48, 42, 45, 47)
     ESP_ERROR_CHECK(button_driver_init(on_button_event));
 
     // 5. Khởi tạo Mode Manager & Đăng ký toàn bộ 9 chế độ chuẩn hóa

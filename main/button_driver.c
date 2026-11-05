@@ -68,20 +68,18 @@ static void button_scanner_task(void *arg) {
                         st->long_emitted = false;
                         st->repeat_emitted = false;
 
-                        // Đối với Vol+ / Vol-, bắn luôn CLICK lần đầu tiên ngay khi bấm
-                        if (i == BUTTON_VOL_DOWN || i == BUTTON_VOL_UP) {
+                        // Tất cả các nút (ngoại trừ BUTTON_MODE) phản hồi CLICK NGAY LẬP TỨC khi vừa bấm xuống!
+                        if (i != BUTTON_MODE) {
                             if (s_event_cb) {
                                 s_event_cb((button_id_t)i, BUTTON_CLICK);
                             }
                         }
                     } else {
                         // Vừa mới nhả nút
-                        if (!st->long_emitted && !st->repeat_emitted) {
-                            // Nếu chưa kích hoạt long press và không phải đang repeat thì bắn CLICK
-                            if (i != BUTTON_VOL_DOWN && i != BUTTON_VOL_UP) {
-                                if (s_event_cb) {
-                                    s_event_cb((button_id_t)i, BUTTON_CLICK);
-                                }
+                        // Chỉ riêng BUTTON_MODE mới cần kiểm tra nhả nút để kích hoạt Click (nếu chưa giữ lâu)
+                        if (i == BUTTON_MODE && !st->long_emitted) {
+                            if (s_event_cb) {
+                                s_event_cb(BUTTON_MODE, BUTTON_CLICK);
                             }
                         }
                     }
@@ -106,12 +104,12 @@ static void button_scanner_task(void *arg) {
                             }
                         }
                     }
-                } else {
-                    // Các nút chức năng khác (MODE, LED, MUTE, ACTION): Phát hiện Long Press >= 1000ms
+                } else if (i == BUTTON_MODE) {
+                    // Riêng BUTTON_MODE: Phát hiện Long Press >= 1000ms để lùi về chế độ trước
                     if (st->press_ms >= 1000 && !st->long_emitted) {
                         st->long_emitted = true;
                         if (s_event_cb) {
-                            s_event_cb((button_id_t)i, BUTTON_LONG_PRESS);
+                            s_event_cb(BUTTON_MODE, BUTTON_LONG_PRESS);
                         }
                     }
                 }

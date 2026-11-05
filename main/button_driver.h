@@ -17,7 +17,7 @@ extern "C" {
 #define PIN_BTN_VOL_UP       21  // BTN 2: Tăng âm lượng (GPIO 21 - Đã đảo với BTN 4)
 #define PIN_BTN_MODE         48  // BTN 3: Chuyển chế độ (GPIO 48)
 #define PIN_BTN_LED_MODE     42  // BTN 4: Đổi hiệu ứng đèn LED (GPIO 42 - Đã đảo với BTN 2)
-#define PIN_BTN_MUTE_OFF     15  // BTN 5: Tắt tiếng / Bật lại (GPIO 15)
+#define PIN_BTN_MUTE_OFF     45  // BTN 5: Tắt tiếng / Bật lại (GPIO 45)
 #define PIN_BTN_ACTION_SONG  47  // BTN 6: Đổi bài hát / Tác vụ đặc biệt (GPIO 47)
 
 typedef enum {
