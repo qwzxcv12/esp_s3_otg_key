@@ -884,31 +884,37 @@ bool audio_synth_is_muted(void) {
 
 void audio_play_mute_feedback(bool is_muted) {
     if (is_muted) {
-        // Âm thanh báo Tắt tiếng (MUTE / OFF): 2 nốt trầm dần (587Hz -> 293Hz)
-        trigger_voice_internal(VOICE_TONE_ADSR, 587.33f, 0, 0, 0.70f, 60, TIMBRE_PIANO);
-        vTaskDelay(pdMS_TO_TICKS(65));
-        trigger_voice_internal(VOICE_TONE_ADSR, 293.66f, 0, 0, 0.65f, 100, TIMBRE_PIANO);
+        // Âm thanh báo Tắt tiếng (MUTE / OFF): Arcade Power-Down rõ ràng, đanh gọn (988Hz -> 659Hz)
+        trigger_voice_internal(VOICE_TONE_ADSR, 987.77f, 0, 0, 0.90f, 130, TIMBRE_8BIT_MARIO);
         vTaskDelay(pdMS_TO_TICKS(110));
+        trigger_voice_internal(VOICE_TONE_ADSR, 659.25f, 0, 0, 0.85f, 200, TIMBRE_8BIT_MARIO);
+        vTaskDelay(pdMS_TO_TICKS(220)); // Chờ âm thanh phát xong hoàn toàn qua DMA I2S
     } else {
-        // Âm thanh báo Bật lại tiếng (UNMUTE / ON): 2 nốt cao dần trong trẻo (392Hz -> 784Hz)
-        trigger_voice_internal(VOICE_TONE_ADSR, 392.00f, 0, 0, 0.75f, 65, TIMBRE_MUSIC_BOX);
-        vTaskDelay(pdMS_TO_TICKS(70));
-        trigger_voice_internal(VOICE_TONE_ADSR, 783.99f, 0, 0, 0.85f, 130, TIMBRE_MUSIC_BOX);
+        // Âm thanh báo Bật lại tiếng (UNMUTE / ON): 3 nốt vút lên vui tươi (E5 659Hz -> B5 988Hz -> E6 1318Hz)
+        trigger_voice_internal(VOICE_TONE_ADSR, 659.25f, 0, 0, 0.85f, 100, TIMBRE_8BIT_MARIO);
+        vTaskDelay(pdMS_TO_TICKS(85));
+        trigger_voice_internal(VOICE_TONE_ADSR, 987.77f, 0, 0, 0.90f, 110, TIMBRE_8BIT_MARIO);
+        vTaskDelay(pdMS_TO_TICKS(95));
+        trigger_voice_internal(VOICE_TONE_ADSR, 1318.51f, 0, 0, 0.95f, 240, TIMBRE_8BIT_MARIO);
     }
 }
 
 bool audio_synth_toggle_mute(void) {
     if (!s_is_muted) {
-        // Phát âm thanh báo Mute trước khi giảm volume về 0
-        audio_play_mute_feedback(true);
+        // Lưu mức volume hiện tại trước
         s_pre_mute_volume = s_master_volume;
-        if (s_pre_mute_volume < 0.10f) s_pre_mute_volume = AUDIO_DEFAULT_VOLUME;
+        if (s_pre_mute_volume < 0.20f) s_pre_mute_volume = AUDIO_DEFAULT_VOLUME;
+        // Đảm bảo volume đang đủ lớn để phát âm thanh Mute rõ ràng
+        if (s_master_volume < 0.40f) s_master_volume = 0.50f;
+        // Phát âm thanh báo Mute
+        audio_play_mute_feedback(true);
+        // Sau khi âm thanh đã ngân xong hoàn toàn -> mới hạ volume về 0
         s_master_volume = 0.0f;
         s_is_muted = true;
     } else {
+        // Khôi phục volume trước -> rồi phát âm thanh Unmute vui tươi
         s_master_volume = s_pre_mute_volume;
         s_is_muted = false;
-        // Bật lại volume xong thì phát âm thanh báo Unmute
         audio_play_mute_feedback(false);
     }
     return s_is_muted;
@@ -917,29 +923,29 @@ bool audio_synth_toggle_mute(void) {
 void audio_play_led_mode_feedback(uint8_t style) {
     if (s_is_muted) return;
     switch (style) {
-        case 0: // REACTIVE: Âm thanh trong trẻo nốt Đố (C5 523Hz + G5 784Hz)
-            trigger_voice_internal(VOICE_TONE_ADSR, 523.25f, 0, 0, 0.75f, 80, TIMBRE_MUSIC_BOX);
-            trigger_voice_internal(VOICE_TONE_ADSR, 783.99f, 0, 0, 0.65f, 100, TIMBRE_MUSIC_BOX);
+        case 0: // REACTIVE: Âm thanh trong trẻo nốt Đố (C5 523Hz + G5 784Hz ngân vang)
+            trigger_voice_internal(VOICE_TONE_ADSR, 523.25f, 0, 0, 0.85f, 150, TIMBRE_MUSIC_BOX);
+            trigger_voice_internal(VOICE_TONE_ADSR, 783.99f, 0, 0, 0.75f, 200, TIMBRE_MUSIC_BOX);
             break;
-        case 1: // RAINBOW: Chuỗi arpeggio 3 nốt vui tươi (C5 523Hz -> E5 659Hz -> G5 784Hz)
-            trigger_voice_internal(VOICE_TONE_ADSR, 523.25f, 0, 0, 0.70f, 60, TIMBRE_MUSIC_BOX);
-            vTaskDelay(pdMS_TO_TICKS(50));
-            trigger_voice_internal(VOICE_TONE_ADSR, 659.25f, 0, 0, 0.75f, 60, TIMBRE_MUSIC_BOX);
-            vTaskDelay(pdMS_TO_TICKS(50));
-            trigger_voice_internal(VOICE_TONE_ADSR, 783.99f, 0, 0, 0.80f, 120, TIMBRE_MUSIC_BOX);
+        case 1: // RAINBOW: Chuỗi arpeggio 3 nốt vút lên vui tươi (C5 523Hz -> E5 659Hz -> G5 784Hz)
+            trigger_voice_internal(VOICE_TONE_ADSR, 523.25f, 0, 0, 0.80f, 100, TIMBRE_MUSIC_BOX);
+            vTaskDelay(pdMS_TO_TICKS(75));
+            trigger_voice_internal(VOICE_TONE_ADSR, 659.25f, 0, 0, 0.85f, 110, TIMBRE_MUSIC_BOX);
+            vTaskDelay(pdMS_TO_TICKS(75));
+            trigger_voice_internal(VOICE_TONE_ADSR, 783.99f, 0, 0, 0.90f, 220, TIMBRE_MUSIC_BOX);
             break;
-        case 2: // BREATHING: Nốt trầm ấm êm dịu (A4 440Hz ngân nhẹ)
-            trigger_voice_internal(VOICE_TONE_ADSR, 440.00f, 0, 0, 0.70f, 250, TIMBRE_PIANO);
+        case 2: // BREATHING: Nốt chuông ấm ngân vang êm dịu (A5 880Hz)
+            trigger_voice_internal(VOICE_TONE_ADSR, 880.00f, 0, 0, 0.85f, 320, TIMBRE_MUSIC_BOX);
             break;
-        case 3: // STARRY: Chuông sao băng lung linh (C6 1046Hz + E6 1318Hz)
-            trigger_voice_internal(VOICE_TONE_ADSR, 1046.50f, 0, 0, 0.75f, 80, TIMBRE_MUSIC_BOX);
-            vTaskDelay(pdMS_TO_TICKS(60));
-            trigger_voice_internal(VOICE_TONE_ADSR, 1318.51f, 0, 0, 0.80f, 130, TIMBRE_MUSIC_BOX);
+        case 3: // STARRY: Chuông sao băng lung linh (C6 1046Hz + G6 1568Hz)
+            trigger_voice_internal(VOICE_TONE_ADSR, 1046.50f, 0, 0, 0.85f, 120, TIMBRE_MUSIC_BOX);
+            vTaskDelay(pdMS_TO_TICKS(80));
+            trigger_voice_internal(VOICE_TONE_ADSR, 1567.98f, 0, 0, 0.90f, 240, TIMBRE_MUSIC_BOX);
             break;
-        case 4: // OFF: Âm thanh tắt đèn hạ cung (440Hz -> 220Hz ngắn)
-            trigger_voice_internal(VOICE_TONE_ADSR, 440.00f, 0, 0, 0.60f, 60, TIMBRE_PIANO);
-            vTaskDelay(pdMS_TO_TICKS(65));
-            trigger_voice_internal(VOICE_TONE_ADSR, 220.00f, 0, 0, 0.55f, 90, TIMBRE_PIANO);
+        case 4: // OFF: Âm thanh tắt đèn hạ cung (G5 784Hz -> E5 659Hz)
+            trigger_voice_internal(VOICE_TONE_ADSR, 783.99f, 0, 0, 0.80f, 90, TIMBRE_8BIT_MARIO);
+            vTaskDelay(pdMS_TO_TICKS(85));
+            trigger_voice_internal(VOICE_TONE_ADSR, 659.25f, 0, 0, 0.75f, 150, TIMBRE_8BIT_MARIO);
             break;
         default:
             audio_play_volume_tick(s_master_volume, true);
@@ -949,11 +955,11 @@ void audio_play_led_mode_feedback(uint8_t style) {
 
 void audio_play_song_change_chime(void) {
     if (s_is_muted) return;
-    // Chime báo chuyển bài hát chuẩn: G4 -> C5 vui tươi
-    trigger_voice_internal(VOICE_TONE_ADSR, 783.99f, 0, 0, 0.75f, 60, TIMBRE_MUSIC_BOX);
-    vTaskDelay(pdMS_TO_TICKS(55));
-    trigger_voice_internal(VOICE_TONE_ADSR, 1046.50f, 0, 0, 0.85f, 140, TIMBRE_MUSIC_BOX);
-    vTaskDelay(pdMS_TO_TICKS(60));
+    // Chime báo chuyển bài hát chuẩn: G5 -> C6 vui tươi, bắt tai
+    trigger_voice_internal(VOICE_TONE_ADSR, 783.99f, 0, 0, 0.85f, 90, TIMBRE_MUSIC_BOX);
+    vTaskDelay(pdMS_TO_TICKS(75));
+    trigger_voice_internal(VOICE_TONE_ADSR, 1046.50f, 0, 0, 0.90f, 220, TIMBRE_MUSIC_BOX);
+    vTaskDelay(pdMS_TO_TICKS(80));
 }
 
 void audio_play_action_feedback(void) {
