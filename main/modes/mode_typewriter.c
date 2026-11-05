@@ -106,9 +106,7 @@ static bool mode_typewriter_handle_key(uint8_t kc, uint8_t mod, char c) {
 }
 
 static void mode_typewriter_handle_action(void) {
-    audio_play_typewriter(TYPEWRITER_ENTER_BELL);
-    vTaskDelay(pdMS_TO_TICKS(100));
-    audio_play_typewriter(TYPEWRITER_SPACE_SLIDE);
+    audio_play_typewriter_return();
     printf("\r\n>>> [BTN 6 ACTION: MÁY GÕ CHỮ XUỐNG DÒNG (KENG KENG!)] <<<\r\n");
     fflush(stdout);
     led_effects_spark();

@@ -100,6 +100,8 @@ void audio_play_led_mode_feedback(uint8_t style);
 void audio_play_mute_feedback(bool is_muted);
 void audio_play_song_change_chime(void);
 void audio_play_action_feedback(void);
+void audio_play_piano_timbre_preview(piano_timbre_t timbre);
+void audio_play_typewriter_return(void);
 void audio_synth_stop_all_background(void);
 
 // Mode 1: Piano & Pentatonic

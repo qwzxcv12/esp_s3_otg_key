@@ -961,6 +961,22 @@ void audio_play_action_feedback(void) {
     audio_play_praise();
 }
 
+void audio_play_piano_timbre_preview(piano_timbre_t timbre) {
+    if (s_is_muted) return;
+    audio_play_piano_note_dur(523.25f, timbre, 0, 160);
+    vTaskDelay(pdMS_TO_TICKS(80));
+    audio_play_piano_note_dur(659.25f, timbre, 0, 160);
+    vTaskDelay(pdMS_TO_TICKS(80));
+    audio_play_piano_note_dur(783.99f, timbre, 0, 320);
+}
+
+void audio_play_typewriter_return(void) {
+    if (s_is_muted) return;
+    audio_play_typewriter(TYPEWRITER_ENTER_BELL);
+    vTaskDelay(pdMS_TO_TICKS(100));
+    audio_play_typewriter(TYPEWRITER_SPACE_SLIDE);
+}
+
 void audio_play_volume_tick(float volume, bool is_up) {
     if (volume <= 0.01f) return;
     if (sb_play_tick(volume)) return;
