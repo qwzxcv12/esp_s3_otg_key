@@ -120,6 +120,9 @@ static void mode_mozart_handle_action(void) {
     audio_mozart_get_info(&info);
     printf("\r\n>>> [BTN 6 ACTION: MOZART ĐỔI BÀI HÁT: \"%s\" (%s)] <<<\r\n", info.name, info.artist);
     fflush(stdout);
+    // Âm thanh thông báo chuẩn khi đổi bài hát
+    audio_play_song_change_chime();
+    audio_play_piano_note_dur(info.freq, audio_mozart_get_timbre(), 0, 350);
     led_effects_color_burst(0, 200, 255);
 }
 

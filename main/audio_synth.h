@@ -96,6 +96,10 @@ void audio_synth_volume_down(void);
 bool audio_synth_toggle_mute(void);
 bool audio_synth_is_muted(void);
 void audio_play_volume_tick(float volume, bool is_up);
+void audio_play_led_mode_feedback(uint8_t style);
+void audio_play_mute_feedback(bool is_muted);
+void audio_play_song_change_chime(void);
+void audio_play_action_feedback(void);
 void audio_synth_stop_all_background(void);
 
 // Mode 1: Piano & Pentatonic

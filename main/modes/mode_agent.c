@@ -54,6 +54,13 @@ static bool mode_agent_handle_key(uint8_t kc, uint8_t mod, char c) {
     return true;
 }
 
+static void mode_agent_handle_action(void) {
+    audio_play_robot_chirp();
+    printf("\r\n>>> [BTN 6 ACTION: ROBOT R2-D2 LÍU LO & TÍN HIỆU RADAR] <<<\r\n");
+    fflush(stdout);
+    led_effects_matrix();
+}
+
 // Cấu hình Driver cho Chế độ 7
 const toy_mode_driver_t g_mode_agent_driver = {
     .id                 = 6,
@@ -65,6 +72,7 @@ const toy_mode_driver_t g_mode_agent_driver = {
     .handle_key         = mode_agent_handle_key,
     .handle_key_release = NULL,
     .background_tick    = NULL,
+    .handle_action      = mode_agent_handle_action,
     .handle_encoder     = NULL,
     .draw_screen        = NULL
 };

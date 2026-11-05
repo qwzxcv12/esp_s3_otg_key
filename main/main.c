@@ -739,6 +739,7 @@ void app_main(void)
                     case BUTTON_LED_MODE: {
                         led_style_t new_style = led_effects_next_style();
                         printf("\r\n>>> [BTN 4: ĐỔI HIỆU ỨNG ĐÈN LED -> %s] <<<\r\n", led_effects_get_style_name(new_style));
+                        audio_play_led_mode_feedback(new_style);
                         break;
                     }
                     case BUTTON_MUTE_OFF: {
@@ -749,7 +750,6 @@ void app_main(void)
                         } else {
                             float vol = audio_synth_get_volume();
                             printf("\r\n>>> [BTN 5: BẬT LẠI TIẾNG (UNMUTE: %d%%)] <<<\r\n", (int)(vol * 100));
-                            audio_play_volume_tick(vol, true);
                             led_effects_volume(vol);
                         }
                         break;

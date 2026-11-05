@@ -102,6 +102,13 @@ static bool mode_phonics_handle_key(uint8_t kc, uint8_t mod, char c) {
     return true;
 }
 
+static void mode_phonics_handle_action(void) {
+    audio_play_praise();
+    printf("\r\n>>> [BTN 6 ACTION: KHEN NGỢI & VỖ TAY HOAN HÔ!] <<<\r\n");
+    fflush(stdout);
+    led_effects_celebration();
+}
+
 // Cấu hình Driver cho Chế độ 9
 const toy_mode_driver_t g_mode_phonics_driver = {
     .id                 = 8,
@@ -113,6 +120,7 @@ const toy_mode_driver_t g_mode_phonics_driver = {
     .handle_key         = mode_phonics_handle_key,
     .handle_key_release = NULL,
     .background_tick    = NULL,
+    .handle_action      = mode_phonics_handle_action,
     .handle_encoder     = NULL,
     .draw_screen        = NULL
 };

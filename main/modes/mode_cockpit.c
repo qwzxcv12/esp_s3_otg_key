@@ -297,6 +297,9 @@ static void mode_cockpit_handle_action(void) {
     bool on = audio_cockpit_is_siren_on();
     printf("\r\n>>> [BTN 6 ACTION: CÒI HÚ CỨU HỎA 114: %s] <<<\r\n", on ? "BẬT CÒI ƯU TIÊN" : "TẮT CÒI");
     fflush(stdout);
+    if (!on) {
+        audio_play_robot_chirp();
+    }
     led_effects_police(on);
 }
 

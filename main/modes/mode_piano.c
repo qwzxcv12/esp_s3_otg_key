@@ -188,8 +188,12 @@ static void mode_piano_handle_action(void) {
                          (s_piano_timbre == TIMBRE_8BIT_MARIO) ? "RETRO GAME 8-BIT MARIO" : "CHUÔNG GIÓ MUSIC BOX";
     printf("\r\n>>> [BTN 6 ACTION: ĐỔI ÂM SẮC PIANO -> %s] <<<\r\n", t_name);
     fflush(stdout);
-    audio_play_piano_note_dur(523.25f, s_piano_timbre, 0, 280);
-    audio_play_piano_note_dur(783.99f, s_piano_timbre, 0, 300);
+    // Hợp âm 3 nốt C-E-G biểu diễn đặc trưng âm sắc mới
+    audio_play_piano_note_dur(523.25f, s_piano_timbre, 0, 160);
+    vTaskDelay(pdMS_TO_TICKS(80));
+    audio_play_piano_note_dur(659.25f, s_piano_timbre, 0, 160);
+    vTaskDelay(pdMS_TO_TICKS(80));
+    audio_play_piano_note_dur(783.99f, s_piano_timbre, 0, 320);
     led_effects_color_burst(0, 255, 255);
 }
 

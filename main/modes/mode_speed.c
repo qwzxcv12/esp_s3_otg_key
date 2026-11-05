@@ -139,6 +139,9 @@ static void mode_speed_handle_action(void) {
     printf("\r\n>>> [BTN 6 ACTION: SPEED ĐỔI BÀI HÁT: \"%s\" (%s)] <<<\r\n",
            info.song_name, info.title_vi ? info.title_vi : "");
     fflush(stdout);
+    // Âm thanh thông báo chuẩn khi đổi bài hát
+    audio_play_song_change_chime();
+    audio_play_piano_note_dur(info.freq, TIMBRE_PIANO, 0, 350);
     led_effects_color_burst(255, 120, 0);
 }
 

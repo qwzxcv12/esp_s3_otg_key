@@ -105,6 +105,15 @@ static bool mode_typewriter_handle_key(uint8_t kc, uint8_t mod, char c) {
     return true;
 }
 
+static void mode_typewriter_handle_action(void) {
+    audio_play_typewriter(TYPEWRITER_ENTER_BELL);
+    vTaskDelay(pdMS_TO_TICKS(100));
+    audio_play_typewriter(TYPEWRITER_SPACE_SLIDE);
+    printf("\r\n>>> [BTN 6 ACTION: MÁY GÕ CHỮ XUỐNG DÒNG (KENG KENG!)] <<<\r\n");
+    fflush(stdout);
+    led_effects_spark();
+}
+
 // Cấu hình Driver cho Chế độ 5
 const toy_mode_driver_t g_mode_typewriter_driver = {
     .id                 = 4,
@@ -116,6 +125,7 @@ const toy_mode_driver_t g_mode_typewriter_driver = {
     .handle_key         = mode_typewriter_handle_key,
     .handle_key_release = NULL,
     .background_tick    = NULL,
+    .handle_action      = mode_typewriter_handle_action,
     .handle_encoder     = NULL,
     .draw_screen        = NULL
 };
