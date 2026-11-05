@@ -14,11 +14,11 @@ extern "C" {
 // Đấu nối: 1 chân nút nối GPIO, 1 chân nối GND (Active-Low, bật Pull-up nội bộ)
 // ============================================================================
 #define PIN_BTN_VOL_DOWN     41  // BTN 1: Giảm âm lượng (GPIO 41)
-#define PIN_BTN_VOL_UP       47  // BTN 2: Tăng âm lượng (GPIO 47)
+#define PIN_BTN_VOL_UP       42  // BTN 2: Tăng âm lượng (GPIO 42 - Đã đổi với BTN 6)
 #define PIN_BTN_MODE         48  // BTN 3: Chuyển chế độ (GPIO 48)
 #define PIN_BTN_LED_MODE     21  // BTN 4: Đổi hiệu ứng đèn LED (GPIO 21)
 #define PIN_BTN_MUTE_OFF     15  // BTN 5: Tắt tiếng / Bật lại (GPIO 15)
-#define PIN_BTN_ACTION_SONG  42  // BTN 6: Đổi bài hát / Tác vụ đặc biệt (GPIO 42)
+#define PIN_BTN_ACTION_SONG  47  // BTN 6: Đổi bài hát / Tác vụ đặc biệt (GPIO 47 - Đã đổi với BTN 2)
 
 typedef enum {
     BUTTON_VOL_DOWN = 0,
