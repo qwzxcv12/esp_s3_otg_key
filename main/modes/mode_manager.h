@@ -46,6 +46,11 @@ void mode_manager_prev(void);
 bool mode_manager_dispatch_key(uint8_t keycode, uint8_t modifier, char ascii_char);
 
 /**
+ * @brief Điều phối sự kiện nút ACTION / SONG (BTN 6) tới chế độ hiện tại.
+ */
+void mode_manager_dispatch_action(void);
+
+/**
  * @brief Điều phối sự kiện nhả phím tới chế độ hiện tại.
  */
 void mode_manager_dispatch_release(uint8_t keycode);

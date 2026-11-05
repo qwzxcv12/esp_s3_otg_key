@@ -111,6 +111,20 @@ void mode_manager_dispatch_release(uint8_t keycode) {
     }
 }
 
+void mode_manager_dispatch_action(void) {
+    if (s_mode_count == 0) return;
+    const toy_mode_driver_t *curr = s_modes[s_current_index];
+    if (curr && curr->handle_action) {
+        curr->handle_action();
+    } else {
+        // Fallback âm thanh phản hồi nếu mode chưa có action riêng
+        audio_play_praise();
+        led_effects_color_burst(255, 215, 0); // Vàng kim lấp lánh
+        printf("\r\n>>> [BTN 6 ACTION: %s PHẢN HỒI MẶC ĐỊNH] <<<\r\n", curr && curr->name ? curr->name : "TOY");
+        fflush(stdout);
+    }
+}
+
 void mode_manager_tick(uint32_t delta_ms) {
     if (s_mode_count == 0) return;
     const toy_mode_driver_t *curr = s_modes[s_current_index];

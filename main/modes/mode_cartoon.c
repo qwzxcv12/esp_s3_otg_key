@@ -192,6 +192,19 @@ static bool mode_cartoon_handle_key(uint8_t kc, uint8_t mod, char c) {
     return true;
 }
 
+static void mode_cartoon_handle_action(void) {
+    static int s_ct_idx = 0;
+    static const cartoon_sfx_t sfx_pool[] = {
+        SFX_MARIO_COIN, SFX_SPRING_BOING, SFX_GAME_JUMP, SFX_GAME_POWERUP,
+        SFX_CT_BONGO_RUN, SFX_CT_SLIP_FALL, SFX_CT_ANVIL_CLANG, SFX_CT_SQUEAK_DUCK
+    };
+    audio_play_cartoon_sfx(sfx_pool[s_ct_idx % 8]);
+    s_ct_idx++;
+    printf("\r\n>>> [BTN 6 ACTION: HOẠT HÌNH & GAME SFX VUI NHỘN] <<<\r\n");
+    fflush(stdout);
+    led_effects_spark();
+}
+
 // Cấu hình Driver cho Chế độ 6
 const toy_mode_driver_t g_mode_cartoon_driver = {
     .id                 = 5,
@@ -203,6 +216,7 @@ const toy_mode_driver_t g_mode_cartoon_driver = {
     .handle_key         = mode_cartoon_handle_key,
     .handle_key_release = NULL,
     .background_tick    = NULL,
+    .handle_action      = mode_cartoon_handle_action,
     .handle_encoder     = NULL,
     .draw_screen        = NULL
 };

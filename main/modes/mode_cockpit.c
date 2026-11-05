@@ -292,6 +292,14 @@ static void mode_cockpit_background_tick(uint32_t delta_ms) {
     }
 }
 
+static void mode_cockpit_handle_action(void) {
+    audio_cockpit_siren_toggle();
+    bool on = audio_cockpit_is_siren_on();
+    printf("\r\n>>> [BTN 6 ACTION: CÒI HÚ CỨU HỎA 114: %s] <<<\r\n", on ? "BẬT CÒI ƯU TIÊN" : "TẮT CÒI");
+    fflush(stdout);
+    led_effects_police(on);
+}
+
 // Cấu hình Driver cho Chế độ 8
 const toy_mode_driver_t g_mode_cockpit_driver = {
     .id                 = 7,
@@ -303,6 +311,7 @@ const toy_mode_driver_t g_mode_cockpit_driver = {
     .handle_key         = mode_cockpit_handle_key,
     .handle_key_release = NULL,
     .background_tick    = mode_cockpit_background_tick,
+    .handle_action      = mode_cockpit_handle_action,
     .handle_encoder     = NULL,
     .draw_screen        = NULL
 };

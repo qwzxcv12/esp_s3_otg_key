@@ -47,7 +47,8 @@ typedef struct toy_mode_driver {
     void      (*background_tick)(uint32_t delta_ms);
 
     // --- Các hook mở rộng cho phần cứng tương lai ---
-    void      (*handle_encoder)(int delta);      ///< Xử lý núm xoay riêng biệt cho từng chế độ
+    void      (*handle_action)(void);            ///< Xử lý nút ACTION / SONG (BTN 6) riêng cho từng chế độ
+    void      (*handle_encoder)(int delta);      ///< Xử lý núm xoay riêng biệt cho từng chế độ (nếu có)
     void      (*draw_screen)(void *disp_ctx);    ///< Dành cho màn hình LCD/OLED mở rộng
 } toy_mode_driver_t;
 

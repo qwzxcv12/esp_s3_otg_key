@@ -8,9 +8,23 @@
 #define PIN_LED_STRIP      4   // WS2812B Data In GPIO
 #define LED_STRIP_COUNT   30   // Default number of addressable LEDs
 
+typedef enum {
+    LED_STYLE_REACTIVE = 0, // Nháy theo phím bấm & âm nhạc (mặc định)
+    LED_STYLE_RAINBOW,      // Sóng cầu vồng chuyển động liên tục
+    LED_STYLE_BREATHING,    // Đèn ngủ đổi màu thở êm dịu
+    LED_STYLE_STARRY,       // Sao băng lấp lánh (sparkle/fireflies)
+    LED_STYLE_OFF,          // Tắt hẳn dải đèn (Night mode / tiết kiệm năng lượng)
+    LED_STYLE_TOTAL
+} led_style_t;
+
 esp_err_t led_effects_init(void);
 void led_effects_clear(void);
 void led_effects_tick(uint32_t delta_ms);
+
+// Chuyển đổi hiệu ứng đèn LED cho BTN 4
+led_style_t led_effects_next_style(void);
+const char *led_effects_get_style_name(led_style_t style);
+led_style_t led_effects_get_current_style(void);
 
 // Visual FX for All Modes
 void led_effects_mode_switch(uint8_t mode_index);

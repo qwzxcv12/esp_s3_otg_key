@@ -93,6 +93,8 @@ void audio_synth_set_volume(float vol);
 float audio_synth_get_volume(void);
 void audio_synth_volume_up(void);
 void audio_synth_volume_down(void);
+bool audio_synth_toggle_mute(void);
+bool audio_synth_is_muted(void);
 void audio_play_volume_tick(float volume, bool is_up);
 void audio_synth_stop_all_background(void);
 

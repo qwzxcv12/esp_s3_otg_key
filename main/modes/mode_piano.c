@@ -182,6 +182,17 @@ static void mode_piano_handle_key_release(uint8_t kc) {
     audio_piano_key_release(kc);
 }
 
+static void mode_piano_handle_action(void) {
+    s_piano_timbre = (piano_timbre_t)((s_piano_timbre + 1) % 3);
+    const char *t_name = (s_piano_timbre == TIMBRE_PIANO) ? "ĐÀN PIANO TRẦM ẤM" :
+                         (s_piano_timbre == TIMBRE_8BIT_MARIO) ? "RETRO GAME 8-BIT MARIO" : "CHUÔNG GIÓ MUSIC BOX";
+    printf("\r\n>>> [BTN 6 ACTION: ĐỔI ÂM SẮC PIANO -> %s] <<<\r\n", t_name);
+    fflush(stdout);
+    audio_play_piano_note_dur(523.25f, s_piano_timbre, 0, 280);
+    audio_play_piano_note_dur(783.99f, s_piano_timbre, 0, 300);
+    led_effects_color_burst(0, 255, 255);
+}
+
 // Cấu hình Driver cho Chế độ 1
 const toy_mode_driver_t g_mode_piano_driver = {
     .id                 = 0,
@@ -193,6 +204,7 @@ const toy_mode_driver_t g_mode_piano_driver = {
     .handle_key         = mode_piano_handle_key,
     .handle_key_release = mode_piano_handle_key_release,
     .background_tick    = NULL,
+    .handle_action      = mode_piano_handle_action,
     .handle_encoder     = NULL,
     .draw_screen        = NULL
 };

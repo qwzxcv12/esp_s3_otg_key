@@ -132,6 +132,16 @@ static void mode_speed_background_tick(uint32_t delta_ms) {
     }
 }
 
+static void mode_speed_handle_action(void) {
+    audio_speed_next_song();
+    speed_note_info_t info;
+    audio_speed_get_info(&info);
+    printf("\r\n>>> [BTN 6 ACTION: SPEED ĐỔI BÀI HÁT: \"%s\" (%s)] <<<\r\n",
+           info.song_name, info.title_vi ? info.title_vi : "");
+    fflush(stdout);
+    led_effects_color_burst(255, 120, 0);
+}
+
 // Cấu hình Driver cho Chế độ 3
 const toy_mode_driver_t g_mode_speed_driver = {
     .id                 = 2,
@@ -143,6 +153,7 @@ const toy_mode_driver_t g_mode_speed_driver = {
     .handle_key         = mode_speed_handle_key,
     .handle_key_release = NULL,
     .background_tick    = mode_speed_background_tick,
+    .handle_action      = mode_speed_handle_action,
     .handle_encoder     = NULL,
     .draw_screen        = NULL
 };

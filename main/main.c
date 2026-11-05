@@ -28,7 +28,7 @@
 
 #include "audio_synth.h"
 #include "led_effects.h"
-#include "rotary_encoder.h"
+#include "button_driver.h"
 #include "soundbank.h"
 #include "mode_manager.h"
 
@@ -39,8 +39,7 @@ QueueHandle_t app_event_queue = NULL;
 typedef enum {
     APP_EVENT_HID_HOST = 0,
     APP_EVENT_UPDATE_LEDS,
-    APP_EVENT_ENCODER_ROTATE,
-    APP_EVENT_ENCODER_CLICK
+    APP_EVENT_BUTTON_PRESS
 } app_event_group_t;
 
 typedef struct {
@@ -51,7 +50,10 @@ typedef struct {
             hid_host_driver_event_t event;
             void *arg;
         } hid_host_device;
-        int encoder_delta;
+        struct {
+            button_id_t id;
+            button_press_type_t type;
+        } button;
     };
 } app_event_queue_t;
 
@@ -616,20 +618,14 @@ static void toy_background_task(void *pvParameters) {
     }
 }
 
-static void on_encoder_rotated(int delta) {
+static void on_button_event(button_id_t btn, button_press_type_t type) {
     if (app_event_queue) {
         app_event_queue_t evt = {
-            .event_group = APP_EVENT_ENCODER_ROTATE,
-            .encoder_delta = delta
-        };
-        xQueueSend(app_event_queue, &evt, 0);
-    }
-}
-
-static void on_encoder_clicked(void) {
-    if (app_event_queue) {
-        app_event_queue_t evt = {
-            .event_group = APP_EVENT_ENCODER_CLICK
+            .event_group = APP_EVENT_BUTTON_PRESS,
+            .button = {
+                .id = btn,
+                .type = type
+            }
         };
         xQueueSend(app_event_queue, &evt, 0);
     }
@@ -664,8 +660,8 @@ void app_main(void)
     // 3. Initialize WS2812B RGB LED Strip (GPIO 4 via RMT)
     ESP_ERROR_CHECK(led_effects_init());
 
-    // 4. Initialize HW-040 Rotary Encoder (CLK=14, DT=13, SW=12)
-    ESP_ERROR_CHECK(rotary_encoder_init(on_encoder_rotated, on_encoder_clicked));
+    // 4. Initialize 6 Push Buttons (BTN 1..6 on GPIO 41, 47, 48, 21, 15, 42)
+    ESP_ERROR_CHECK(button_driver_init(on_button_event));
 
     // 5. Khởi tạo Mode Manager & Đăng ký toàn bộ 9 chế độ chuẩn hóa
     ESP_ERROR_CHECK(mode_manager_init());
@@ -709,22 +705,64 @@ void app_main(void)
                                       evt_queue.hid_host_device.arg);
             } else if (APP_EVENT_UPDATE_LEDS == evt_queue.event_group) {
                 update_keyboard_leds();
-            } else if (APP_EVENT_ENCODER_ROTATE == evt_queue.event_group) {
-                if (evt_queue.encoder_delta > 0) {
-                    audio_synth_volume_up();
-                    printf("\r\n>>> [NÚM XOAY HW-040: TĂNG ÂM LƯỢNG: %d%%]\r\n", (int)(audio_synth_get_volume() * 100));
-                    audio_play_volume_tick(audio_synth_get_volume(), true);
-                } else if (evt_queue.encoder_delta < 0) {
-                    audio_synth_volume_down();
-                    printf("\r\n>>> [NÚM XOAY HW-040: GIẢM ÂM LƯỢNG: %d%%]\r\n", (int)(audio_synth_get_volume() * 100));
-                    audio_play_volume_tick(audio_synth_get_volume(), false);
+            } else if (APP_EVENT_BUTTON_PRESS == evt_queue.event_group) {
+                button_id_t btn = evt_queue.button.id;
+                button_press_type_t ptype = evt_queue.button.type;
+
+                switch (btn) {
+                    case BUTTON_VOL_DOWN: {
+                        audio_synth_volume_down();
+                        float vol = audio_synth_get_volume();
+                        printf("\r\n>>> [BTN 1: GIẢM ÂM LƯỢNG -> %d%%]\r\n", (int)(vol * 100));
+                        audio_play_volume_tick(vol, false);
+                        led_effects_volume(vol);
+                        break;
+                    }
+                    case BUTTON_VOL_UP: {
+                        audio_synth_volume_up();
+                        float vol = audio_synth_get_volume();
+                        printf("\r\n>>> [BTN 2: TĂNG ÂM LƯỢNG -> %d%%]\r\n", (int)(vol * 100));
+                        audio_play_volume_tick(vol, true);
+                        led_effects_volume(vol);
+                        break;
+                    }
+                    case BUTTON_MODE: {
+                        if (ptype == BUTTON_LONG_PRESS) {
+                            printf("\r\n>>> [BTN 3 NHẤN GIỮ: LÙI VỀ CHẾ ĐỘ TRƯỚC ĐÓ]\r\n");
+                            mode_manager_prev();
+                        } else {
+                            printf("\r\n>>> [BTN 3 NHẤN: CHUYỂN CHẾ ĐỘ TIẾP THEO]\r\n");
+                            mode_manager_next();
+                        }
+                        break;
+                    }
+                    case BUTTON_LED_MODE: {
+                        led_style_t new_style = led_effects_next_style();
+                        printf("\r\n>>> [BTN 4: ĐỔI HIỆU ỨNG ĐÈN LED -> %s] <<<\r\n", led_effects_get_style_name(new_style));
+                        break;
+                    }
+                    case BUTTON_MUTE_OFF: {
+                        bool muted = audio_synth_toggle_mute();
+                        if (muted) {
+                            printf("\r\n>>> [BTN 5: TẮT TIẾNG (MUTE / OFF)] <<<\r\n");
+                            led_effects_color_burst(255, 0, 0); // Đỏ báo tắt tiếng
+                        } else {
+                            float vol = audio_synth_get_volume();
+                            printf("\r\n>>> [BTN 5: BẬT LẠI TIẾNG (UNMUTE: %d%%)] <<<\r\n", (int)(vol * 100));
+                            audio_play_volume_tick(vol, true);
+                            led_effects_volume(vol);
+                        }
+                        break;
+                    }
+                    case BUTTON_ACTION_SONG: {
+                        printf("\r\n>>> [BTN 6: KÍCH HOẠT ACTION / ĐỔI BÀI HÁT] <<<\r\n");
+                        mode_manager_dispatch_action();
+                        break;
+                    }
+                    default:
+                        break;
                 }
                 fflush(stdout);
-                led_effects_volume(audio_synth_get_volume());
-            } else if (APP_EVENT_ENCODER_CLICK == evt_queue.event_group) {
-                printf("\r\n>>> [NÚM XOAY HW-040: NHẤN SW -> CHUYỂN CHẾ ĐỘ TIẾP THEO]\r\n");
-                fflush(stdout);
-                mode_manager_next();
             }
         }
     }

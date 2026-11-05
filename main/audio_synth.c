@@ -94,6 +94,8 @@ typedef struct {
 static i2s_chan_handle_t s_tx_handle = NULL;
 static bool s_audio_ready = false;
 static float s_master_volume = AUDIO_DEFAULT_VOLUME;
+static bool s_is_muted = false;
+static float s_pre_mute_volume = AUDIO_DEFAULT_VOLUME;
 static SemaphoreHandle_t s_voice_mutex = NULL;
 static voice_t s_voices[MAX_POLY_VOICES];
 
@@ -867,11 +869,30 @@ float audio_synth_get_volume(void) {
 }
 
 void audio_synth_volume_up(void) {
+    if (s_is_muted) s_is_muted = false;
     audio_synth_set_volume(s_master_volume + 0.05f);
 }
 
 void audio_synth_volume_down(void) {
+    if (s_is_muted) s_is_muted = false;
     audio_synth_set_volume(s_master_volume - 0.05f);
+}
+
+bool audio_synth_is_muted(void) {
+    return s_is_muted;
+}
+
+bool audio_synth_toggle_mute(void) {
+    if (!s_is_muted) {
+        s_pre_mute_volume = s_master_volume;
+        if (s_pre_mute_volume < 0.10f) s_pre_mute_volume = AUDIO_DEFAULT_VOLUME;
+        s_master_volume = 0.0f;
+        s_is_muted = true;
+    } else {
+        s_master_volume = s_pre_mute_volume;
+        s_is_muted = false;
+    }
+    return s_is_muted;
 }
 
 void audio_play_volume_tick(float volume, bool is_up) {

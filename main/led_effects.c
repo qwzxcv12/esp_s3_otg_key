@@ -30,7 +30,46 @@ static volatile uint8_t  s_count_current = 0;
 static volatile int32_t  s_count_wait_ms = 0;
 static volatile uint32_t s_count_step_ms = 200;
 
+static led_style_t s_current_style = LED_STYLE_REACTIVE;
+static uint16_t s_style_step = 0;
+
+static const char *s_style_names[LED_STYLE_TOTAL] = {
+    [LED_STYLE_REACTIVE]  = "TUONG TAC PHIM & AM NHAC (MAC DINH)",
+    [LED_STYLE_RAINBOW]   = "SONG CAU VONG DA SAC",
+    [LED_STYLE_BREATHING] = "DEN THO DIU NHE NHIEU MAU",
+    [LED_STYLE_STARRY]    = "SAO BANG & DOM DOM LAP LANH",
+    [LED_STYLE_OFF]       = "TAT DEN LED (NIGHT MODE)"
+};
+
+const char *led_effects_get_style_name(led_style_t style) {
+    if (style < LED_STYLE_TOTAL && s_style_names[style]) {
+        return s_style_names[style];
+    }
+    return "UNKNOWN";
+}
+
+led_style_t led_effects_get_current_style(void) {
+    return s_current_style;
+}
+
+led_style_t led_effects_next_style(void) {
+    s_current_style = (led_style_t)((s_current_style + 1) % LED_STYLE_TOTAL);
+    if (s_current_style == LED_STYLE_OFF) {
+        led_effects_clear();
+    } else if (s_current_style == LED_STYLE_RAINBOW) {
+        led_effects_celebration();
+    } else if (s_current_style == LED_STYLE_BREATHING) {
+        led_effects_color_burst(0, 180, 255);
+    } else if (s_current_style == LED_STYLE_STARRY) {
+        led_effects_spark();
+    } else {
+        led_effects_color_burst(255, 255, 255);
+    }
+    return s_current_style;
+}
+
 static inline void touch_led_activity(bool cancel_anim) {
+    if (s_current_style == LED_STYLE_OFF) return;
     if (cancel_anim && s_anim_type != LED_ANIM_CELEBRATION) {
         s_anim_type = LED_ANIM_NONE;
     }
@@ -104,6 +143,7 @@ void led_effects_clear(void) {
 // Non-blocking periodic animation tick (called every 25ms by toy_background_task)
 void led_effects_tick(uint32_t delta_ms) {
     if (!s_led_strip || !s_led_mutex) return;
+    if (s_current_style == LED_STYLE_OFF) return;
 
     led_anim_type_t anim = s_anim_type;
 
@@ -172,7 +212,31 @@ void led_effects_tick(uint32_t delta_ms) {
         return;
     }
 
-    // Gentle idle breathing glow after 4.5 seconds of inactivity so the toy stays inviting
+    // Ambient Lighting Modes / Idle step
+    if (s_current_style == LED_STYLE_RAINBOW) {
+        if (xSemaphoreTake(s_led_mutex, pdMS_TO_TICKS(3)) == pdTRUE) {
+            s_style_step = (s_style_step + 4) % 360;
+            for (int i = 0; i < LED_STRIP_COUNT; i++) {
+                uint8_t r, g, b;
+                hsv_to_rgb((s_style_step + i * 12) % 360, 100, 75, &r, &g, &b);
+                led_strip_set_pixel(s_led_strip, i, r, g, b);
+            }
+            led_strip_refresh(s_led_strip);
+            xSemaphoreGive(s_led_mutex);
+        }
+        return;
+    } else if (s_current_style == LED_STYLE_BREATHING) {
+        led_effects_idle_step();
+        return;
+    } else if (s_current_style == LED_STYLE_STARRY) {
+        s_style_step++;
+        if (s_style_step % 3 == 0) {
+            led_effects_spark();
+        }
+        return;
+    }
+
+    // Default Reactive style: Gentle idle breathing glow after 4.5 seconds of inactivity
     s_idle_elapsed_ms += delta_ms;
     if (s_idle_elapsed_ms >= 4500) {
         led_effects_idle_step();

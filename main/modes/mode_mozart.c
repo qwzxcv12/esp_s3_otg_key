@@ -114,6 +114,15 @@ static void mode_mozart_background_tick(uint32_t delta_ms) {
     audio_mozart_autoplay_tick();
 }
 
+static void mode_mozart_handle_action(void) {
+    audio_mozart_next_song();
+    mozart_play_info_t info;
+    audio_mozart_get_info(&info);
+    printf("\r\n>>> [BTN 6 ACTION: MOZART ĐỔI BÀI HÁT: \"%s\" (%s)] <<<\r\n", info.name, info.artist);
+    fflush(stdout);
+    led_effects_color_burst(0, 200, 255);
+}
+
 // Cấu hình Driver cho Chế độ 2
 const toy_mode_driver_t g_mode_mozart_driver = {
     .id                 = 1,
@@ -125,6 +134,7 @@ const toy_mode_driver_t g_mode_mozart_driver = {
     .handle_key         = mode_mozart_handle_key,
     .handle_key_release = NULL,
     .background_tick    = mode_mozart_background_tick,
+    .handle_action      = mode_mozart_handle_action,
     .handle_encoder     = NULL,
     .draw_screen        = NULL
 };

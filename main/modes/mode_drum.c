@@ -166,6 +166,14 @@ static void mode_drum_background_tick(uint32_t delta_ms) {
     }
 }
 
+static void mode_drum_handle_action(void) {
+    audio_play_drum(DRUM_CYMBAL);
+    audio_play_slap_chord();
+    printf("\r\n>>> [BTN 6 ACTION: DÀN TRỐNG CYMBAL CRASH & BEAT ROLL] <<<\r\n");
+    fflush(stdout);
+    led_effects_beat();
+}
+
 // Cấu hình Driver cho Chế độ 4
 const toy_mode_driver_t g_mode_drum_driver = {
     .id                 = 3,
@@ -177,6 +185,7 @@ const toy_mode_driver_t g_mode_drum_driver = {
     .handle_key         = mode_drum_handle_key,
     .handle_key_release = NULL,
     .background_tick    = mode_drum_background_tick,
+    .handle_action      = mode_drum_handle_action,
     .handle_encoder     = NULL,
     .draw_screen        = NULL
 };
