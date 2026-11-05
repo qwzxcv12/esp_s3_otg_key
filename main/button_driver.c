@@ -10,7 +10,6 @@ static const int s_button_pins[BUTTON_TOTAL_COUNT] = {
     [BUTTON_VOL_DOWN]    = PIN_BTN_VOL_DOWN,
     [BUTTON_VOL_UP]      = PIN_BTN_VOL_UP,
     [BUTTON_MODE]        = PIN_BTN_MODE,
-    [BUTTON_LED_MODE]    = PIN_BTN_LED_MODE,
     [BUTTON_MUTE_OFF]    = PIN_BTN_MUTE_OFF,
     [BUTTON_ACTION_SONG] = PIN_BTN_ACTION_SONG
 };
@@ -19,9 +18,8 @@ static const char *s_button_names[BUTTON_TOTAL_COUNT] = {
     [BUTTON_VOL_DOWN]    = "BTN 1 (VOL_DOWN)",
     [BUTTON_VOL_UP]      = "BTN 2 (VOL_UP)",
     [BUTTON_MODE]        = "BTN 3 (MODE_CHUYEN)",
-    [BUTTON_LED_MODE]    = "BTN 4 (LED_MODE)",
-    [BUTTON_MUTE_OFF]    = "BTN 5 (MUTE/OFF)",
-    [BUTTON_ACTION_SONG] = "BTN 6 (ACTION/SONG)"
+    [BUTTON_MUTE_OFF]    = "BTN 4 (MUTE/OFF)",
+    [BUTTON_ACTION_SONG] = "BTN 5 (ACTION/SONG)"
 };
 
 const char *button_driver_get_name(button_id_t btn) {
@@ -45,7 +43,7 @@ static button_state_t s_states[BUTTON_TOTAL_COUNT];
 static button_event_cb_t s_event_cb = NULL;
 
 static void button_scanner_task(void *arg) {
-    ESP_LOGI(TAG, "6-Button Scanner Task running at 100Hz (10ms tick)");
+    ESP_LOGI(TAG, "5-Button Scanner Task running at 100Hz (10ms tick)");
 
     while (1) {
         for (int i = 0; i < BUTTON_TOTAL_COUNT; i++) {
@@ -127,8 +125,12 @@ esp_err_t button_driver_init(button_event_cb_t callback) {
 
     uint64_t pin_mask = 0;
     for (int i = 0; i < BUTTON_TOTAL_COUNT; i++) {
-        pin_mask |= (1ULL << s_button_pins[i]);
-        s_states[i].pin = s_button_pins[i];
+        int pin = s_button_pins[i];
+        gpio_reset_pin((gpio_num_t)pin);
+        gpio_set_direction((gpio_num_t)pin, GPIO_MODE_INPUT);
+        gpio_set_pull_mode((gpio_num_t)pin, GPIO_PULLUP_ONLY);
+        pin_mask |= (1ULL << pin);
+        s_states[i].pin = pin;
         s_states[i].debounce_cnt = 0;
         s_states[i].is_pressed = false;
         s_states[i].long_emitted = false;
@@ -156,7 +158,7 @@ esp_err_t button_driver_init(button_event_cb_t callback) {
         return ESP_FAIL;
     }
 
-    ESP_LOGI(TAG, "6-Button Driver initialized successfully!");
+    ESP_LOGI(TAG, "5-Button Driver initialized successfully!");
     for (int i = 0; i < BUTTON_TOTAL_COUNT; i++) {
         ESP_LOGI(TAG, "  [%s] -> GPIO %d", s_button_names[i], s_button_pins[i]);
     }

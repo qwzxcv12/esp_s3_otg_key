@@ -660,7 +660,7 @@ void app_main(void)
     // 3. Initialize WS2812B RGB LED Strip (GPIO 4 via RMT)
     ESP_ERROR_CHECK(led_effects_init());
 
-    // 4. Initialize 6 Push Buttons (BTN 1..6 on GPIO 41, 42, 48, 21, 15, 47)
+    // 4. Initialize 5 Push Buttons (BTN 1..5 on GPIO 41, 42, 48, 15, 47)
     ESP_ERROR_CHECK(button_driver_init(on_button_event));
 
     // 5. Khởi tạo Mode Manager & Đăng ký toàn bộ 9 chế độ chuẩn hóa
@@ -713,7 +713,7 @@ void app_main(void)
                     case BUTTON_VOL_DOWN: {
                         audio_synth_volume_down();
                         float vol = audio_synth_get_volume();
-                        printf("\r\n>>> [BTN 1: GIẢM ÂM LƯỢNG -> %d%%]\r\n", (int)(vol * 100));
+                        printf("\r\n>>> [BTN 1 - GPIO %d: GIẢM ÂM LƯỢNG -> %d%%]\r\n", PIN_BTN_VOL_DOWN, (int)(vol * 100));
                         audio_play_volume_tick(vol, false);
                         led_effects_volume(vol);
                         break;
@@ -721,41 +721,35 @@ void app_main(void)
                     case BUTTON_VOL_UP: {
                         audio_synth_volume_up();
                         float vol = audio_synth_get_volume();
-                        printf("\r\n>>> [BTN 2: TĂNG ÂM LƯỢNG -> %d%%]\r\n", (int)(vol * 100));
+                        printf("\r\n>>> [BTN 2 - GPIO %d: TĂNG ÂM LƯỢNG -> %d%%]\r\n", PIN_BTN_VOL_UP, (int)(vol * 100));
                         audio_play_volume_tick(vol, true);
                         led_effects_volume(vol);
                         break;
                     }
                     case BUTTON_MODE: {
                         if (ptype == BUTTON_LONG_PRESS) {
-                            printf("\r\n>>> [BTN 3 NHẤN GIỮ: LÙI VỀ CHẾ ĐỘ TRƯỚC ĐÓ]\r\n");
+                            printf("\r\n>>> [BTN 3 - GPIO %d NHẤN GIỮ: LÙI VỀ CHẾ ĐỘ TRƯỚC ĐÓ]\r\n", PIN_BTN_MODE);
                             mode_manager_prev();
                         } else {
-                            printf("\r\n>>> [BTN 3 NHẤN: CHUYỂN CHẾ ĐỘ TIẾP THEO]\r\n");
+                            printf("\r\n>>> [BTN 3 - GPIO %d NHẤN: CHUYỂN CHẾ ĐỘ TIẾP THEO]\r\n", PIN_BTN_MODE);
                             mode_manager_next();
                         }
-                        break;
-                    }
-                    case BUTTON_LED_MODE: {
-                        led_style_t new_style = led_effects_next_style();
-                        printf("\r\n>>> [BTN 4: ĐỔI HIỆU ỨNG ĐÈN LED -> %s] <<<\r\n", led_effects_get_style_name(new_style));
-                        audio_play_led_mode_feedback(new_style);
                         break;
                     }
                     case BUTTON_MUTE_OFF: {
                         bool muted = audio_synth_toggle_mute();
                         if (muted) {
-                            printf("\r\n>>> [BTN 5: TẮT TIẾNG (MUTE / OFF)] <<<\r\n");
+                            printf("\r\n>>> [BTN 4 - GPIO %d: TẮT TIẾNG (MUTE / OFF)] <<<\r\n", PIN_BTN_MUTE_OFF);
                             led_effects_color_burst(255, 0, 0); // Đỏ báo tắt tiếng
                         } else {
                             float vol = audio_synth_get_volume();
-                            printf("\r\n>>> [BTN 5: BẬT LẠI TIẾNG (UNMUTE: %d%%)] <<<\r\n", (int)(vol * 100));
+                            printf("\r\n>>> [BTN 4 - GPIO %d: BẬT LẠI TIẾNG (UNMUTE: %d%%)] <<<\r\n", PIN_BTN_MUTE_OFF, (int)(vol * 100));
                             led_effects_volume(vol);
                         }
                         break;
                     }
                     case BUTTON_ACTION_SONG: {
-                        printf("\r\n>>> [BTN 6: KÍCH HOẠT ACTION / ĐỔI BÀI HÁT] <<<\r\n");
+                        printf("\r\n>>> [BTN 5 - GPIO %d: KÍCH HOẠT ACTION / ĐỔI BÀI HÁT] <<<\r\n", PIN_BTN_ACTION_SONG);
                         mode_manager_dispatch_action();
                         break;
                     }
