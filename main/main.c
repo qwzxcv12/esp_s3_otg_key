@@ -660,7 +660,7 @@ void app_main(void)
     // 3. Initialize WS2812B RGB LED Strip (GPIO 4 via RMT)
     ESP_ERROR_CHECK(led_effects_init());
 
-    // 4. Initialize 5 Push Buttons (BTN 1..5 on GPIO 41, 42, 48, 15, 47)
+    // 4. Initialize 6 Push Buttons (BTN 1..6 on GPIO 41, 21, 48, 42, 15, 47)
     ESP_ERROR_CHECK(button_driver_init(on_button_event));
 
     // 5. Khởi tạo Mode Manager & Đăng ký toàn bộ 9 chế độ chuẩn hóa
@@ -736,20 +736,26 @@ void app_main(void)
                         }
                         break;
                     }
+                    case BUTTON_LED_MODE: {
+                        led_style_t new_style = led_effects_next_style();
+                        printf("\r\n>>> [BTN 4 - GPIO %d: ĐỔI HIỆU ỨNG ĐÈN LED -> %s] <<<\r\n", PIN_BTN_LED_MODE, led_effects_get_style_name(new_style));
+                        audio_play_led_mode_feedback(new_style);
+                        break;
+                    }
                     case BUTTON_MUTE_OFF: {
                         bool muted = audio_synth_toggle_mute();
                         if (muted) {
-                            printf("\r\n>>> [BTN 4 - GPIO %d: TẮT TIẾNG (MUTE / OFF)] <<<\r\n", PIN_BTN_MUTE_OFF);
+                            printf("\r\n>>> [BTN 5 - GPIO %d: TẮT TIẾNG (MUTE / OFF)] <<<\r\n", PIN_BTN_MUTE_OFF);
                             led_effects_color_burst(255, 0, 0); // Đỏ báo tắt tiếng
                         } else {
                             float vol = audio_synth_get_volume();
-                            printf("\r\n>>> [BTN 4 - GPIO %d: BẬT LẠI TIẾNG (UNMUTE: %d%%)] <<<\r\n", PIN_BTN_MUTE_OFF, (int)(vol * 100));
+                            printf("\r\n>>> [BTN 5 - GPIO %d: BẬT LẠI TIẾNG (UNMUTE: %d%%)] <<<\r\n", PIN_BTN_MUTE_OFF, (int)(vol * 100));
                             led_effects_volume(vol);
                         }
                         break;
                     }
                     case BUTTON_ACTION_SONG: {
-                        printf("\r\n>>> [BTN 5 - GPIO %d: KÍCH HOẠT ACTION / ĐỔI BÀI HÁT] <<<\r\n", PIN_BTN_ACTION_SONG);
+                        printf("\r\n>>> [BTN 6 - GPIO %d: KÍCH HOẠT ACTION / ĐỔI BÀI HÁT] <<<\r\n", PIN_BTN_ACTION_SONG);
                         mode_manager_dispatch_action();
                         break;
                     }

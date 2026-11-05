@@ -10,19 +10,21 @@ extern "C" {
 #endif
 
 // ============================================================================
-// CẤU HÌNH CHÂN GPIO CHO 5 NÚT NHẤN (ESP32-S3 N16R8) - ĐÃ BỎ NÚT LED_MODE
+// CẤU HÌNH CHÂN GPIO CHO 6 NÚT NHẤN (ESP32-S3 N16R8)
 // Đấu nối: 1 chân nút nối GPIO, 1 chân nối GND (Active-Low, bật Pull-up nội bộ)
 // ============================================================================
 #define PIN_BTN_VOL_DOWN     41  // BTN 1: Giảm âm lượng (GPIO 41)
-#define PIN_BTN_VOL_UP       42  // BTN 2: Tăng âm lượng (GPIO 42)
+#define PIN_BTN_VOL_UP       21  // BTN 2: Tăng âm lượng (GPIO 21 - Đã đảo với BTN 4)
 #define PIN_BTN_MODE         48  // BTN 3: Chuyển chế độ (GPIO 48)
-#define PIN_BTN_MUTE_OFF     15  // BTN 4: Tắt tiếng / Bật lại (GPIO 15)
-#define PIN_BTN_ACTION_SONG  47  // BTN 5: Đổi bài hát / Tác vụ đặc biệt (GPIO 47)
+#define PIN_BTN_LED_MODE     42  // BTN 4: Đổi hiệu ứng đèn LED (GPIO 42 - Đã đảo với BTN 2)
+#define PIN_BTN_MUTE_OFF     15  // BTN 5: Tắt tiếng / Bật lại (GPIO 15)
+#define PIN_BTN_ACTION_SONG  47  // BTN 6: Đổi bài hát / Tác vụ đặc biệt (GPIO 47)
 
 typedef enum {
     BUTTON_VOL_DOWN = 0,
     BUTTON_VOL_UP,
     BUTTON_MODE,
+    BUTTON_LED_MODE,
     BUTTON_MUTE_OFF,
     BUTTON_ACTION_SONG,
     BUTTON_TOTAL_COUNT
