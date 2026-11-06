@@ -102,6 +102,19 @@ static uint32_t s_idle_step = 0;
 static uint32_t s_idle_elapsed_ms = 0;
 static led_style_t s_current_style = LED_STYLE_REACTIVE;
 static uint16_t s_style_step = 0;
+static uint8_t  s_master_brightness = 255; // Quản lý độ sáng tổng thể (0..255)
+
+void led_effects_set_master_brightness(uint8_t brightness) {
+    s_master_brightness = brightness;
+}
+
+uint8_t led_effects_get_master_brightness(void) {
+    return s_master_brightness;
+}
+
+void led_effects_reset_idle(void) {
+    s_idle_elapsed_ms = 0;
+}
 
 static const char *s_style_names[LED_STYLE_TOTAL] = {
     [LED_STYLE_REACTIVE]  = "TUONG TAC KHUNG VUONG 4x8 (40 FPS)",
@@ -193,8 +206,21 @@ static void canvas_add_side(uint8_t side, uint8_t r, uint8_t g, uint8_t b) {
 
 // Đẩy dữ liệu từ Canvas ra dải LED phần cứng (Yêu cầu đã giữ s_led_mutex)
 static void flush_canvas_locked(void) {
+    if (!s_led_strip) return;
+    if (s_master_brightness == 0) {
+        led_strip_clear(s_led_strip);
+        return;
+    }
     for (int i = 0; i < LED_STRIP_COUNT; i++) {
-        led_strip_set_pixel(s_led_strip, i, s_canvas_r[i], s_canvas_g[i], s_canvas_b[i]);
+        uint8_t r = s_canvas_r[i];
+        uint8_t g = s_canvas_g[i];
+        uint8_t b = s_canvas_b[i];
+        if (s_master_brightness < 255) {
+            r = (uint8_t)(((uint16_t)r * s_master_brightness) >> 8);
+            g = (uint8_t)(((uint16_t)g * s_master_brightness) >> 8);
+            b = (uint8_t)(((uint16_t)b * s_master_brightness) >> 8);
+        }
+        led_strip_set_pixel(s_led_strip, i, r, g, b);
     }
     led_strip_refresh(s_led_strip);
 }
@@ -524,6 +550,18 @@ void led_effects_tick(uint32_t delta_ms) {
     if (!s_led_strip || !s_led_mutex) return;
     if (s_current_style == LED_STYLE_OFF) return;
 
+    // Khi đang ngủ (độ sáng = 0), xóa dải LED nếu còn dư và dừng tính toán để tiết kiệm CPU tối đa
+    if (s_master_brightness == 0) {
+        if (s_canvas_active) {
+            if (xSemaphoreTake(s_led_mutex, pdMS_TO_TICKS(2)) == pdTRUE) {
+                led_strip_clear(s_led_strip);
+                s_canvas_active = false;
+                xSemaphoreGive(s_led_mutex);
+            }
+        }
+        return;
+    }
+
     // 1. Xử lý các chế độ đèn nền chủ động (Ambient Styles từ BTN 4)
     if (s_current_style == LED_STYLE_RAINBOW) {
         if (xSemaphoreTake(s_led_mutex, pdMS_TO_TICKS(3)) == pdTRUE) {
@@ -531,6 +569,11 @@ void led_effects_tick(uint32_t delta_ms) {
             for (int i = 0; i < LED_STRIP_COUNT; i++) {
                 uint8_t r, g, b;
                 hsv_to_rgb((s_style_step + (i * 360) / LED_STRIP_COUNT) % 360, 100, 80, &r, &g, &b);
+                if (s_master_brightness < 255) {
+                    r = (uint8_t)(((uint16_t)r * s_master_brightness) >> 8);
+                    g = (uint8_t)(((uint16_t)g * s_master_brightness) >> 8);
+                    b = (uint8_t)(((uint16_t)b * s_master_brightness) >> 8);
+                }
                 led_strip_set_pixel(s_led_strip, i, r, g, b);
             }
             led_strip_refresh(s_led_strip);
@@ -1203,6 +1246,10 @@ void led_effects_rescue_success(void) {
 // Đèn thở đối xứng 4 cạnh hình vuông khi chờ (Idle Mode)
 void led_effects_idle_step(void) {
     if (!s_led_strip || !s_led_mutex) return;
+    if (s_master_brightness == 0) {
+        led_strip_clear(s_led_strip);
+        return;
+    }
     if (xSemaphoreTake(s_led_mutex, pdMS_TO_TICKS(2)) != pdTRUE) return;
 
     s_idle_step++;
@@ -1215,6 +1262,11 @@ void led_effects_idle_step(void) {
             uint8_t local_v = (uint8_t)(brightness * (8 - dist_center) / 8.0f);
             uint8_t r, g, b;
             hsv_to_rgb((s_idle_step * 2 + side * 45 + k * 8) % 360, 85, local_v, &r, &g, &b);
+            if (s_master_brightness < 255) {
+                r = (uint8_t)(((uint16_t)r * s_master_brightness) >> 8);
+                g = (uint8_t)(((uint16_t)g * s_master_brightness) >> 8);
+                b = (uint8_t)(((uint16_t)b * s_master_brightness) >> 8);
+            }
             led_strip_set_pixel(s_led_strip, side * 8 + k, r, g, b);
         }
     }

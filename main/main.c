@@ -31,6 +31,7 @@
 #include "button_driver.h"
 #include "soundbank.h"
 #include "mode_manager.h"
+#include "power_manager.h"
 
 static const char *TAG = "usb_toy";
 
@@ -167,6 +168,36 @@ static inline bool hid_keyboard_is_modifier_shift(uint8_t modifier) {
 }
 
 // -------------------------------------------------------------
+// POWER MANAGEMENT CALLBACKS (ÂM TẠM BIỆT & ĐÁNH THỨC)
+// -------------------------------------------------------------
+static void on_pm_pre_sleep(void) {
+    printf("\r\n>>> [HỆ THỐNG CHUẨN BỊ NGỦ: PHÁT ÂM THANH TẠM BIỆT] <<<\r\n");
+    audio_play_goodbye_lullaby();
+}
+
+static void on_pm_enter_sleep(void) {
+    printf("\r\n>>> [HỆ THỐNG VÀO CHẾ ĐỘ NGỦ: TẮT NGOẠI VI & ĐÈN BÀN PHÍM] <<<\r\n");
+    // 1. Tắt toàn bộ đèn LED trên bàn phím USB (NumLock, CapsLock, ScrollLock)
+    if (s_kb_handle != NULL) {
+        uint8_t led_report = 0;
+        hid_class_request_set_report(s_kb_handle, HID_REPORT_TYPE_OUTPUT, 0, &led_report, 1);
+    }
+    // 2. Tắt clock I2S MAX98357A đưa về Hardware Shutdown (< 10uA)
+    audio_synth_enter_low_power();
+}
+
+static void on_pm_wake_up(void) {
+    printf("\r\n>>> [HỆ THỐNG ĐÃ ĐƯỢC ĐÁNH THỨC: KHÔI PHỤC HOẠT ĐỘNG] <<<\r\n");
+    // 1. Mở lại clock I2S MAX98357A
+    audio_synth_exit_low_power();
+    // 2. Khôi phục đèn NumLock trên bàn phím USB
+    s_num_lock = true;
+    trigger_led_update();
+    // 3. Phát âm thanh Chime đánh thức vui tươi
+    audio_play_wake_chime();
+}
+
+// -------------------------------------------------------------
 // TOY KEY EVENT HANDLER (GLOBAL SHORTCUTS & MODE DISPATCHER)
 // -------------------------------------------------------------
 static int64_t s_last_mode_switch_us = 0;
@@ -245,6 +276,9 @@ static void key_event_callback(key_event_t *key_event)
     if (KEY_STATE_PRESSED != key_event->state) {
         return;
     }
+
+    // Đánh thức và nuôi bộ đếm rảnh khi có bất kỳ phím nào được nhấn
+    power_manager_feed_activity();
 
     uint8_t kc = key_event->key_code;
     uint8_t mod = key_event->modifier;
@@ -423,6 +457,7 @@ static void hid_host_keyboard_report_callback(const uint8_t *const data, const i
 
     // 1. Phát hiện bé đập cả bàn tay lên bàn phím (6-Key Rollover / Phantom State = 0x01)
     if (kb_report->key[0] == HID_KEY_ROLLOVER) {
+        power_manager_feed_activity();
         int64_t now_us = esp_timer_get_time();
         if ((now_us - s_last_slap_us) > 350000LL) {
             s_last_slap_us = now_us;
@@ -437,6 +472,10 @@ static void hid_host_keyboard_report_callback(const uint8_t *const data, const i
     uint8_t pressed_mods = curr_modifier & (~prev_modifier);
     uint8_t released_mods = prev_modifier & (~curr_modifier);
     bool any_key_pressed = false;
+
+    if (pressed_mods != 0) {
+        power_manager_feed_activity();
+    }
 
     for (int i = 0; i < HID_KEYBOARD_KEY_MAX; i++) {
         if (kb_report->key[i] > HID_KEY_ERROR_UNDEFINED) {
@@ -610,9 +649,10 @@ static void toy_background_task(void *pvParameters) {
     uint8_t divider = 0;
     while (1) {
         vTaskDelay(pdMS_TO_TICKS(25));
+        power_manager_tick(25);
         led_effects_tick(25);
         divider ^= 1;
-        if (divider == 0) {
+        if (divider == 0 && !power_manager_is_sleeping()) {
             mode_manager_tick(50);
         }
     }
@@ -659,6 +699,14 @@ void app_main(void)
 
     // 3. Initialize WS2812B RGB LED Strip (GPIO 4 via RMT)
     ESP_ERROR_CHECK(led_effects_init());
+
+    // 3.1 Initialize Smart Power Manager (Auto-dim, Sleep & Goodbye sound)
+    const power_manager_cbs_t pm_callbacks = {
+        .on_pre_sleep   = on_pm_pre_sleep,
+        .on_enter_sleep = on_pm_enter_sleep,
+        .on_wake_up     = on_pm_wake_up
+    };
+    ESP_ERROR_CHECK(power_manager_init(&pm_callbacks));
 
     // 4. Initialize 6 Push Buttons (BTN 1..6 on GPIO 41, 21, 48, 42, 45, 47)
     ESP_ERROR_CHECK(button_driver_init(on_button_event));
@@ -709,6 +757,9 @@ void app_main(void)
                 button_id_t btn = evt_queue.button.id;
                 button_press_type_t ptype = evt_queue.button.type;
 
+                // Bất kỳ nút nào được bấm cũng nuôi bộ đếm rảnh và đánh thức hệ thống nếu đang ngủ
+                power_manager_feed_activity();
+
                 switch (btn) {
                     case BUTTON_VOL_DOWN: {
                         audio_synth_volume_down();
@@ -743,6 +794,11 @@ void app_main(void)
                         break;
                     }
                     case BUTTON_MUTE_OFF: {
+                        if (ptype == BUTTON_LONG_PRESS) {
+                            printf("\r\n>>> [BTN 5 - GPIO %d NHẤN GIỮ: CHỦ ĐỘNG VÀO CHẾ ĐỘ NGỦ (SLEEP)] <<<\r\n", PIN_BTN_MUTE_OFF);
+                            power_manager_force_sleep();
+                            break;
+                        }
                         bool muted = audio_synth_toggle_mute();
                         if (muted) {
                             printf("\r\n>>> [BTN 5 - GPIO %d: TẮT TIẾNG (MUTE / OFF)] <<<\r\n", PIN_BTN_MUTE_OFF);

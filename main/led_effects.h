@@ -41,6 +41,11 @@ esp_err_t led_effects_init(void);
 void led_effects_clear(void);
 void led_effects_tick(uint32_t delta_ms);
 
+// Điều chỉnh độ sáng tổng và quản lý năng lượng LED
+void led_effects_set_master_brightness(uint8_t brightness);
+uint8_t led_effects_get_master_brightness(void);
+void led_effects_reset_idle(void);
+
 // Chuyển đổi hiệu ứng đèn LED cho BTN 4
 led_style_t led_effects_next_style(void);
 const char *led_effects_get_style_name(led_style_t style);

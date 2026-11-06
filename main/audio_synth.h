@@ -210,4 +210,11 @@ void audio_play_counting_number(uint8_t num);
 void audio_play_special_key(uint8_t kc);
 void audio_play_symbol(char c);
 
+// Power Management: Âm thanh tạm biệt, đánh thức & chế độ tiết kiệm điện I2S
+void audio_play_goodbye_lullaby(void);
+void audio_play_wake_chime(void);
+void audio_synth_enter_low_power(void);
+void audio_synth_exit_low_power(void);
+bool audio_synth_is_low_power(void);
+
 #endif // AUDIO_SYNTH_H

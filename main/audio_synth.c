@@ -93,6 +93,7 @@ typedef struct {
 
 static i2s_chan_handle_t s_tx_handle = NULL;
 static bool s_audio_ready = false;
+static volatile bool s_low_power_mode = false;
 static float s_master_volume = AUDIO_DEFAULT_VOLUME;
 static bool s_is_muted = false;
 static float s_pre_mute_volume = AUDIO_DEFAULT_VOLUME;
@@ -582,6 +583,11 @@ static void audio_synth_task(void *pvParameters) {
     float float_mix[CHUNK_SAMPLES];
 
     while (1) {
+        if (s_low_power_mode) {
+            vTaskDelay(pdMS_TO_TICKS(50));
+            continue;
+        }
+
         memset(float_mix, 0, sizeof(float_mix));
 
         xSemaphoreTake(s_voice_mutex, portMAX_DELAY);
@@ -1802,4 +1808,54 @@ void audio_play_special_key(uint8_t kc) {
 void audio_play_symbol(char c) {
     if (sb_play_symbol(c)) return;
     trigger_voice_internal(VOICE_TONE_ADSR, 659.25f, 0, 0, 0.70f, 180, TIMBRE_MUSIC_BOX);
+}
+
+// ============================================================================
+// POWER MANAGEMENT: ÂM THANH TẠM BIỆT, ĐÁNH THỨC & TIẾT KIỆM NĂNG LƯỢNG I2S
+// ============================================================================
+
+void audio_play_goodbye_lullaby(void) {
+    if (s_is_muted) return;
+    // Giai điệu tạm biệt êm dịu Hộp Nhạc (Music Box 4 nốt ru ngủ du dương: E5 -> D5 -> C5 -> G4)
+    trigger_voice_internal(VOICE_TONE_ADSR, 659.25f, 0, 0, 0.85f, 260, TIMBRE_MUSIC_BOX);
+    vTaskDelay(pdMS_TO_TICKS(220));
+    trigger_voice_internal(VOICE_TONE_ADSR, 587.33f, 0, 0, 0.80f, 260, TIMBRE_MUSIC_BOX);
+    vTaskDelay(pdMS_TO_TICKS(220));
+    trigger_voice_internal(VOICE_TONE_ADSR, 523.25f, 0, 0, 0.85f, 300, TIMBRE_MUSIC_BOX);
+    vTaskDelay(pdMS_TO_TICKS(260));
+    trigger_voice_internal(VOICE_TONE_ADSR, 392.00f, 0, 0, 0.90f, 550, TIMBRE_MUSIC_BOX);
+    vTaskDelay(pdMS_TO_TICKS(580)); // Đợi nốt ngân kết thúc mượt mà trước khi ngắt clock
+}
+
+void audio_play_wake_chime(void) {
+    if (s_is_muted) return;
+    // Chime đánh thức vui tươi: C5 (523Hz) -> G5 (784Hz) -> C6 (1046Hz)
+    trigger_voice_internal(VOICE_TONE_ADSR, 523.25f, 0, 0, 0.70f, 80, TIMBRE_MUSIC_BOX);
+    vTaskDelay(pdMS_TO_TICKS(60));
+    trigger_voice_internal(VOICE_TONE_ADSR, 783.99f, 0, 0, 0.80f, 90, TIMBRE_MUSIC_BOX);
+    vTaskDelay(pdMS_TO_TICKS(65));
+    trigger_voice_internal(VOICE_TONE_ADSR, 1046.50f, 0, 0, 0.90f, 200, TIMBRE_MUSIC_BOX);
+}
+
+void audio_synth_enter_low_power(void) {
+    if (!s_audio_ready || s_low_power_mode) return;
+    s_low_power_mode = true;
+    vTaskDelay(pdMS_TO_TICKS(60)); // Chờ buffer đang phát dở hoàn thành
+    if (s_tx_handle) {
+        i2s_channel_disable(s_tx_handle);
+    }
+    ESP_LOGI(TAG, "I2S MAX98357A clock disabled -> IC enters shutdown (<10uA)");
+}
+
+void audio_synth_exit_low_power(void) {
+    if (!s_audio_ready || !s_low_power_mode) return;
+    if (s_tx_handle) {
+        i2s_channel_enable(s_tx_handle);
+    }
+    s_low_power_mode = false;
+    ESP_LOGI(TAG, "I2S MAX98357A clock restored -> Ready to play");
+}
+
+bool audio_synth_is_low_power(void) {
+    return s_low_power_mode;
 }
