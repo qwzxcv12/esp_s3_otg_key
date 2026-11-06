@@ -192,20 +192,44 @@ const char *mp3_player_get_repeat_mode_name(void) {
 }
 
 static bool play_wav_file(FILE *f, player_cmd_t *cmd_out) {
-    uint8_t header[44];
-    if (fread(header, 1, 44, f) != 44) return false;
+    uint8_t header[12];
+    if (fread(header, 1, 12, f) != 12) return false;
 
-    // Basic WAV validation
     if (memcmp(header, "RIFF", 4) != 0 || memcmp(header + 8, "WAVE", 4) != 0) {
         return false;
     }
 
-    uint16_t channels = header[22] | (header[23] << 8);
-    uint32_t sample_rate = header[24] | (header[25] << 8) | (header[26] << 16) | (header[27] << 24);
-    uint16_t bits = header[34] | (header[35] << 8);
+    uint16_t channels = 2;
+    uint32_t sample_rate = 44100;
+    uint16_t bits = 16;
+    bool found_fmt = false;
+    bool found_data = false;
 
-    if (bits != 16) {
-        ESP_LOGW(TAG, "Unsupported WAV bit depth: %d (only 16-bit supported)", bits);
+    // Scan chunks để tìm đúng chunk "fmt " và "data", bỏ qua LIST/JUNK/metadata
+    char chunk_id[4];
+    uint32_t chunk_size = 0;
+    while (fread(chunk_id, 1, 4, f) == 4 && fread(&chunk_size, 4, 1, f) == 1) {
+        if (memcmp(chunk_id, "fmt ", 4) == 0) {
+            uint8_t fmt_data[16];
+            size_t to_read = (chunk_size < 16) ? chunk_size : 16;
+            if (fread(fmt_data, 1, to_read, f) != to_read) return false;
+            channels = fmt_data[2] | (fmt_data[3] << 8);
+            sample_rate = fmt_data[4] | (fmt_data[5] << 8) | (fmt_data[6] << 16) | (fmt_data[7] << 24);
+            bits = fmt_data[14] | (fmt_data[15] << 8);
+            if (chunk_size > to_read) fseek(f, (long)(chunk_size - to_read), SEEK_CUR);
+            if (chunk_size & 1) fseek(f, 1, SEEK_CUR);
+            found_fmt = true;
+        } else if (memcmp(chunk_id, "data", 4) == 0) {
+            found_data = true;
+            break; // Tìm thấy vị trí âm thanh thực sự!
+        } else {
+            fseek(f, (long)chunk_size, SEEK_CUR);
+            if (chunk_size & 1) fseek(f, 1, SEEK_CUR);
+        }
+    }
+
+    if (!found_fmt || !found_data || bits != 16) {
+        ESP_LOGW(TAG, "Unsupported WAV format: only 16-bit PCM supported");
         return false;
     }
 
@@ -248,6 +272,26 @@ static bool play_wav_file(FILE *f, player_cmd_t *cmd_out) {
 static bool play_mp3_file(FILE *f, player_cmd_t *cmd_out) {
     if (!s_mp3_read_buf || !s_mp3_pcm_buf) return false;
 
+    // 1. Tự động kiểm tra và bỏ qua ID3v2 header (chứa metadata, ảnh bìa album JPEG)
+    // Tránh việc bộ giải mã đọc nhầm byte ảnh JPEG gây ra tiếng nổ/rè ở đầu bài
+    uint8_t id3_hdr[10];
+    if (fread(id3_hdr, 1, 10, f) == 10) {
+        if (id3_hdr[0] == 'I' && id3_hdr[1] == 'D' && id3_hdr[2] == '3') {
+            uint32_t tag_size = ((uint32_t)(id3_hdr[6] & 0x7F) << 21) |
+                                ((uint32_t)(id3_hdr[7] & 0x7F) << 14) |
+                                ((uint32_t)(id3_hdr[8] & 0x7F) << 7)  |
+                                ((uint32_t)(id3_hdr[9] & 0x7F));
+            uint32_t skip_bytes = tag_size;
+            if (id3_hdr[5] & 0x10) skip_bytes += 10; // Có ID3v2 footer
+            ESP_LOGI(TAG, "Bo qua ID3v2 tag (%u bytes metadata/album art)", (unsigned int)skip_bytes);
+            fseek(f, (long)(10 + skip_bytes), SEEK_SET);
+        } else {
+            fseek(f, 0, SEEK_SET);
+        }
+    } else {
+        fseek(f, 0, SEEK_SET);
+    }
+
     mp3dec_init(&s_mp3d);
     mp3dec_frame_info_t info;
 
@@ -271,14 +315,14 @@ static bool play_mp3_file(FILE *f, player_cmd_t *cmd_out) {
             continue;
         }
 
-        // Refill buffer if low on data
-        if (bytes_in_buf < 4096 && !feof(f)) {
+        // Nạp thêm dữ liệu từ USB nếu bộ đệm đọc còn chỗ trống
+        if (bytes_in_buf < (FILE_READ_BUF_SIZE / 2) && !feof(f)) {
             size_t bytes_to_read = FILE_READ_BUF_SIZE - bytes_in_buf;
             size_t read_bytes = fread(s_mp3_read_buf + bytes_in_buf, 1, bytes_to_read, f);
             bytes_in_buf += read_bytes;
         }
 
-        if (bytes_in_buf <= 0) break; // Finished file
+        if (bytes_in_buf <= 0) break; // Hết file
 
         int samples = mp3dec_decode_frame(&s_mp3d, s_mp3_read_buf, bytes_in_buf, s_mp3_pcm_buf, &info);
 
@@ -288,13 +332,12 @@ static bool play_mp3_file(FILE *f, player_cmd_t *cmd_out) {
                 memmove(s_mp3_read_buf, s_mp3_read_buf + info.frame_bytes, bytes_in_buf);
             }
         } else {
-            // No valid sync found in current chunk (e.g. ID3 header) -> shift
+            // Chưa tìm thấy frame hoàn chỉnh hoặc gặp rác giữa luồng
             if (feof(f)) break;
-            if (bytes_in_buf > 2048) {
-                bytes_in_buf -= 2048;
-                memmove(s_mp3_read_buf, s_mp3_read_buf + 2048, bytes_in_buf);
-            } else {
-                bytes_in_buf = 0;
+            // Dịch 1 byte để tìm đồng bộ frame tiếp theo, TUYỆT ĐỐI không vứt bỏ cả chunk 2KB
+            if (bytes_in_buf > 0) {
+                bytes_in_buf--;
+                memmove(s_mp3_read_buf, s_mp3_read_buf + 1, bytes_in_buf);
             }
             continue;
         }

@@ -821,25 +821,61 @@ static void audio_synth_task(void *pvParameters) {
             if (avail > 0) {
                 has_stream = true;
                 float local_energy = 0.0f;
+                static float s_resample_l = 0.0f;
+                static float s_resample_r = 0.0f;
+                static float s_next_l = 0.0f;
+                static float s_next_r = 0.0f;
+
                 for (int i = 0; i < CHUNK_SAMPLES; i++) {
-                    if (avail == 0) break;
-                    int16_t s_l = 0, s_r = 0;
-                    if (s_stream_channels == 2) {
-                        if (avail >= 2) {
-                            s_l = s_stream_ringbuf[s_stream_rd_idx++];
-                            if (s_stream_rd_idx >= STREAM_RINGBUF_SAMPLES) s_stream_rd_idx = 0;
-                            s_r = s_stream_ringbuf[s_stream_rd_idx++];
-                            if (s_stream_rd_idx >= STREAM_RINGBUF_SAMPLES) s_stream_rd_idx = 0;
-                            avail -= 2;
+                    while (s_stream_resample_frac >= 1.0f) {
+                        if (s_stream_channels == 2) {
+                            if (avail >= 2) {
+                                s_resample_l = s_next_l;
+                                s_resample_r = s_next_r;
+                                int16_t raw_l = s_stream_ringbuf[s_stream_rd_idx++];
+                                if (s_stream_rd_idx >= STREAM_RINGBUF_SAMPLES) s_stream_rd_idx = 0;
+                                int16_t raw_r = s_stream_ringbuf[s_stream_rd_idx++];
+                                if (s_stream_rd_idx >= STREAM_RINGBUF_SAMPLES) s_stream_rd_idx = 0;
+                                s_next_l = (float)raw_l * (1.0f / 32768.0f);
+                                s_next_r = (float)raw_r * (1.0f / 32768.0f);
+                                avail -= 2;
+                                s_stream_resample_frac -= 1.0f;
+                            } else {
+                                break;
+                            }
+                        } else {
+                            if (avail >= 1) {
+                                s_resample_l = s_next_l;
+                                s_resample_r = s_next_r;
+                                int16_t raw = s_stream_ringbuf[s_stream_rd_idx++];
+                                if (s_stream_rd_idx >= STREAM_RINGBUF_SAMPLES) s_stream_rd_idx = 0;
+                                float mono = (float)raw * (1.0f / 32768.0f);
+                                s_next_l = mono;
+                                s_next_r = mono;
+                                avail--;
+                                s_stream_resample_frac -= 1.0f;
+                            } else {
+                                break;
+                            }
                         }
-                    } else {
-                        s_l = s_stream_ringbuf[s_stream_rd_idx++];
-                        if (s_stream_rd_idx >= STREAM_RINGBUF_SAMPLES) s_stream_rd_idx = 0;
-                        s_r = s_l;
-                        avail--;
                     }
-                    stream_l[i] = (float)s_l * (1.0f / 32768.0f);
-                    stream_r[i] = (float)s_r * (1.0f / 32768.0f);
+
+                    if (avail == 0 && s_stream_resample_frac >= 1.0f) {
+                        // Tránh nổ pop/rè khi hết dữ liệu đệm: suy hao dần về 0
+                        s_resample_l *= 0.9f;
+                        s_resample_r *= 0.9f;
+                        s_next_l *= 0.9f;
+                        s_next_r *= 0.9f;
+                    }
+
+                    float frac = s_stream_resample_frac;
+                    if (frac < 0.0f) frac = 0.0f;
+                    if (frac > 1.0f) frac = 1.0f;
+                    stream_l[i] = s_resample_l + (s_next_l - s_resample_l) * frac;
+                    stream_r[i] = s_resample_r + (s_next_r - s_resample_r) * frac;
+
+                    s_stream_resample_frac += s_stream_resample_ratio;
+
                     float e = fabsf(stream_l[i]) + fabsf(stream_r[i]);
                     if (e > local_energy) local_energy = e;
                 }
@@ -858,11 +894,12 @@ static void audio_synth_task(void *pvParameters) {
             float val_l = float_mix[i];
             float val_r = float_mix[i];
             if (has_stream) {
-                val_l += stream_l[i] * 0.85f;
-                val_r += stream_r[i] * 0.85f;
+                // Headroom 3.5dB (-3.7dBFS) để âm thanh tròn trịa, không bị rè màng loa MAX98357A khi gặp nốt bass mạnh
+                val_l += stream_l[i] * 0.65f;
+                val_r += stream_r[i] * 0.65f;
             }
-            float lim_l = soft_limit(val_l * MIX_PRE_GAIN * 1.6f);
-            float lim_r = soft_limit(val_r * MIX_PRE_GAIN * 1.6f);
+            float lim_l = soft_limit(has_stream ? val_l : (val_l * MIX_PRE_GAIN * 1.6f));
+            float lim_r = soft_limit(has_stream ? val_r : (val_r * MIX_PRE_GAIN * 1.6f));
             mix_buffer[i * 2]     = (int32_t)(lim_l * max_int32);
             mix_buffer[i * 2 + 1] = (int32_t)(lim_r * max_int32);
         }
