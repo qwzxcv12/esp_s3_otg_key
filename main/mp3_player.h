@@ -90,6 +90,11 @@ esp_err_t mp3_player_prev(void);
 esp_err_t mp3_player_stop(void);
 
 /**
+ * @brief Dừng phát nhạc đồng bộ (chờ đóng file an toàn trước khi unmount USB)
+ */
+void mp3_player_stop_sync(void);
+
+/**
  * @brief Đổi chế độ lặp bài (All, One, Shuffle)
  */
 void mp3_player_set_repeat_mode(repeat_mode_t mode);

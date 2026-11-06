@@ -27,7 +27,7 @@ static const char *TAG = "MP3_PLAYER";
 
 typedef struct {
     char path[256];
-    char filename[96];
+    char filename[128];
 } track_item_t;
 
 typedef enum {
@@ -59,6 +59,7 @@ static mp3dec_t s_mp3d;
 static uint8_t *s_mp3_read_buf = NULL;
 static short *s_mp3_pcm_buf = NULL;
 static int16_t *s_wav_buf = NULL;
+static volatile bool s_file_is_open = false;
 
 void mp3_player_set_usb_mounted(bool mounted) {
     s_usb_mounted = mounted;
@@ -80,8 +81,8 @@ static bool is_audio_file(const char *name) {
     return (strcasecmp(ext, ".mp3") == 0 || strcasecmp(ext, ".wav") == 0);
 }
 
-static void scan_directory_recursive(const char *dir_path) {
-    if (s_total_tracks >= MAX_TRACKS) return;
+static void scan_directory_recursive(const char *dir_path, int depth) {
+    if (s_total_tracks >= MAX_TRACKS || depth > 3 || !s_usb_mounted) return;
 
     DIR *d = opendir(dir_path);
     if (!d) {
@@ -90,21 +91,34 @@ static void scan_directory_recursive(const char *dir_path) {
     }
 
     struct dirent *entry;
-    while ((entry = readdir(d)) != NULL && s_total_tracks < MAX_TRACKS) {
+    while ((entry = readdir(d)) != NULL && s_total_tracks < MAX_TRACKS && s_usb_mounted) {
         if (entry->d_name[0] == '.') continue; // Skip hidden / . and ..
+        if (strcasecmp(entry->d_name, "System Volume Information") == 0) continue;
+        if (strcasecmp(entry->d_name, "$RECYCLE.BIN") == 0) continue;
+        if (strcasecmp(entry->d_name, "FOUND.000") == 0) continue;
 
         char full_path[256];
         snprintf(full_path, sizeof(full_path), "%s/%s", dir_path, entry->d_name);
 
-        struct stat st;
-        if (stat(full_path, &st) == 0) {
-            if (S_ISDIR(st.st_mode)) {
-                scan_directory_recursive(full_path);
-            } else if (S_ISREG(st.st_mode) && is_audio_file(entry->d_name)) {
-                strncpy(s_playlist[s_total_tracks].path, full_path, sizeof(s_playlist[s_total_tracks].path) - 1);
-                strncpy(s_playlist[s_total_tracks].filename, entry->d_name, sizeof(s_playlist[s_total_tracks].filename) - 1);
-                s_total_tracks++;
+        bool is_dir = (entry->d_type == DT_DIR);
+        bool is_file = (entry->d_type == DT_REG);
+
+        if (entry->d_type == DT_UNKNOWN) {
+            struct stat st;
+            if (stat(full_path, &st) == 0) {
+                is_dir = S_ISDIR(st.st_mode);
+                is_file = S_ISREG(st.st_mode);
             }
+        }
+
+        if (is_dir) {
+            scan_directory_recursive(full_path, depth + 1);
+        } else if (is_file && is_audio_file(entry->d_name)) {
+            strncpy(s_playlist[s_total_tracks].path, full_path, sizeof(s_playlist[s_total_tracks].path) - 1);
+            s_playlist[s_total_tracks].path[sizeof(s_playlist[s_total_tracks].path) - 1] = '\0';
+            strncpy(s_playlist[s_total_tracks].filename, entry->d_name, sizeof(s_playlist[s_total_tracks].filename) - 1);
+            s_playlist[s_total_tracks].filename[sizeof(s_playlist[s_total_tracks].filename) - 1] = '\0';
+            s_total_tracks++;
         }
     }
     closedir(d);
@@ -125,7 +139,7 @@ int mp3_player_scan_usb(const char *mount_path) {
     if (xSemaphoreTake(s_player_mutex, pdMS_TO_TICKS(100)) == pdTRUE) {
         s_total_tracks = 0;
         s_current_index = 0;
-        scan_directory_recursive(mount_path);
+        scan_directory_recursive(mount_path, 0);
         ESP_LOGI(TAG, "Scanned %s -> Found %d audio tracks", mount_path, s_total_tracks);
         xSemaphoreGive(s_player_mutex);
     }
@@ -201,6 +215,11 @@ static bool play_wav_file(FILE *f, player_cmd_t *cmd_out) {
 
     bool finished = true;
     while (!feof(f)) {
+        if (!s_usb_mounted) {
+            finished = false;
+            break;
+        }
+
         if (xQueueReceive(s_cmd_queue, cmd_out, 0) == pdTRUE) {
             finished = false;
             break;
@@ -237,6 +256,11 @@ static bool play_mp3_file(FILE *f, player_cmd_t *cmd_out) {
     bool finished = true;
 
     while (1) {
+        if (!s_usb_mounted) {
+            finished = false;
+            break;
+        }
+
         if (xQueueReceive(s_cmd_queue, cmd_out, 0) == pdTRUE) {
             finished = false;
             break;
@@ -304,12 +328,20 @@ static void mp3_player_task(void *arg) {
                     s_state = MP3_STATE_PLAYING;
                 } else if (cmd.type == CMD_TOGGLE_PAUSE) {
                     s_state = (s_state == MP3_STATE_PAUSED) ? MP3_STATE_PLAYING : MP3_STATE_PAUSED;
+                } else if (cmd.type == CMD_NEXT) {
+                    if (s_total_tracks > 0) s_current_index = (s_current_index + 1) % s_total_tracks;
+                    s_state = MP3_STATE_PLAYING;
+                } else if (cmd.type == CMD_PREV) {
+                    if (s_total_tracks > 0) s_current_index = (s_current_index + s_total_tracks - 1) % s_total_tracks;
+                    s_state = MP3_STATE_PLAYING;
+                } else if (cmd.type == CMD_STOP) {
+                    s_state = MP3_STATE_STOPPED;
                 }
             }
             continue;
         }
 
-        if (s_total_tracks == 0) {
+        if (s_total_tracks == 0 || !s_usb_mounted) {
             s_state = MP3_STATE_STOPPED;
             vTaskDelay(pdMS_TO_TICKS(100));
             continue;
@@ -327,6 +359,8 @@ static void mp3_player_task(void *arg) {
             continue;
         }
 
+        s_file_is_open = true;
+
         bool is_wav = (strcasecmp(file_path + strlen(file_path) - 4, ".wav") == 0);
         player_cmd_t next_cmd;
         memset(&next_cmd, 0, sizeof(next_cmd));
@@ -339,6 +373,7 @@ static void mp3_player_task(void *arg) {
         }
 
         fclose(f);
+        s_file_is_open = false;
         audio_stream_stop();
 
         if (natural_finish) {
@@ -446,4 +481,12 @@ esp_err_t mp3_player_stop(void) {
     xQueueSend(s_cmd_queue, &cmd, 0);
     audio_stream_stop();
     return ESP_OK;
+}
+
+void mp3_player_stop_sync(void) {
+    mp3_player_stop();
+    int timeout = 60; // Chờ tối đa 600ms để mp3_task nhận CMD_STOP và gọi fclose(f)
+    while (s_file_is_open && timeout-- > 0) {
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
 }

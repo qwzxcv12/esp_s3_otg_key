@@ -873,7 +873,7 @@ void app_main(void)
                 if (err == ESP_OK) {
                     const esp_vfs_fat_mount_config_t mount_config = {
                         .format_if_mount_failed = false,
-                        .max_files = 4,
+                        .max_files = 8,
                         .allocation_unit_size = 16 * 1024
                     };
                     err = msc_host_vfs_register(s_msc_device_handle, "/usb", &mount_config, &s_msc_vfs_handle);
@@ -882,9 +882,13 @@ void app_main(void)
                         mp3_player_set_usb_mounted(true);
                         int count = mp3_player_scan_usb("/usb");
                         printf("\r\n>>> [USB ĐÃ CẮM: TÌM THẤY %d BÀI HÁT TẠI /usb] <<<\r\n", count);
-                        audio_play_action_feedback();
-                        s_prev_mode_before_usb = mode_manager_get_current_index();
-                        mode_manager_switch_to(9); // Chuyển sang Mode 10 (Chỉ mục 9)
+                        if (mp3_player_is_usb_mounted() && s_msc_device_handle != NULL) {
+                            audio_play_action_feedback();
+                            s_prev_mode_before_usb = mode_manager_get_current_index();
+                            mode_manager_switch_to(9); // Chuyển sang Mode 10 (Chỉ mục 9)
+                        } else {
+                            ESP_LOGW(TAG, "USB disconnected during scan, skipping mode switch");
+                        }
                     } else {
                         ESP_LOGE(TAG, "Failed to mount /usb: %s", esp_err_to_name(err));
                         msc_host_uninstall_device(s_msc_device_handle);
@@ -895,6 +899,7 @@ void app_main(void)
                 }
             } else if (APP_EVENT_MSC_DISCONNECTED == evt_queue.event_group) {
                 printf("\r\n>>> [USB FLASH DRIVE ĐÃ RÚT RA] <<<\r\n");
+                mp3_player_stop_sync();
                 mp3_player_set_usb_mounted(false);
                 mp3_player_clear_playlist();
                 if (s_msc_vfs_handle) {
