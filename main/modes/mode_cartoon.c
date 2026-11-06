@@ -16,7 +16,6 @@ static void mode_cartoon_on_enter(void) {
     printf("\r\n>>> [VŨ TRỤ GAME & PHIM HOẠT HÌNH TRÊN KHUNG HÌNH VUÔNG 32 LED] <<<\r\n");
     printf(">>> [1..0/Numpad = Mario & Arcade | QWERTY = Action Hero | ASDFGH = Tom & Jerry | ZXCVBNM = Phép Thuật] <<<\r\n");
     printf(">>> [Phím Space = Mèo Tom & Chuột Jerry Rượt Đuổi Quanh Hình Vuông | Mũi Tên = Bắn Sóng 4 Cạnh] <<<\r\n\r\n");
-    led_effects_cartoon_fx(CARTOON_ANIM_MAGIC_WAND, 200, 80, 255);
 }
 
 static void check_and_schedule_combo_reward(void) {

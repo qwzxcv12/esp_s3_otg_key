@@ -18,7 +18,6 @@ static const char *s_morse_digits[10] = {
 static void mode_agent_on_enter(void) {
     printf("\r\n>>> [ĐIỆP VIÊN NHÍ & ROBOT R2-D2 TRÊN KHUNG HÌNH VUÔNG 32 LED] <<<\r\n");
     printf(">>> [Chữ A-Z & Số 0-9: Truyền Quang Học Mã Morse Quanh 4 Cạnh | Space: Radar Xoay 360° | Phím khác: Bảng Mạch R2-D2] <<<\r\n\r\n");
-    led_effects_radar_sweep();
 }
 
 static bool mode_agent_handle_key(uint8_t kc, uint8_t mod, char c) {

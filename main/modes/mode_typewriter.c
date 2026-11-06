@@ -13,7 +13,7 @@ static void mode_typewriter_on_enter(void) {
     s_carriage_col = 0;
     printf("\r\n>>> [MÁY GÕ CHỮ CỔ ĐIỂN TRÊN KHUNG TRANG GIẤY VUÔNG 4x8 (32 LED)] <<<\r\n");
     printf(">>> [Mỗi cạnh 8 LED là 1 dòng chữ (4 dòng x 8 chữ = 32 cột) | Cột 26 reo chuông báo hết lề | Cột 32 hoặc Enter trượt trục giấy về đầu!] <<<\r\n\r\n");
-    led_effects_typewriter_key(s_carriage_col, TYPEWRITER_MAX_COL, false);
+    // Không gọi hiệu ứng LED ở đây để không đè mất hoạt cảnh đổi chế độ (mode_switch chạy trước on_enter)
 }
 
 static bool mode_typewriter_handle_key(uint8_t kc, uint8_t mod, char c) {

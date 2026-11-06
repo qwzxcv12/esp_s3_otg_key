@@ -272,7 +272,8 @@ led_style_t led_effects_next_style(void) {
     } else if (s_current_style == LED_STYLE_STARRY) {
         led_effects_spark();
     } else {
-        led_effects_mode_switch(0);
+        // Quay lại style mặc định: xoay 1 vòng báo hiệu (không reset trạng thái của chế độ đang chạy)
+        led_effects_square_spin(true, 255, 255, 255);
     }
     return s_current_style;
 }
@@ -539,11 +540,11 @@ void led_effects_tick(uint32_t delta_ms) {
         led_effects_idle_step();
         return;
     } else if (s_current_style == LED_STYLE_STARRY) {
+        // Không return: để engine bên dưới tiếp tục render sóng lan & mờ dần của các tia sao
         s_style_step++;
-        if (s_style_step % 2 == 0) {
+        if (s_style_step % 4 == 0) {
             led_effects_spark();
         }
-        return;
     }
 
     // 2. Xử lý đếm số đồng bộ theo thời gian thực (Mode 9 Counting)
@@ -776,14 +777,12 @@ void led_effects_tick(uint32_t delta_ms) {
             } else if (anim == LED_ANIM_TURN_SIGNAL) {
                 // Xi-nhan chạy đuổi tuần tự kiểu Audi trên Cạnh Trái (Side 3) hoặc Cạnh Phải (Side 1)
                 if (step < 16) {
+                    // Cạnh Trái = LED 24..31 (Side 3), Cạnh Phải = LED 8..15 (Side 1)
                     bool is_left = (s_anim_sub != 0);
+                    int base = is_left ? 24 : 8;
                     int prog = (step % 8) + 1;
                     for (int k = 0; k < prog; k++) {
-                        int led_idx = is_left ? WRAP32(23 - k) : WRAP32(8 + k);
-                        canvas_set_pixel(led_idx, 255, 130, 0);
-                        // Ôm thêm góc trên & góc dưới cho đúng chất đèn xi-nhan khung xe
-                        int corner_idx = is_left ? WRAP32(24 + k) : WRAP32(7 - k);
-                        canvas_set_pixel(corner_idx, 255, 110, 0);
+                        canvas_set_pixel(base + k, 255, 130, 0);
                     }
                     s_anim_step = step + 1;
                 } else {
@@ -1126,7 +1125,7 @@ void led_effects_police(bool toggle) {
     touch_led_activity(false);
     if (xSemaphoreTake(s_led_mutex, pdMS_TO_TICKS(2)) != pdTRUE) return;
 
-    s_decay_rate = 220;
+    s_decay_rate = 248; // Giữ sáng đều giữa 2 lần đảo màu, không bị mờ nhấp nhả
     canvas_clear_mem();
     if (toggle) {
         canvas_add_side(0, 255, 0, 0);   // Cạnh Trên: Đỏ

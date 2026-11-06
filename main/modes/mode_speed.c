@@ -25,8 +25,6 @@ static void mode_speed_on_enter(void) {
     printf(" -> Phím Mũi Tên: Đổi bài | Phím TAB/F10: Đổi nhạc cụ (%s)\r\n",
            audio_speed_get_timbre_name());
     printf("================================================================================\r\n\r\n");
-
-    led_effects_square_spin(true, 0, 180, 255);
 }
 
 static void mode_speed_on_exit(void) {

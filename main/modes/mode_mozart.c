@@ -27,7 +27,7 @@ static bool mode_mozart_handle_key(uint8_t kc, uint8_t mod, char c) {
                ap ? "BẬT" : "TẮT");
         mozart_play_info_t info;
         audio_mozart_get_info(&info);
-        led_effects_mozart_progress(info.freq, 30.0f, info.timbre, info.note_idx, info.total_notes, ap);
+        led_effects_mozart_progress(info.freq, 0.0f, info.timbre, info.note_idx, info.total_notes, ap);
         return true;
     }
 
