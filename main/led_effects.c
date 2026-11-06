@@ -207,8 +207,13 @@ static void canvas_add_side(uint8_t side, uint8_t r, uint8_t g, uint8_t b) {
 // Đẩy dữ liệu từ Canvas ra dải LED phần cứng (Yêu cầu đã giữ s_led_mutex)
 static void flush_canvas_locked(void) {
     if (!s_led_strip) return;
-    if (s_master_brightness == 0) {
+    // Chốt chặn 1: Khi tắt đèn hoặc độ sáng = 0 -> Xóa dải LED và dừng xuất
+    if (s_master_brightness == 0 || s_current_style == LED_STYLE_OFF) {
         led_strip_clear(s_led_strip);
+        return;
+    }
+    // Chốt chặn 2: Đang ở chế độ Cầu vồng hoặc Đèn ngủ thở -> Không cho phím bấm đè lên gây giật chớp
+    if (s_current_style == LED_STYLE_RAINBOW || s_current_style == LED_STYLE_BREATHING) {
         return;
     }
     for (int i = 0; i < LED_STRIP_COUNT; i++) {
@@ -227,6 +232,10 @@ static void flush_canvas_locked(void) {
 
 // Khởi tạo 1 sóng lan tỏa (Ripple) trên khung vuông 32 LED
 static void spawn_square_ripple(uint8_t center, uint8_t max_steps, uint8_t r, uint8_t g, uint8_t b, uint8_t style) {
+    // Chỉ kích hoạt gợn sóng khi ở chế độ tương tác (REACTIVE hoặc STARRY)
+    if (s_current_style != LED_STYLE_REACTIVE && s_current_style != LED_STYLE_STARRY) {
+        return;
+    }
     int slot = -1;
     uint8_t oldest_step = 0;
     int oldest_idx = 0;
@@ -262,8 +271,11 @@ static void spawn_square_ripple(uint8_t center, uint8_t max_steps, uint8_t r, ui
     }
 }
 
-static inline void touch_led_activity(bool cancel_anim) {
-    if (s_current_style == LED_STYLE_OFF) return;
+static inline bool touch_led_activity(bool cancel_anim) {
+    // Chỉ kích hoạt tương tác người dùng khi ở REACTIVE hoặc STARRY
+    if (s_current_style != LED_STYLE_REACTIVE && s_current_style != LED_STYLE_STARRY) {
+        return false;
+    }
     if (cancel_anim && s_anim_type != LED_ANIM_CELEBRATION) {
         s_anim_type = LED_ANIM_NONE;
     }
@@ -271,6 +283,7 @@ static inline void touch_led_activity(bool cancel_anim) {
     s_tw_page_active = false;
     s_idle_elapsed_ms = 0;
     s_canvas_active = true;
+    return true;
 }
 
 // ============================================================================
@@ -290,16 +303,28 @@ led_style_t led_effects_get_current_style(void) {
 
 led_style_t led_effects_next_style(void) {
     s_current_style = (led_style_t)((s_current_style + 1) % LED_STYLE_TOTAL);
+
+    // Dọn dẹp sạch sẽ trạng thái cũ khi đổi kiểu để tránh rò rỉ buffer và animation rác
+    s_anim_type = LED_ANIM_NONE;
+    s_tw_page_active = false;
+    s_dj_beat_active = false;
+    s_mozart_autoplay = false;
+    s_mozart_progress_leds = 0;
+    s_race_active_ms = 0;
+    memset(s_ripples, 0, sizeof(s_ripples));
+    canvas_clear_mem();
+
     if (s_current_style == LED_STYLE_OFF) {
         led_effects_clear();
     } else if (s_current_style == LED_STYLE_RAINBOW) {
-        led_effects_celebration();
+        s_style_step = 0; // Reset góc xoay cầu vồng
     } else if (s_current_style == LED_STYLE_BREATHING) {
-        led_effects_piano_chord(0, 180, 255);
+        s_idle_step = 0;  // Reset chu kỳ thở êm dịu
     } else if (s_current_style == LED_STYLE_STARRY) {
-        led_effects_spark();
+        s_style_step = 0;
+        led_effects_spark(); // Lóe 1 tia sao chào đón
     } else {
-        // Quay lại style mặc định: xoay 1 vòng báo hiệu (không reset trạng thái của chế độ đang chạy)
+        // Quay lại style mặc định REACTIVE: Xoay 1 vòng LED trắng báo hiệu
         led_effects_square_spin(true, 255, 255, 255);
     }
     return s_current_style;
@@ -1085,6 +1110,9 @@ void led_effects_tick(uint32_t delta_ms) {
 // ============================================================================
 
 void led_effects_mode_switch(uint8_t mode_index) {
+    if (s_current_style != LED_STYLE_REACTIVE && s_current_style != LED_STYLE_STARRY) {
+        return;
+    }
     s_anim_hue = (mode_index * 40) % 360;
     s_anim_step = 0;
     s_decay_rate = 185;
@@ -1099,6 +1127,9 @@ void led_effects_mode_switch(uint8_t mode_index) {
 }
 
 void led_effects_celebration(void) {
+    if (s_current_style != LED_STYLE_REACTIVE && s_current_style != LED_STYLE_STARRY) {
+        return;
+    }
     s_anim_step = 0;
     s_decay_rate = 200;
     s_anim_type = LED_ANIM_CELEBRATION;
@@ -1254,7 +1285,7 @@ void led_effects_rescue_success(void) {
 // Đèn thở đối xứng 4 cạnh hình vuông khi chờ (Idle Mode)
 void led_effects_idle_step(void) {
     if (!s_led_strip || !s_led_mutex) return;
-    if (s_master_brightness == 0) {
+    if (s_master_brightness == 0 || s_current_style == LED_STYLE_OFF) {
         led_strip_clear(s_led_strip);
         return;
     }
