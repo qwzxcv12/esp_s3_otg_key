@@ -206,6 +206,22 @@ static void on_pm_wake_up(void) {
     audio_play_wake_chime();
 }
 
+static bool on_pm_can_sleep(void) {
+    // 1. Chế độ nghe nhạc (Mode 10: Máy phát nhạc USB MP3 / WAV, chỉ mục 9): Không tự động ngủ
+    if (mode_manager_get_current_index() == 9) {
+        return false;
+    }
+    // 2. Kiểm tra nếu trình phát nhạc MP3 đang phát
+    if (mp3_player_get_state() == MP3_STATE_PLAYING) {
+        return false;
+    }
+    // 3. Kiểm tra nếu Baby Mozart đang tự động biểu diễn (autoplay)
+    if (audio_mozart_is_autoplay()) {
+        return false;
+    }
+    return true;
+}
+
 // -------------------------------------------------------------
 // TOY KEY EVENT HANDLER (GLOBAL SHORTCUTS & MODE DISPATCHER)
 // -------------------------------------------------------------
@@ -742,7 +758,8 @@ void app_main(void)
     const power_manager_cbs_t pm_callbacks = {
         .on_pre_sleep   = on_pm_pre_sleep,
         .on_enter_sleep = on_pm_enter_sleep,
-        .on_wake_up     = on_pm_wake_up
+        .on_wake_up     = on_pm_wake_up,
+        .can_sleep      = on_pm_can_sleep
     };
     ESP_ERROR_CHECK(power_manager_init(&pm_callbacks));
 

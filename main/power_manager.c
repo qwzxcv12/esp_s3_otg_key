@@ -142,6 +142,14 @@ void power_manager_tick(uint32_t delta_ms) {
 
         case POWER_STATE_DIMMED:
             s_inactivity_timer_ms += delta_ms;
+            // Kiểm tra xem chế độ hiện tại có cho phép tự động ngủ không (ví dụ: Chế độ nghe nhạc không được ngủ)
+            if (s_cbs.can_sleep && !s_cbs.can_sleep()) {
+                // Giữ bộ đếm ở ngưỡng DIMMED (chỉ giảm độ sáng sau 60s, không để tăng đến 180s để đi ngủ)
+                if (s_inactivity_timer_ms > POWER_INACTIVITY_DIM_MS + 2000) {
+                    s_inactivity_timer_ms = POWER_INACTIVITY_DIM_MS + 2000;
+                }
+                break;
+            }
             if (s_inactivity_timer_ms >= POWER_INACTIVITY_SLEEP_MS) {
                 power_state_t old = s_state;
                 s_state = POWER_STATE_PRE_SLEEP;

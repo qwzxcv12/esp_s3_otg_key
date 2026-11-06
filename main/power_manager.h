@@ -31,6 +31,7 @@ typedef struct {
     void (*on_pre_sleep)(void);     // Được gọi khi bắt đầu vào PRE_SLEEP (phát âm tạm biệt)
     void (*on_enter_sleep)(void);   // Được gọi khi chính thức vào SLEEP (tắt LED, ngắt clock)
     void (*on_wake_up)(void);       // Được gọi khi vừa thức dậy (khôi phục ngoại vi)
+    bool (*can_sleep)(void);        // Kiểm tra xem hệ thống có được phép tự động vào chế độ ngủ không
 } power_manager_cbs_t;
 
 /**
