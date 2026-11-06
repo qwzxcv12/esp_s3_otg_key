@@ -108,12 +108,14 @@ static uint32_t s_siren_step = 0;
 
 // Streaming Audio Buffer State (USB Flash Drive MP3 / WAV)
 #define STREAM_RINGBUF_SAMPLES (64 * 1024)
+#define STREAM_PREBUFFER_THRESHOLD (8 * 1024) // Ngưỡng mồi đệm 8192 mẫu (~185ms stereo 44.1kHz)
 static int16_t *s_stream_ringbuf = NULL;
 static size_t s_stream_wr_idx = 0;
 static size_t s_stream_rd_idx = 0;
 static size_t s_stream_available = 0;
 static portMUX_TYPE s_stream_mux = portMUX_INITIALIZER_UNLOCKED;
 static volatile bool s_stream_active = false;
+static volatile bool s_stream_prebuffering = true;
 static uint32_t s_stream_sample_rate = 44100;
 static uint8_t s_stream_channels = 2;
 static float s_stream_resample_ratio = 1.0f;
@@ -816,7 +818,21 @@ static void audio_synth_task(void *pvParameters) {
         if (s_stream_active && s_stream_ringbuf) {
             portENTER_CRITICAL(&s_stream_mux);
             size_t avail = s_stream_available;
+            bool is_prebuf = s_stream_prebuffering;
             portEXIT_CRITICAL(&s_stream_mux);
+
+            // Cơ chế Pre-buffering Watermark:
+            // Tạm giữ im lặng cho đến khi bộ đệm tích lũy đủ ít nhất 8192 mẫu (~185ms stereo 44.1kHz)
+            // để bảo đảm luồng âm thanh không bao giờ bị đói buffer khi USB đọc file
+            if (is_prebuf) {
+                if (avail >= STREAM_PREBUFFER_THRESHOLD) {
+                    portENTER_CRITICAL(&s_stream_mux);
+                    s_stream_prebuffering = false;
+                    portEXIT_CRITICAL(&s_stream_mux);
+                } else {
+                    avail = 0; // Chưa đủ ngưỡng mồi đệm -> giữ im lặng để task đọc USB nạp đủ
+                }
+            }
 
             if (avail > 0) {
                 has_stream = true;
@@ -841,6 +857,8 @@ static void audio_synth_task(void *pvParameters) {
                                 avail -= 2;
                                 s_stream_resample_frac -= 1.0f;
                             } else {
+                                // Hết buffer giữa chừng -> kẹp resample_frac ngay lập tức
+                                s_stream_resample_frac = 0.0f;
                                 break;
                             }
                         } else {
@@ -855,26 +873,30 @@ static void audio_synth_task(void *pvParameters) {
                                 avail--;
                                 s_stream_resample_frac -= 1.0f;
                             } else {
+                                s_stream_resample_frac = 0.0f;
                                 break;
                             }
                         }
                     }
 
-                    if (avail == 0 && s_stream_resample_frac >= 1.0f) {
+                    if (avail == 0) {
                         // Tránh nổ pop/rè khi hết dữ liệu đệm: suy hao dần về 0
                         s_resample_l *= 0.9f;
                         s_resample_r *= 0.9f;
                         s_next_l *= 0.9f;
                         s_next_r *= 0.9f;
+                        // Khắc phục triệt để lỗi tích lũy resample_frac:
+                        // Tuyệt đối không cộng dồn khi buffer rỗng để tránh vứt bỏ sample mới!
+                        s_stream_resample_frac = 0.0f;
+                    } else {
+                        float frac = s_stream_resample_frac;
+                        if (frac < 0.0f) frac = 0.0f;
+                        if (frac > 1.0f) frac = 1.0f;
+                        stream_l[i] = s_resample_l + (s_next_l - s_resample_l) * frac;
+                        stream_r[i] = s_resample_r + (s_next_r - s_resample_r) * frac;
+
+                        s_stream_resample_frac += s_stream_resample_ratio;
                     }
-
-                    float frac = s_stream_resample_frac;
-                    if (frac < 0.0f) frac = 0.0f;
-                    if (frac > 1.0f) frac = 1.0f;
-                    stream_l[i] = s_resample_l + (s_next_l - s_resample_l) * frac;
-                    stream_r[i] = s_resample_r + (s_next_r - s_resample_r) * frac;
-
-                    s_stream_resample_frac += s_stream_resample_ratio;
 
                     float e = fabsf(stream_l[i]) + fabsf(stream_r[i]);
                     if (e > local_energy) local_energy = e;
@@ -885,6 +907,9 @@ static void audio_synth_task(void *pvParameters) {
                 portEXIT_CRITICAL(&s_stream_mux);
 
                 s_stream_current_energy = s_stream_current_energy * 0.85f + local_energy * 0.15f;
+            } else {
+                // Buffer đang rỗng: luôn giữ s_stream_resample_frac = 0.0f
+                s_stream_resample_frac = 0.0f;
             }
         }
 
@@ -958,9 +983,9 @@ esp_err_t audio_synth_init(void) {
     }
 
     s_audio_ready = true;
-    xTaskCreatePinnedToCore(audio_synth_task, "audio_synth", 6144, NULL, 4, NULL, 1);
+    xTaskCreatePinnedToCore(audio_synth_task, "audio_synth", 6144, NULL, 6, NULL, 1);
 
-    ESP_LOGI(TAG, "I2S Audio Engine ready at %d Hz!", AUDIO_SAMPLE_RATE);
+    ESP_LOGI(TAG, "I2S Audio Engine ready at %d Hz (Real-time Priority 6)!", AUDIO_SAMPLE_RATE);
     return ESP_OK;
 }
 
@@ -1982,21 +2007,38 @@ esp_err_t audio_stream_start(uint32_t sample_rate, uint8_t channels) {
     s_stream_resample_ratio = (float)s_stream_sample_rate / (float)AUDIO_SAMPLE_RATE;
     s_stream_resample_frac = 0.0f;
     s_stream_current_energy = 0.0f;
+    s_stream_prebuffering = true;
     s_stream_active = true;
     portEXIT_CRITICAL(&s_stream_mux);
-    ESP_LOGI(TAG, "Audio stream started: %u Hz, %d ch", (unsigned int)sample_rate, (int)channels);
+    ESP_LOGI(TAG, "Audio stream started: %u Hz, %d ch (Prebuffer Watermark: %d samples)",
+             (unsigned int)sample_rate, (int)channels, STREAM_PREBUFFER_THRESHOLD);
     return ESP_OK;
 }
 
 void audio_stream_stop(void) {
     portENTER_CRITICAL(&s_stream_mux);
     s_stream_active = false;
+    s_stream_prebuffering = true;
     s_stream_wr_idx = 0;
     s_stream_rd_idx = 0;
     s_stream_available = 0;
     s_stream_current_energy = 0.0f;
+    s_stream_resample_frac = 0.0f;
     portEXIT_CRITICAL(&s_stream_mux);
     ESP_LOGI(TAG, "Audio stream stopped");
+}
+
+void audio_stream_set_prebuffering(bool enable) {
+    portENTER_CRITICAL(&s_stream_mux);
+    s_stream_prebuffering = enable;
+    portEXIT_CRITICAL(&s_stream_mux);
+}
+
+size_t audio_stream_get_available(void) {
+    portENTER_CRITICAL(&s_stream_mux);
+    size_t avail = s_stream_available;
+    portEXIT_CRITICAL(&s_stream_mux);
+    return avail;
 }
 
 bool audio_stream_is_active(void) {

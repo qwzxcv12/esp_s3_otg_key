@@ -266,6 +266,7 @@ static bool play_wav_file(FILE *f, player_cmd_t *cmd_out) {
         }
     }
 
+    audio_stream_set_prebuffering(false);
     return finished;
 }
 
@@ -357,6 +358,7 @@ static bool play_mp3_file(FILE *f, player_cmd_t *cmd_out) {
         }
     }
 
+    audio_stream_set_prebuffering(false);
     return finished;
 }
 
@@ -417,6 +419,15 @@ static void mp3_player_task(void *arg) {
 
         fclose(f);
         s_file_is_open = false;
+
+        if (natural_finish) {
+            // Chờ dải đệm phát hết sạch các nốt cuối cùng của bài hát (tối đa 1 giây)
+            int wait_ms = 0;
+            while (audio_stream_get_available() > 0 && wait_ms < 1000) {
+                vTaskDelay(pdMS_TO_TICKS(40));
+                wait_ms += 40;
+            }
+        }
         audio_stream_stop();
 
         if (natural_finish) {

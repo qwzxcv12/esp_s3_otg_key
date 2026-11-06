@@ -110,6 +110,8 @@ void      audio_stream_stop(void);
 bool      audio_stream_is_active(void);
 size_t    audio_stream_write(const int16_t *pcm, size_t num_samples);
 float     audio_stream_get_energy(void);
+void      audio_stream_set_prebuffering(bool enable);
+size_t    audio_stream_get_available(void);
 
 // Mode 1: Piano & Pentatonic
 void audio_play_piano_note(float freq_hz, piano_timbre_t timbre);
