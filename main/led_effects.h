@@ -77,6 +77,9 @@ void led_effects_speed_nitro(void);
 // Tiện ích hình học Khung Vuông: Thắp sáng & phóng sóng từ 1 trong 4 cạnh (0=Trên, 1=Phải, 2=Dưới, 3=Trái)
 void led_effects_square_side_pulse(uint8_t side_idx, uint8_t r, uint8_t g, uint8_t b);
 void led_effects_square_spin(bool clockwise, uint8_t r, uint8_t g, uint8_t b);
+// Quét hướng: bắt đầu từ LED trung tâm cạnh `side` (0=Trên, 1=Phải, 2=Dưới, 3=Trái), chia 2 nhánh chạy vòng
+// qua 2 bên và sáng dần cho tới LED trung tâm của cạnh đối diện.
+void led_effects_direction_sweep(uint8_t side, uint8_t r, uint8_t g, uint8_t b);
 
 // Mode 1: Đàn Piano Diệu Kỳ & Ngũ Cung (4 Hàng phím = 4 Cạnh hình vuông)
 void led_effects_piano_key(uint8_t row_side, uint8_t pos_in_side, uint8_t timbre, uint8_t r, uint8_t g, uint8_t b);

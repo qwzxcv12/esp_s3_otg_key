@@ -43,6 +43,7 @@ typedef enum {
     LED_ANIM_CELEBRATION,        // Pháo hoa 4 góc & cầu vồng xoay quanh hình vuông
     LED_ANIM_COUNTING,           // Đoàn tàu đếm số cầu vồng + chớp 4 góc khen thưởng
     LED_ANIM_SQUARE_SPIN,        // Xoay 1 vòng 360° thuận/ngược chiều kim đồng hồ
+    LED_ANIM_DIRECTION_SWEEP,    // Quét hướng: từ tâm cạnh bấm sáng dần 2 nhánh tới tâm cạnh đối diện
     LED_ANIM_TURN_SIGNAL,        // Đèn xi-nhan chạy đuổi tuần tự kiểu Audi ôm góc vuông
     LED_ANIM_WATER_CANNON,       // 2 luồng nước phun dọc 2 cạnh bên dập lửa ở cạnh đối diện
     LED_ANIM_FIRE_FLICKER,       // Ngọn lửa cháy bập bùng động trên 4 cạnh hình vuông
@@ -774,6 +775,28 @@ void led_effects_tick(uint32_t delta_ms) {
                 } else {
                     s_anim_type = LED_ANIM_NONE;
                 }
+            } else if (anim == LED_ANIM_DIRECTION_SWEEP) {
+                // Từ LED trung tâm cạnh `side` (side*8+3 và side*8+4), 2 nhánh chạy ngược chiều nhau
+                // quanh khung vuông, sáng dần (giữ lại vệt) và gặp nhau ở tâm cạnh đối diện (sau 15 bước)
+                if (step < 24) {
+                    int side = s_anim_sub & 0x03;
+                    int c1 = side * 8 + 3;
+                    int c2 = side * 8 + 4;
+                    int reach = (step > 15) ? 15 : (int)step;
+                    for (int d = 0; d <= reach; d++) {
+                        // Đầu sóng trắng sáng nhất, vệt phía sau mang màu chủ đạo mờ dần
+                        uint8_t fade = (uint8_t)(255 - ((reach - d) * 11));
+                        uint8_t rr = (uint8_t)(((uint16_t)s_anim_r * fade) >> 8);
+                        uint8_t gg = (uint8_t)(((uint16_t)s_anim_g * fade) >> 8);
+                        uint8_t bb = (uint8_t)(((uint16_t)s_anim_b * fade) >> 8);
+                        if (d == reach && step <= 15) { rr = 255; gg = 255; bb = 255; }
+                        canvas_set_pixel(c1 - d, rr, gg, bb);
+                        canvas_set_pixel(c2 + d, rr, gg, bb);
+                    }
+                    s_anim_step = step + 1;
+                } else {
+                    s_anim_type = LED_ANIM_NONE;
+                }
             } else if (anim == LED_ANIM_TURN_SIGNAL) {
                 // Xi-nhan chạy đuổi tuần tự kiểu Audi trên Cạnh Trái (Side 3) hoặc Cạnh Phải (Side 1)
                 if (step < 16) {
@@ -1310,6 +1333,19 @@ void led_effects_speed_nitro(void) {
 // ============================================================================
 
 // Thắp sáng 1 cạnh (0=Trên, 1=Phải, 2=Dưới, 3=Trái) và phóng sóng sang 2 cạnh bên
+// Thắp sáng 1 cạnh (0=Trên, 1=Phải, 2=Dưới, 3=Trái) và phóng sóng sang 2 cạnh bên
+void led_effects_direction_sweep(uint8_t side, uint8_t r, uint8_t g, uint8_t b) {
+    if (!s_led_strip || !s_led_mutex) return;
+    touch_led_activity(true);
+    s_decay_rate = 215;
+    s_anim_sub = side & 0x03;
+    s_anim_r = r;
+    s_anim_g = g;
+    s_anim_b = b;
+    s_anim_step = 0;
+    s_anim_type = LED_ANIM_DIRECTION_SWEEP;
+}
+
 void led_effects_square_side_pulse(uint8_t side_idx, uint8_t r, uint8_t g, uint8_t b) {
     if (!s_led_strip || !s_led_mutex) return;
     touch_led_activity(true);

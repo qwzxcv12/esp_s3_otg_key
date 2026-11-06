@@ -81,8 +81,8 @@ static bool mode_phonics_handle_key(uint8_t kc, uint8_t mod, char c) {
         if (!sb_play_special_key(kc)) {
             audio_play_special_key(kc);
         }
-        led_effects_square_side_pulse(side, 0, 220, 255);
-        printf(" -> [BÉ HỌC HƯỚNG: THẮP SÁNG CẠNH %u HÌNH VUÔNG (0x%02X)]\r\n", (unsigned int)side, kc);
+        led_effects_direction_sweep(side, 0, 220, 255);
+        printf(" -> [BÉ HỌC HƯỚNG: QUÉT TỪ TÂM CẠNH %u SANG TÂM CẠNH ĐỐI DIỆN (0x%02X)]\r\n", (unsigned int)side, kc);
         return true;
     }
 
