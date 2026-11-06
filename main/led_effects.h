@@ -5,8 +5,8 @@
 #include <stdbool.h>
 #include "esp_err.h"
 
-#define PIN_LED_STRIP      4   // WS2812B Data In GPIO
-#define LED_STRIP_COUNT   30   // Default number of addressable LEDs
+#define PIN_LED_STRIP     13   // WS2812B Data In GPIO (Gắn chân 13)
+#define LED_STRIP_COUNT   32   // Số lượng bóng LED WS2812B (32 LED)
 
 typedef enum {
     LED_STYLE_REACTIVE = 0, // Nháy theo phím bấm & âm nhạc (mặc định)
