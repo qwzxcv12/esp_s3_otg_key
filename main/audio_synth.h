@@ -113,6 +113,12 @@ float     audio_stream_get_energy(void);
 void      audio_stream_set_prebuffering(bool enable);
 size_t    audio_stream_get_available(void);
 
+// Hi-Fi DSP Audio Engine Control (Subsonic HPF, Bass Boost, Vocal Clarity, Mono Downmixing)
+void      audio_dsp_set_enabled(bool enabled);
+bool      audio_dsp_is_enabled(void);
+void      audio_dsp_set_mono_downmix(bool enable);
+bool      audio_dsp_is_mono_downmix(void);
+
 // Mode 1: Piano & Pentatonic
 void audio_play_piano_note(float freq_hz, piano_timbre_t timbre);
 void audio_play_chime_mode(uint8_t mode_index);

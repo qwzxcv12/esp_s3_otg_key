@@ -123,6 +123,94 @@ static float s_stream_resample_frac = 0.0f;
 static volatile float s_stream_current_energy = 0.0f;
 
 // ============================================================================
+// HI-FI DSP BIQUAD ENGINE (Direct Form II Transposed) & TRANSPARENT SOFT-KNEE GUARD
+// ============================================================================
+typedef struct {
+    float b0, b1, b2, a1, a2;
+    float s1, s2;
+} dsp_biquad_t;
+
+static inline void biquad_reset(dsp_biquad_t *f) {
+    f->s1 = 0.0f;
+    f->s2 = 0.0f;
+}
+
+static inline float biquad_process(dsp_biquad_t *f, float in) {
+    float out = f->b0 * in + f->s1;
+    f->s1 = f->b1 * in - f->a1 * out + f->s2;
+    f->s2 = f->b2 * in - f->a2 * out;
+    return out;
+}
+
+// Subsonic High-Pass Filter (Butterworth 2nd-order, Q=0.7071)
+static void biquad_calc_hpf(dsp_biquad_t *f, float fc, float fs) {
+    float w0 = 2.0f * (float)M_PI * fc / fs;
+    float alpha = sinf(w0) / (2.0f * 0.70710678f);
+    float cos_w0 = cosf(w0);
+    float b0 = (1.0f + cos_w0) * 0.5f;
+    float b1 = -(1.0f + cos_w0);
+    float b2 = (1.0f + cos_w0) * 0.5f;
+    float a0 = 1.0f + alpha;
+    float a1 = -2.0f * cos_w0;
+    float a2 = 1.0f - alpha;
+    float inv_a0 = 1.0f / a0;
+    f->b0 = b0 * inv_a0;
+    f->b1 = b1 * inv_a0;
+    f->b2 = b2 * inv_a0;
+    f->a1 = a1 * inv_a0;
+    f->a2 = a2 * inv_a0;
+    f->s1 = 0.0f;
+    f->s2 = 0.0f;
+}
+
+// Peaking EQ Filter (Audio EQ Cookbook)
+static void biquad_calc_peaking(dsp_biquad_t *f, float f0, float fs, float gain_db, float Q) {
+    float A = powf(10.0f, gain_db / 40.0f);
+    float w0 = 2.0f * (float)M_PI * f0 / fs;
+    float alpha = sinf(w0) / (2.0f * Q);
+    float cos_w0 = cosf(w0);
+    float b0 = 1.0f + alpha * A;
+    float b1 = -2.0f * cos_w0;
+    float b2 = 1.0f - alpha * A;
+    float a0 = 1.0f + alpha / A;
+    float a1 = -2.0f * cos_w0;
+    float a2 = 1.0f - alpha / A;
+    float inv_a0 = 1.0f / a0;
+    f->b0 = b0 * inv_a0;
+    f->b1 = b1 * inv_a0;
+    f->b2 = b2 * inv_a0;
+    f->a1 = a1 * inv_a0;
+    f->a2 = a2 * inv_a0;
+    f->s1 = 0.0f;
+    f->s2 = 0.0f;
+}
+
+// Bit-Perfect Transparent Guard with Hermite Soft-Knee (Zero THD for |x| <= 0.90)
+static inline float audio_guard_soft_knee(float x) {
+    if (x >= -0.90f && x <= 0.90f) {
+        return x; // 100% BIT-PERFECT LINEAR PASS-THROUGH
+    }
+    if (x > 0.90f) {
+        if (x >= 1.25f) return 1.0f;
+        float t = (x - 0.90f) * (1.0f / 0.35f); // 0.0 to 1.0
+        float f = 0.15f * (t * t * t) - 0.40f * (t * t) + 0.35f * t;
+        return 0.90f + f;
+    } else {
+        if (x <= -1.25f) return -1.0f;
+        float t = (-x - 0.90f) * (1.0f / 0.35f);
+        float f = 0.15f * (t * t * t) - 0.40f * (t * t) + 0.35f * t;
+        return -(0.90f + f);
+    }
+}
+
+// Hi-Fi DSP Filter Instances (Subsonic 75Hz HPF, Punch Bass 140Hz, Vocal/Treble Clarity 4.5kHz)
+static dsp_biquad_t s_dsp_subsonic_l, s_dsp_subsonic_r;
+static dsp_biquad_t s_dsp_bass_l, s_dsp_bass_r;
+static dsp_biquad_t s_dsp_treble_l, s_dsp_treble_r;
+static bool s_dsp_enabled = true;
+static bool s_dsp_mono_downmix = true;
+
+// ============================================================================
 // MOZART 20-SONG MASTER PLAYLIST & HARMONIC AUDIO ENGINE
 // ============================================================================
 #define F_C2   65.41f
@@ -898,35 +986,74 @@ static void audio_synth_task(void *pvParameters) {
                         s_stream_resample_frac += s_stream_resample_ratio;
                     }
 
-                    float e = fabsf(stream_l[i]) + fabsf(stream_r[i]);
-                    if (e > local_energy) local_energy = e;
                 }
 
                 portENTER_CRITICAL(&s_stream_mux);
                 s_stream_available = avail;
                 portEXIT_CRITICAL(&s_stream_mux);
 
+                // 1. Smart Mono Downmixing (L + R) cho ampli don MAX98357A:
+                if (s_dsp_mono_downmix && s_stream_channels == 2) {
+                    for (int i = 0; i < CHUNK_SAMPLES; i++) {
+                        float mono = (stream_l[i] + stream_r[i]) * 0.5f;
+                        stream_l[i] = mono;
+                        stream_r[i] = mono;
+                    }
+                }
+
+                // 2. Hi-Fi DSP Biquad Filters (Subsonic 75Hz HPF + Warm Bass 140Hz + Vocal/Treble Clarity 4.5kHz):
+                if (s_dsp_enabled) {
+                    for (int i = 0; i < CHUNK_SAMPLES; i++) {
+                        float sl = stream_l[i];
+                        sl = biquad_process(&s_dsp_subsonic_l, sl);
+                        sl = biquad_process(&s_dsp_bass_l, sl);
+                        sl = biquad_process(&s_dsp_treble_l, sl);
+                        stream_l[i] = sl;
+
+                        float sr = stream_r[i];
+                        sr = biquad_process(&s_dsp_subsonic_r, sr);
+                        sr = biquad_process(&s_dsp_bass_r, sr);
+                        sr = biquad_process(&s_dsp_treble_r, sr);
+                        stream_r[i] = sr;
+                    }
+                }
+
+                // 3. Tinh toan nang luong am thanh cho LED Visualizer sau khi loc:
+                local_energy = 0.0f;
+                for (int i = 0; i < CHUNK_SAMPLES; i++) {
+                    float e = fabsf(stream_l[i]) + fabsf(stream_r[i]);
+                    if (e > local_energy) local_energy = e;
+                }
+
                 s_stream_current_energy = s_stream_current_energy * 0.85f + local_energy * 0.15f;
             } else {
-                // Buffer đang rỗng: luôn giữ s_stream_resample_frac = 0.0f
+                // Buffer dang rong: luon giu s_stream_resample_frac = 0.0f
                 s_stream_resample_frac = 0.0f;
             }
         }
 
-        // Convert float mix to 32-bit stereo PCM: pre-gain headroom + soft limiter (no hard clipping)
+        // Convert float mix to 32-bit stereo PCM: transparent soft-knee guard + headroom gain
         const float max_int32 = 2147480000.0f * s_master_volume;
         for (int i = 0; i < CHUNK_SAMPLES; i++) {
             float val_l = float_mix[i];
             float val_r = float_mix[i];
             if (has_stream) {
-                // Headroom 3.5dB (-3.7dBFS) để âm thanh tròn trịa, không bị rè màng loa MAX98357A khi gặp nốt bass mạnh
-                val_l += stream_l[i] * 0.65f;
-                val_r += stream_r[i] * 0.65f;
+                // Toi uu Headroom len 0.88f (+2.6dB) an toan tuyet doi nho bo loc Subsonic bao ve mang loa
+                val_l += stream_l[i] * 0.88f;
+                val_r += stream_r[i] * 0.88f;
             }
-            float lim_l = soft_limit(has_stream ? val_l : (val_l * MIX_PRE_GAIN * 1.6f));
-            float lim_r = soft_limit(has_stream ? val_r : (val_r * MIX_PRE_GAIN * 1.6f));
-            mix_buffer[i * 2]     = (int32_t)(lim_l * max_int32);
-            mix_buffer[i * 2 + 1] = (int32_t)(lim_r * max_int32);
+            float out_l, out_r;
+            if (has_stream) {
+                // Doi voi nhac MP3/WAV: Su dung Bit-Perfect Transparent Soft-Knee Guard (0% THD cho |x| <= 0.90)
+                out_l = audio_guard_soft_knee(val_l);
+                out_r = audio_guard_soft_knee(val_r);
+            } else {
+                // Doi voi dan synth ao polyphonic 24 giong: dung soft_limit Pade tanh
+                out_l = soft_limit(val_l * MIX_PRE_GAIN * 1.6f);
+                out_r = soft_limit(val_r * MIX_PRE_GAIN * 1.6f);
+            }
+            mix_buffer[i * 2]     = (int32_t)(out_l * max_int32);
+            mix_buffer[i * 2 + 1] = (int32_t)(out_r * max_int32);
         }
 
         size_t written = 0;
@@ -941,6 +1068,14 @@ esp_err_t audio_synth_init(void) {
     init_sine_table();
     s_voice_mutex = xSemaphoreCreateMutex();
     memset(s_voices, 0, sizeof(s_voices));
+
+    float fs = (float)AUDIO_SAMPLE_RATE;
+    biquad_calc_hpf(&s_dsp_subsonic_l, 75.0f, fs);
+    biquad_calc_hpf(&s_dsp_subsonic_r, 75.0f, fs);
+    biquad_calc_peaking(&s_dsp_bass_l, 140.0f, fs, 3.0f, 1.0f);
+    biquad_calc_peaking(&s_dsp_bass_r, 140.0f, fs, 3.0f, 1.0f);
+    biquad_calc_peaking(&s_dsp_treble_l, 4500.0f, fs, 2.2f, 0.8f);
+    biquad_calc_peaking(&s_dsp_treble_r, 4500.0f, fs, 2.2f, 0.8f);
 
     i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_0, I2S_ROLE_MASTER);
     chan_cfg.auto_clear = true;
@@ -2010,8 +2145,18 @@ esp_err_t audio_stream_start(uint32_t sample_rate, uint8_t channels) {
     s_stream_prebuffering = true;
     s_stream_active = true;
     portEXIT_CRITICAL(&s_stream_mux);
-    ESP_LOGI(TAG, "Audio stream started: %u Hz, %d ch (Prebuffer Watermark: %d samples)",
-             (unsigned int)sample_rate, (int)channels, STREAM_PREBUFFER_THRESHOLD);
+
+    // Cập nhật bộ lọc Hi-Fi DSP Biquad theo tần số lấy mẫu thực tế của bài nhạc
+    float fs = (float)s_stream_sample_rate;
+    biquad_calc_hpf(&s_dsp_subsonic_l, 75.0f, fs);
+    biquad_calc_hpf(&s_dsp_subsonic_r, 75.0f, fs);
+    biquad_calc_peaking(&s_dsp_bass_l, 140.0f, fs, 3.0f, 1.0f);
+    biquad_calc_peaking(&s_dsp_bass_r, 140.0f, fs, 3.0f, 1.0f);
+    biquad_calc_peaking(&s_dsp_treble_l, 4500.0f, fs, 2.2f, 0.8f);
+    biquad_calc_peaking(&s_dsp_treble_r, 4500.0f, fs, 2.2f, 0.8f);
+
+    ESP_LOGI(TAG, "Audio stream started: %u Hz, %d ch (Prebuffer: %d, Hi-Fi DSP: Subsonic 75Hz + Bass + Treble, MonoDownmix: %d)",
+             (unsigned int)sample_rate, (int)channels, STREAM_PREBUFFER_THRESHOLD, s_dsp_mono_downmix);
     return ESP_OK;
 }
 
@@ -2025,6 +2170,14 @@ void audio_stream_stop(void) {
     s_stream_current_energy = 0.0f;
     s_stream_resample_frac = 0.0f;
     portEXIT_CRITICAL(&s_stream_mux);
+
+    biquad_reset(&s_dsp_subsonic_l);
+    biquad_reset(&s_dsp_subsonic_r);
+    biquad_reset(&s_dsp_bass_l);
+    biquad_reset(&s_dsp_bass_r);
+    biquad_reset(&s_dsp_treble_l);
+    biquad_reset(&s_dsp_treble_r);
+
     ESP_LOGI(TAG, "Audio stream stopped");
 }
 
@@ -2071,4 +2224,26 @@ size_t audio_stream_write(const int16_t *pcm, size_t num_samples) {
         }
     }
     return written;
+}
+
+// ============================================================================
+// HI-FI DSP CONTROL APIS
+// ============================================================================
+
+void audio_dsp_set_enabled(bool enabled) {
+    s_dsp_enabled = enabled;
+    ESP_LOGI(TAG, "Hi-Fi DSP %s", enabled ? "ENABLED" : "DISABLED");
+}
+
+bool audio_dsp_is_enabled(void) {
+    return s_dsp_enabled;
+}
+
+void audio_dsp_set_mono_downmix(bool enable) {
+    s_dsp_mono_downmix = enable;
+    ESP_LOGI(TAG, "Smart Mono Downmix %s", enable ? "ENABLED" : "DISABLED");
+}
+
+bool audio_dsp_is_mono_downmix(void) {
+    return s_dsp_mono_downmix;
 }

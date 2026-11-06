@@ -51,6 +51,7 @@ static void mode_usb_player_on_enter(void) {
         printf("   - Mũi tên Trái          : Prev Track\r\n");
         printf("   - Phím 1..9             : Nhảy nhanh tới bài 1 đến 9\r\n");
         printf("   - Phím R                : Đổi chế độ lặp (All / 1 bài / Ngẫu nhiên)\r\n");
+        printf("   - Phím E                : Bật / Tắt bộ lọc Hi-Fi DSP (Subsonic HPF + Bass + Treble)\r\n");
         printf("========================================================\r\n\r\n");
 
         if (mp3_player_get_state() != MP3_STATE_PLAYING) {
@@ -117,6 +118,16 @@ static bool mode_usb_player_handle_key(uint8_t kc, uint8_t mod, char c) {
         mp3_player_set_repeat_mode(rep);
         printf(">>> [BÀN PHÍM]: ĐỔI CHẾ ĐỘ LẶP -> %s <<<\r\n", mp3_player_get_repeat_mode_name());
         led_effects_color_burst(255, 0, 255);
+        return true;
+    }
+
+    // 6. Phím 'e' hoặc 'E': Bật / Tắt bộ lọc Hi-Fi DSP (Subsonic HPF + Bass Boost + Vocal Clarity)
+    if (c == 'e' || c == 'E') {
+        bool dsp = !audio_dsp_is_enabled();
+        audio_dsp_set_enabled(dsp);
+        printf("\r\n>>> [BÀN PHÍM]: BỘ LỌC HI-FI DSP (SUBSONIC + BASS + TREBLE) -> %s <<<\r\n",
+               dsp ? "BẬT (BASS ẤM & RÕ TIẾNG)" : "TẮT (NGUYÊN BẢN)");
+        led_effects_color_burst(dsp ? 0 : 255, dsp ? 255 : 100, 0);
         return true;
     }
 
