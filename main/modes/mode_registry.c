@@ -10,6 +10,7 @@ extern const toy_mode_driver_t g_mode_cartoon_driver;     // Mode 6: Hộp Âm T
 extern const toy_mode_driver_t g_mode_agent_driver;       // Mode 7: Điệp Viên Nhí & Robot R2-D2
 extern const toy_mode_driver_t g_mode_cockpit_driver;     // Mode 8: Buồng Lái Xe Cứu Hỏa & 26 Con Thú
 extern const toy_mode_driver_t g_mode_phonics_driver;     // Mode 9: Bé Học Đánh Vần & Tập Đếm Số
+extern const toy_mode_driver_t g_mode_usb_player_driver;  // Mode 10: Máy Phát Nhạc USB MP3 / WAV
 
 /**
  * @brief Đăng ký danh sách toàn bộ các chế độ vào hệ thống.
@@ -26,4 +27,5 @@ void mode_registry_register_all(void) {
     mode_manager_register(&g_mode_agent_driver);
     mode_manager_register(&g_mode_cockpit_driver);
     mode_manager_register(&g_mode_phonics_driver);
+    mode_manager_register(&g_mode_usb_player_driver);
 }

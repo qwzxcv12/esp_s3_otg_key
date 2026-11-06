@@ -1,6 +1,7 @@
 idf_component_register(SRCS "main.c"
                             "audio_synth.c"
                             "soundbank.c"
+                            "mp3_player.c"
                             "led_effects.c"
                             "button_driver.c"
                             "power_manager.c"
@@ -15,7 +16,8 @@ idf_component_register(SRCS "main.c"
                             "modes/mode_agent.c"
                             "modes/mode_cockpit.c"
                             "modes/mode_phonics.c"
+                            "modes/mode_usb_player.c"
                     INCLUDE_DIRS "." "modes"
-                    REQUIRES usb_host_hid esp_driver_gpio esp_driver_i2s esp_driver_rmt led_strip esp_psram esp_timer littlefs)
+                    REQUIRES usb_host_hid usb_host_msc fatfs vfs esp_driver_gpio esp_driver_i2s esp_driver_rmt led_strip esp_psram esp_timer littlefs)
 
 target_compile_options(${COMPONENT_LIB} PRIVATE -Wno-format-truncation)

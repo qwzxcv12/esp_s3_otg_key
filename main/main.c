@@ -32,6 +32,10 @@
 #include "soundbank.h"
 #include "mode_manager.h"
 #include "power_manager.h"
+#include "msc_host.h"
+#include "msc_host_vfs.h"
+#include "esp_vfs_fat.h"
+#include "mp3_player.h"
 
 static const char *TAG = "usb_toy";
 
@@ -40,7 +44,9 @@ QueueHandle_t app_event_queue = NULL;
 typedef enum {
     APP_EVENT_HID_HOST = 0,
     APP_EVENT_UPDATE_LEDS,
-    APP_EVENT_BUTTON_PRESS
+    APP_EVENT_BUTTON_PRESS,
+    APP_EVENT_MSC_CONNECTED,
+    APP_EVENT_MSC_DISCONNECTED
 } app_event_group_t;
 
 typedef struct {
@@ -55,6 +61,9 @@ typedef struct {
             button_id_t id;
             button_press_type_t type;
         } button;
+        struct {
+            uint8_t address;
+        } msc_dev;
     };
 } app_event_queue_t;
 
@@ -628,6 +637,30 @@ static void hid_host_device_callback(hid_host_device_handle_t hid_device_handle,
     }
 }
 
+static msc_host_device_handle_t s_msc_device_handle = NULL;
+static msc_host_vfs_handle_t s_msc_vfs_handle = NULL;
+static uint8_t s_prev_mode_before_usb = 0;
+
+static void msc_host_event_callback(const msc_host_event_t *event, void *arg)
+{
+    if (event->event == MSC_DEVICE_CONNECTED) {
+        ESP_LOGI(TAG, "USB MSC Device connected (address %d)", event->device.address);
+        app_event_queue_t evt_queue = {
+            .event_group = APP_EVENT_MSC_CONNECTED,
+            .msc_dev = {
+                .address = event->device.address
+            }
+        };
+        xQueueSend(app_event_queue, &evt_queue, 0);
+    } else if (event->event == MSC_DEVICE_DISCONNECTED) {
+        ESP_LOGI(TAG, "USB MSC Device disconnected");
+        app_event_queue_t evt_queue = {
+            .event_group = APP_EVENT_MSC_DISCONNECTED
+        };
+        xQueueSend(app_event_queue, &evt_queue, 0);
+    }
+}
+
 static void usb_lib_task(void *pvParameters)
 {
     const usb_host_config_t host_config = {
@@ -740,8 +773,18 @@ void app_main(void)
 
     ESP_ERROR_CHECK(hid_host_install(&hid_host_driver_config));
 
+    const msc_host_driver_config_t msc_host_driver_config = {
+        .create_backround_task = true,
+        .task_priority = 5,
+        .stack_size = 4096,
+        .core_id = 0,
+        .callback = msc_host_event_callback,
+        .callback_arg = NULL
+    };
+    ESP_ERROR_CHECK(msc_host_install(&msc_host_driver_config));
+
     ESP_LOGI(TAG, "==========================================================");
-    ESP_LOGI(TAG, "USB HOST READY! Hay cam ban phim USB vao cong Type-C OTG");
+    ESP_LOGI(TAG, "USB HOST READY! Cam ban phim USB hoac USB Flash Drive vao Type-C");
     ESP_LOGI(TAG, "==========================================================");
 
     app_event_queue_t evt_queue;
@@ -819,6 +862,45 @@ void app_main(void)
                         break;
                 }
                 fflush(stdout);
+            } else if (APP_EVENT_MSC_CONNECTED == evt_queue.event_group) {
+                ESP_LOGI(TAG, "Connecting to USB MSC device at addr %d...", evt_queue.msc_dev.address);
+                esp_err_t err = msc_host_install_device(evt_queue.msc_dev.address, &s_msc_device_handle);
+                if (err == ESP_OK) {
+                    const esp_vfs_fat_mount_config_t mount_config = {
+                        .format_if_mount_failed = false,
+                        .max_files = 4,
+                        .allocation_unit_size = 16 * 1024
+                    };
+                    err = msc_host_vfs_register(s_msc_device_handle, "/usb", &mount_config, &s_msc_vfs_handle);
+                    if (err == ESP_OK) {
+                        ESP_LOGI(TAG, "USB Flash Drive mounted at /usb successfully!");
+                        int count = mp3_player_scan_usb("/usb");
+                        printf("\r\n>>> [USB ĐÃ CẮM: TÌM THẤY %d BÀI HÁT TẠI /usb] <<<\r\n", count);
+                        audio_play_action_feedback();
+                        s_prev_mode_before_usb = mode_manager_get_current_index();
+                        mode_manager_switch_to(9); // Chuyển sang Mode 10 (Chỉ mục 9)
+                    } else {
+                        ESP_LOGE(TAG, "Failed to mount /usb: %s", esp_err_to_name(err));
+                        msc_host_uninstall_device(s_msc_device_handle);
+                        s_msc_device_handle = NULL;
+                    }
+                } else {
+                    ESP_LOGE(TAG, "Failed to install MSC device: %s", esp_err_to_name(err));
+                }
+            } else if (APP_EVENT_MSC_DISCONNECTED == evt_queue.event_group) {
+                printf("\r\n>>> [USB FLASH DRIVE ĐÃ RÚT RA] <<<\r\n");
+                mp3_player_clear_playlist();
+                if (s_msc_vfs_handle) {
+                    msc_host_vfs_unregister(s_msc_vfs_handle);
+                    s_msc_vfs_handle = NULL;
+                }
+                if (s_msc_device_handle) {
+                    msc_host_uninstall_device(s_msc_device_handle);
+                    s_msc_device_handle = NULL;
+                }
+                if (mode_manager_get_current_index() == 9) {
+                    mode_manager_switch_to(s_prev_mode_before_usb);
+                }
             }
         }
     }

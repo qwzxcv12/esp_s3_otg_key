@@ -1141,6 +1141,14 @@ void led_effects_beat(void) {
     led_effects_drum_kick(0);
 }
 
+void led_effects_music_energy(float energy) {
+    if (energy > 0.45f) {
+        led_effects_beat();
+    } else if (energy > 0.20f) {
+        led_effects_spark();
+    }
+}
+
 // Tia lửa kim tuyến lấp lánh tại vị trí ngẫu nhiên & góc vuông
 void led_effects_spark(void) {
     if (!s_led_strip || !s_led_mutex) return;

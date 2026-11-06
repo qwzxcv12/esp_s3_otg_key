@@ -104,6 +104,13 @@ void audio_play_piano_timbre_preview(piano_timbre_t timbre);
 void audio_play_typewriter_return(void);
 void audio_synth_stop_all_background(void);
 
+// ---- Streaming Audio API (MP3 / WAV from USB Flash Drive) ----
+esp_err_t audio_stream_start(uint32_t sample_rate, uint8_t channels);
+void      audio_stream_stop(void);
+bool      audio_stream_is_active(void);
+size_t    audio_stream_write(const int16_t *pcm, size_t num_samples);
+float     audio_stream_get_energy(void);
+
 // Mode 1: Piano & Pentatonic
 void audio_play_piano_note(float freq_hz, piano_timbre_t timbre);
 void audio_play_chime_mode(uint8_t mode_index);

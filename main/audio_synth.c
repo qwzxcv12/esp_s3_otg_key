@@ -106,6 +106,20 @@ static float s_siren_phase = 0.0f;
 static float s_siren_gain = 0.0f;
 static uint32_t s_siren_step = 0;
 
+// Streaming Audio Buffer State (USB Flash Drive MP3 / WAV)
+#define STREAM_RINGBUF_SAMPLES (64 * 1024)
+static int16_t *s_stream_ringbuf = NULL;
+static size_t s_stream_wr_idx = 0;
+static size_t s_stream_rd_idx = 0;
+static size_t s_stream_available = 0;
+static portMUX_TYPE s_stream_mux = portMUX_INITIALIZER_UNLOCKED;
+static volatile bool s_stream_active = false;
+static uint32_t s_stream_sample_rate = 44100;
+static uint8_t s_stream_channels = 2;
+static float s_stream_resample_ratio = 1.0f;
+static float s_stream_resample_frac = 0.0f;
+static volatile float s_stream_current_energy = 0.0f;
+
 // ============================================================================
 // MOZART 20-SONG MASTER PLAYLIST & HARMONIC AUDIO ENGINE
 // ============================================================================
@@ -794,13 +808,63 @@ static void audio_synth_task(void *pvParameters) {
 
         xSemaphoreGive(s_voice_mutex);
 
+        // Mix Audio Stream from USB Flash Drive (MP3 / WAV) if active
+        float stream_l[CHUNK_SAMPLES] = { 0 };
+        float stream_r[CHUNK_SAMPLES] = { 0 };
+        bool has_stream = false;
+
+        if (s_stream_active && s_stream_ringbuf) {
+            portENTER_CRITICAL(&s_stream_mux);
+            size_t avail = s_stream_available;
+            portEXIT_CRITICAL(&s_stream_mux);
+
+            if (avail > 0) {
+                has_stream = true;
+                float local_energy = 0.0f;
+                for (int i = 0; i < CHUNK_SAMPLES; i++) {
+                    if (avail == 0) break;
+                    int16_t s_l = 0, s_r = 0;
+                    if (s_stream_channels == 2) {
+                        if (avail >= 2) {
+                            s_l = s_stream_ringbuf[s_stream_rd_idx++];
+                            if (s_stream_rd_idx >= STREAM_RINGBUF_SAMPLES) s_stream_rd_idx = 0;
+                            s_r = s_stream_ringbuf[s_stream_rd_idx++];
+                            if (s_stream_rd_idx >= STREAM_RINGBUF_SAMPLES) s_stream_rd_idx = 0;
+                            avail -= 2;
+                        }
+                    } else {
+                        s_l = s_stream_ringbuf[s_stream_rd_idx++];
+                        if (s_stream_rd_idx >= STREAM_RINGBUF_SAMPLES) s_stream_rd_idx = 0;
+                        s_r = s_l;
+                        avail--;
+                    }
+                    stream_l[i] = (float)s_l * (1.0f / 32768.0f);
+                    stream_r[i] = (float)s_r * (1.0f / 32768.0f);
+                    float e = fabsf(stream_l[i]) + fabsf(stream_r[i]);
+                    if (e > local_energy) local_energy = e;
+                }
+
+                portENTER_CRITICAL(&s_stream_mux);
+                s_stream_available = avail;
+                portEXIT_CRITICAL(&s_stream_mux);
+
+                s_stream_current_energy = s_stream_current_energy * 0.85f + local_energy * 0.15f;
+            }
+        }
+
         // Convert float mix to 32-bit stereo PCM: pre-gain headroom + soft limiter (no hard clipping)
         const float max_int32 = 2147480000.0f * s_master_volume;
         for (int i = 0; i < CHUNK_SAMPLES; i++) {
-            float val = soft_limit(float_mix[i] * MIX_PRE_GAIN * 1.6f);
-            int32_t pcm = (int32_t)(val * max_int32);
-            mix_buffer[i * 2]     = pcm;
-            mix_buffer[i * 2 + 1] = pcm;
+            float val_l = float_mix[i];
+            float val_r = float_mix[i];
+            if (has_stream) {
+                val_l += stream_l[i] * 0.85f;
+                val_r += stream_r[i] * 0.85f;
+            }
+            float lim_l = soft_limit(val_l * MIX_PRE_GAIN * 1.6f);
+            float lim_r = soft_limit(val_r * MIX_PRE_GAIN * 1.6f);
+            mix_buffer[i * 2]     = (int32_t)(lim_l * max_int32);
+            mix_buffer[i * 2 + 1] = (int32_t)(lim_r * max_int32);
         }
 
         size_t written = 0;
@@ -1858,4 +1922,74 @@ void audio_synth_exit_low_power(void) {
 
 bool audio_synth_is_low_power(void) {
     return s_low_power_mode;
+}
+
+// ============================================================================
+// STREAMING AUDIO API (MP3 / WAV PLAYBACK FROM USB FLASH DRIVE)
+// ============================================================================
+
+esp_err_t audio_stream_start(uint32_t sample_rate, uint8_t channels) {
+    if (!s_stream_ringbuf) {
+        s_stream_ringbuf = (int16_t *)heap_caps_malloc(STREAM_RINGBUF_SAMPLES * sizeof(int16_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        if (!s_stream_ringbuf) {
+            ESP_LOGE(TAG, "Failed to allocate audio stream ringbuf in PSRAM");
+            return ESP_ERR_NO_MEM;
+        }
+    }
+    portENTER_CRITICAL(&s_stream_mux);
+    s_stream_wr_idx = 0;
+    s_stream_rd_idx = 0;
+    s_stream_available = 0;
+    s_stream_sample_rate = sample_rate ? sample_rate : 44100;
+    s_stream_channels = (channels == 1) ? 1 : 2;
+    s_stream_resample_ratio = (float)s_stream_sample_rate / (float)AUDIO_SAMPLE_RATE;
+    s_stream_resample_frac = 0.0f;
+    s_stream_current_energy = 0.0f;
+    s_stream_active = true;
+    portEXIT_CRITICAL(&s_stream_mux);
+    ESP_LOGI(TAG, "Audio stream started: %u Hz, %d ch", (unsigned int)sample_rate, (int)channels);
+    return ESP_OK;
+}
+
+void audio_stream_stop(void) {
+    portENTER_CRITICAL(&s_stream_mux);
+    s_stream_active = false;
+    s_stream_wr_idx = 0;
+    s_stream_rd_idx = 0;
+    s_stream_available = 0;
+    s_stream_current_energy = 0.0f;
+    portEXIT_CRITICAL(&s_stream_mux);
+    ESP_LOGI(TAG, "Audio stream stopped");
+}
+
+bool audio_stream_is_active(void) {
+    return s_stream_active;
+}
+
+float audio_stream_get_energy(void) {
+    return s_stream_current_energy;
+}
+
+size_t audio_stream_write(const int16_t *pcm, size_t num_samples) {
+    if (!s_stream_active || !s_stream_ringbuf || !pcm || num_samples == 0) return 0;
+
+    size_t written = 0;
+    while (written < num_samples && s_stream_active) {
+        portENTER_CRITICAL(&s_stream_mux);
+        size_t free_space = STREAM_RINGBUF_SAMPLES - s_stream_available;
+        size_t to_write = num_samples - written;
+        if (to_write > free_space) to_write = free_space;
+
+        for (size_t i = 0; i < to_write; i++) {
+            s_stream_ringbuf[s_stream_wr_idx++] = pcm[written++];
+            if (s_stream_wr_idx >= STREAM_RINGBUF_SAMPLES) s_stream_wr_idx = 0;
+        }
+        s_stream_available += to_write;
+        portEXIT_CRITICAL(&s_stream_mux);
+
+        if (written < num_samples) {
+            vTaskDelay(pdMS_TO_TICKS(10));
+        }
+    }
+    return written;
 }
