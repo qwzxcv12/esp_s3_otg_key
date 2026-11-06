@@ -55,6 +55,11 @@ static QueueHandle_t s_cmd_queue = NULL;
 static TaskHandle_t s_player_task_handle = NULL;
 static SemaphoreHandle_t s_player_mutex = NULL;
 
+static mp3dec_t s_mp3d;
+static uint8_t *s_mp3_read_buf = NULL;
+static short *s_mp3_pcm_buf = NULL;
+static int16_t *s_wav_buf = NULL;
+
 void mp3_player_set_usb_mounted(bool mounted) {
     s_usb_mounted = mounted;
     if (!mounted) {
@@ -192,9 +197,7 @@ static bool play_wav_file(FILE *f, player_cmd_t *cmd_out) {
 
     audio_stream_start(sample_rate, channels);
 
-    int16_t *buf = (int16_t *)heap_caps_malloc(2048 * sizeof(int16_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    if (!buf) buf = (int16_t *)malloc(2048 * sizeof(int16_t));
-    if (!buf) return false;
+    if (!s_wav_buf) return false;
 
     bool finished = true;
     while (!feof(f)) {
@@ -208,11 +211,11 @@ static bool play_wav_file(FILE *f, player_cmd_t *cmd_out) {
             continue;
         }
 
-        size_t read_bytes = fread(buf, 1, 2048 * sizeof(int16_t), f);
+        size_t read_bytes = fread(s_wav_buf, 1, 2048 * sizeof(int16_t), f);
         if (read_bytes == 0) break;
 
         size_t samples = read_bytes / sizeof(int16_t);
-        audio_stream_write(buf, samples);
+        audio_stream_write(s_wav_buf, samples);
 
         float eng = audio_stream_get_energy();
         if (eng > 0.05f) {
@@ -220,24 +223,13 @@ static bool play_wav_file(FILE *f, player_cmd_t *cmd_out) {
         }
     }
 
-    free(buf);
     return finished;
 }
 
 static bool play_mp3_file(FILE *f, player_cmd_t *cmd_out) {
-    uint8_t *read_buf = (uint8_t *)heap_caps_malloc(FILE_READ_BUF_SIZE, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    if (!read_buf) read_buf = (uint8_t *)malloc(FILE_READ_BUF_SIZE);
-    if (!read_buf) return false;
+    if (!s_mp3_read_buf || !s_mp3_pcm_buf) return false;
 
-    short *pcm = (short *)heap_caps_malloc(MINIMP3_MAX_SAMPLES_PER_FRAME * sizeof(short), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
-    if (!pcm) pcm = (short *)malloc(MINIMP3_MAX_SAMPLES_PER_FRAME * sizeof(short));
-    if (!pcm) {
-        free(read_buf);
-        return false;
-    }
-
-    mp3dec_t mp3d;
-    mp3dec_init(&mp3d);
+    mp3dec_init(&s_mp3d);
     mp3dec_frame_info_t info;
 
     int bytes_in_buf = 0;
@@ -258,23 +250,28 @@ static bool play_mp3_file(FILE *f, player_cmd_t *cmd_out) {
         // Refill buffer if low on data
         if (bytes_in_buf < 4096 && !feof(f)) {
             size_t bytes_to_read = FILE_READ_BUF_SIZE - bytes_in_buf;
-            size_t read_bytes = fread(read_buf + bytes_in_buf, 1, bytes_to_read, f);
+            size_t read_bytes = fread(s_mp3_read_buf + bytes_in_buf, 1, bytes_to_read, f);
             bytes_in_buf += read_bytes;
         }
 
         if (bytes_in_buf <= 0) break; // Finished file
 
-        int samples = mp3dec_decode_frame(&mp3d, read_buf, bytes_in_buf, pcm, &info);
+        int samples = mp3dec_decode_frame(&s_mp3d, s_mp3_read_buf, bytes_in_buf, s_mp3_pcm_buf, &info);
 
         if (info.frame_bytes > 0) {
             bytes_in_buf -= info.frame_bytes;
             if (bytes_in_buf > 0) {
-                memmove(read_buf, read_buf + info.frame_bytes, bytes_in_buf);
+                memmove(s_mp3_read_buf, s_mp3_read_buf + info.frame_bytes, bytes_in_buf);
             }
         } else {
-            // No valid sync found or need more data
+            // No valid sync found in current chunk (e.g. ID3 header) -> shift
             if (feof(f)) break;
-            bytes_in_buf = 0;
+            if (bytes_in_buf > 2048) {
+                bytes_in_buf -= 2048;
+                memmove(s_mp3_read_buf, s_mp3_read_buf + 2048, bytes_in_buf);
+            } else {
+                bytes_in_buf = 0;
+            }
             continue;
         }
 
@@ -284,7 +281,7 @@ static bool play_mp3_file(FILE *f, player_cmd_t *cmd_out) {
                 stream_started = true;
             }
 
-            audio_stream_write(pcm, samples * info.channels);
+            audio_stream_write(s_mp3_pcm_buf, samples * info.channels);
 
             float eng = audio_stream_get_energy();
             if (eng > 0.05f) {
@@ -293,8 +290,6 @@ static bool play_mp3_file(FILE *f, player_cmd_t *cmd_out) {
         }
     }
 
-    free(read_buf);
-    free(pcm);
     return finished;
 }
 
@@ -389,8 +384,21 @@ esp_err_t mp3_player_init(void) {
     if (s_cmd_queue == NULL) {
         s_cmd_queue = xQueueCreate(8, sizeof(player_cmd_t));
     }
+    if (!s_mp3_read_buf) {
+        s_mp3_read_buf = (uint8_t *)heap_caps_malloc(FILE_READ_BUF_SIZE, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        if (!s_mp3_read_buf) s_mp3_read_buf = (uint8_t *)malloc(FILE_READ_BUF_SIZE);
+    }
+    if (!s_mp3_pcm_buf) {
+        s_mp3_pcm_buf = (short *)heap_caps_malloc(MINIMP3_MAX_SAMPLES_PER_FRAME * sizeof(short), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        if (!s_mp3_pcm_buf) s_mp3_pcm_buf = (short *)malloc(MINIMP3_MAX_SAMPLES_PER_FRAME * sizeof(short));
+    }
+    if (!s_wav_buf) {
+        s_wav_buf = (int16_t *)heap_caps_malloc(2048 * sizeof(int16_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        if (!s_wav_buf) s_wav_buf = (int16_t *)malloc(2048 * sizeof(int16_t));
+    }
     if (s_player_task_handle == NULL) {
-        xTaskCreatePinnedToCore(mp3_player_task, "mp3_task", 8192, NULL, 5, &s_player_task_handle, 1);
+        // Tăng stack size lên 20KB để đảm bảo không bị tràn stack khi gọi stdio / FatFS
+        xTaskCreatePinnedToCore(mp3_player_task, "mp3_task", 20480, NULL, 5, &s_player_task_handle, 1);
     }
     ESP_LOGI(TAG, "MP3 Player Subsystem initialized");
     return ESP_OK;
