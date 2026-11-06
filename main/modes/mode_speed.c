@@ -15,18 +15,18 @@ static void mode_speed_on_enter(void) {
     audio_speed_get_info(&info);
 
     printf("\r\n================================================================================\r\n");
-    printf(">>> CHẾ ĐỘ 3: NHẠC CHẠY THEO TỐC ĐỘ GÕ PHÍM <<<\r\n");
+    printf(">>> CHẾ ĐỘ 3: ĐƯỜNG ĐUA ÂM NHẠC F1 TRÊN KHUNG HÌNH VUÔNG (32 LED) <<<\r\n");
     printf("================================================================================\r\n");
-    printf(" -> BÉ GÕ BẤT KỲ PHÍM NÀO ĐỀU TẤU NỐT NHẠC TIẾP THEO CỦA BÀI HÁT!\r\n");
-    printf(" -> Gõ chậm rãi: Nhạc ngân dài, du dương, êm đềm.\r\n");
-    printf(" -> Gõ dồn dập: Nhạc giòn giã, rộn rã, dải LED đồng hồ tốc độ bừng sáng!\r\n");
+    printf(" -> BÉ GÕ BẤT KỲ PHÍM NÀO ĐỀU TẤU NỐT NHẠC & ĐẠP GA XE ĐUA QUANH 4 CẠNH!\r\n");
+    printf(" -> Gõ chậm rãi: Xe lướt nhẹ quanh khung vuông, nhạc ngân du dương.\r\n");
+    printf(" -> Gõ dồn dập: Xe đua ôm cua 4 góc cực tít, đạt Nitro bốc lửa cầu vồng!\r\n");
     printf(" -> Bài mở đầu (%d/%d): \"%s\" (%s)\r\n",
            (int)(info.song_idx + 1), (int)info.total_songs, info.song_name, info.title_vi);
     printf(" -> Phím Mũi Tên: Đổi bài | Phím TAB/F10: Đổi nhạc cụ (%s)\r\n",
            audio_speed_get_timbre_name());
     printf("================================================================================\r\n\r\n");
 
-    led_effects_color_burst(0, 180, 255);
+    led_effects_square_spin(true, 0, 180, 255);
 }
 
 static void mode_speed_on_exit(void) {
@@ -45,7 +45,7 @@ static bool mode_speed_handle_key(uint8_t kc, uint8_t mod, char c) {
         audio_speed_get_info(&info);
         printf("\r\n>>> [BÀI TIẾP THEO (%d/%d): \"%s\" (%s)] <<<\r\n",
                (int)(info.song_idx + 1), (int)info.total_songs, info.song_name, info.title_vi);
-        led_effects_mode_switch(2);
+        led_effects_square_spin(true, 0, 220, 255);
         return true;
     }
 
@@ -56,7 +56,7 @@ static bool mode_speed_handle_key(uint8_t kc, uint8_t mod, char c) {
         audio_speed_get_info(&info);
         printf("\r\n>>> [LÙI BÀI TRƯỚC (%d/%d): \"%s\" (%s)] <<<\r\n",
                (int)(info.song_idx + 1), (int)info.total_songs, info.song_name, info.title_vi);
-        led_effects_mode_switch(2);
+        led_effects_square_spin(false, 255, 160, 0);
         return true;
     }
 
@@ -64,7 +64,7 @@ static bool mode_speed_handle_key(uint8_t kc, uint8_t mod, char c) {
     if (kc == 0x2B || kc == 0x43) {
         audio_speed_toggle_timbre();
         printf("\r\n>>> [ĐỔI NHẠC CỤ -> %s] <<<\r\n", audio_speed_get_timbre_name());
-        led_effects_color_burst(255, 215, 0);
+        led_effects_piano_chord(255, 215, 0);
         return true;
     }
 
@@ -79,18 +79,16 @@ static bool mode_speed_handle_key(uint8_t kc, uint8_t mod, char c) {
         return true;
     }
 
-    // 5. MỌI PHÍM BẤM CÒN LẠI (Chữ, Số 1..0, Space, Enter, Backspace, v.v.):
-    // Đều tấu nốt nhạc tiếp theo ngay lập tức (100% phản hồi tức thời)!
+    // 5. MỌI PHÍM BẤM CÒN LẠI: Tấu nốt nhạc tiếp theo & tăng tốc xe đua quanh khung hình vuông 32 LED!
     speed_note_info_t info;
     bool finished = audio_speed_play_note(&info);
 
-    // Hiển thị thanh đồng hồ tốc độ BPM (Speedometer Tachometer Bar) trên 30 bóng LED
     float ratio = (float)(info.speed_bpm - 60) / 220.0f;
     if (ratio < 0.08f) ratio = 0.08f;
     if (ratio > 1.0f)  ratio = 1.0f;
-    uint8_t target_leds = (uint8_t)(ratio * 30.0f + 0.5f);
+    uint8_t target_leds = (uint8_t)(ratio * (float)LED_STRIP_COUNT + 0.5f);
     if (target_leds < 2) target_leds = 2;
-    if (target_leds > 30) target_leds = 30;
+    if (target_leds > LED_STRIP_COUNT) target_leds = LED_STRIP_COUNT;
     s_speed_led_level = target_leds;
     s_idle_decay_ms = 0;
 
@@ -100,7 +98,7 @@ static bool mode_speed_handle_key(uint8_t kc, uint8_t mod, char c) {
         } else {
             led_effects_speedometer(s_speed_led_level, ratio);
         }
-        printf(" -> [\"%s\" | Hoàn thành vòng nhạc! | Tốc độ: %u BPM]\r\n",
+        printf(" -> [\"%s\" | Hoàn thành vòng đua! | Tốc độ: %u BPM]\r\n",
                info.song_name, (unsigned int)info.speed_bpm);
     } else {
         led_effects_speedometer(s_speed_led_level, ratio);
@@ -116,7 +114,6 @@ static bool mode_speed_handle_key(uint8_t kc, uint8_t mod, char c) {
 }
 
 static void mode_speed_background_tick(uint32_t delta_ms) {
-    // Khi bé ngừng gõ, kim đồng hồ tốc độ LED hạ dần mượt mà về 0
     if (s_speed_led_level > 0) {
         s_idle_decay_ms += delta_ms;
         if (s_idle_decay_ms >= 350) {
@@ -126,7 +123,7 @@ static void mode_speed_background_tick(uint32_t delta_ms) {
             } else {
                 s_speed_led_level = 0;
             }
-            float ratio = (float)s_speed_led_level / 30.0f;
+            float ratio = (float)s_speed_led_level / (float)LED_STRIP_COUNT;
             led_effects_speedometer(s_speed_led_level, ratio);
         }
     }
@@ -139,17 +136,15 @@ static void mode_speed_handle_action(void) {
     printf("\r\n>>> [BTN 6 ACTION: SPEED ĐỔI BÀI HÁT: \"%s\" (%s)] <<<\r\n",
            info.song_name, info.title_vi ? info.title_vi : "");
     fflush(stdout);
-    // Âm thanh thông báo chuẩn khi đổi bài hát
     audio_play_song_change_chime();
     audio_play_piano_note_dur(info.freq, TIMBRE_PIANO, 0, 350);
-    led_effects_color_burst(255, 120, 0);
+    led_effects_square_spin(true, 255, 120, 0);
 }
 
-// Cấu hình Driver cho Chế độ 3
 const toy_mode_driver_t g_mode_speed_driver = {
     .id                 = 2,
     .name               = "3. NHẠC CHẠY THEO TỐC ĐỘ GÕ PHÍM",
-    .short_desc         = "Bé gõ bất kỳ phím nào cũng ra bài hát: gõ nhanh nhạc nhanh, gõ chậm nhạc chậm",
+    .short_desc         = "Đường đua F1 trên khung hình vuông 32 LED: gõ càng nhanh xe chạy quanh 4 cạnh càng tít",
     .init               = NULL,
     .on_enter           = mode_speed_on_enter,
     .on_exit            = mode_speed_on_exit,

@@ -35,10 +35,9 @@ static const char *s_spell_dict[26] = {
 };
 
 static void mode_phonics_on_enter(void) {
-    printf("\r\n>>> [BÉ HỌC ĐÁNH VẦN CHỮ CÁI & TẬP ĐẾM SỐ SẴN SÀNG] <<<\r\n");
-    printf(">>> [Phím A..Z: Đọc tên chữ cái, ngữ âm & từ vựng minh họa] <<<\r\n");
-    printf(">>> [Phím 0..9 & Numpad: Bé học đếm số 0..9 | Phím F10 hoặc Shift+0: Bé tập đếm SỐ 10!] <<<\r\n");
-    printf(">>> [Phím F1..F9, ESC, Space, Enter, Mũi tên, Dấu câu: Đọc tên từng phím tiếng Việt (Nhấn đúp ESC để đổi chế độ)] <<<\r\n\r\n");
+    printf("\r\n>>> [BÉ HỌC ĐÁNH VẦN CHỮ CÁI & TẬP ĐẾM SỐ TRÊN KHUNG VUÔNG 32 LED] <<<\r\n");
+    printf(">>> [Phím A..Z: Bản đồ chữ cái cầu vồng quanh 4 cạnh | Phím 0..10: Đoàn tàu đếm số cầu vồng] <<<\r\n");
+    printf(">>> [4 Phím Mũi Tên: Học 4 hướng (Lên/Phải/Xuống/Trái) sáng đúng 4 cạnh hình vuông!] <<<\r\n\r\n");
 }
 
 static bool mode_phonics_handle_key(uint8_t kc, uint8_t mod, char c) {
@@ -47,15 +46,10 @@ static bool mode_phonics_handle_key(uint8_t kc, uint8_t mod, char c) {
     if (c >= 'a' && c <= 'z') upper = c - 32;
     else if (c >= 'A' && c <= 'Z') upper = c;
 
-    // 1. Phím chữ cái A - Z: Phát âm ngữ âm tiếng Việt & từ vựng
+    // 1. Phím chữ cái A - Z: Phát âm ngữ âm tiếng Việt & thắp sáng vị trí chữ cái trên khung vuông
     if (upper >= 'A' && upper <= 'Z') {
         audio_play_phonics_letter(upper);
-
-        // Hiệu ứng màu riêng biệt cho từng chữ cái
-        uint8_t r = 50 + ((upper * 37) % 205);
-        uint8_t g = 50 + ((upper * 67) % 205);
-        uint8_t b = 50 + ((upper * 97) % 205);
-        led_effects_color_burst(r, g, b);
+        led_effects_phonics_letter(upper);
 
         const char *spell_text = s_spell_dict[upper - 'A'];
         printf(" -> [BÉ HỌC ĐÁNH VẦN: %s]\r\n", spell_text);
@@ -64,7 +58,7 @@ static bool mode_phonics_handle_key(uint8_t kc, uint8_t mod, char c) {
 
     // 2. Phím F10 (0x43) hoặc Shift+0 (c == ')'): Bé học đếm SỐ 10 hoàn chỉnh!
     if (kc == 0x43 || (kc == 0x27 && c == ')')) {
-        printf(" -> [BÉ HỌC SỐ: SỐ 10 - ĐẾM ĐỦ 10 NHỊP TRỐNG & 10 BÓNG ĐÈN!]\r\n");
+        printf(" -> [BÉ HỌC SỐ: SỐ 10 - ĐẾM ĐỦ 10 NHỊP TRỐNG & 10 BÓNG ĐÈN CẦU VỒNG!]\r\n");
         audio_play_counting_number(10);
         return true;
     }
@@ -81,21 +75,32 @@ static bool mode_phonics_handle_key(uint8_t kc, uint8_t mod, char c) {
         return true;
     }
 
-    // 4. Phím ký tự & dấu câu (Khi bé bấm các dấu +, -, *, /, =, ?, !, @, #...)
+    // 4. 4 Phím Mũi Tên: Học phương hướng trực quan trên 4 Cạnh Hình Vuông (Trên / Phải / Dưới / Trái)
+    if (kc >= 0x4F && kc <= 0x52) {
+        uint8_t side = (kc == 0x52) ? 0 : (kc == 0x4F) ? 1 : (kc == 0x51) ? 2 : 3;
+        if (!sb_play_special_key(kc)) {
+            audio_play_special_key(kc);
+        }
+        led_effects_square_side_pulse(side, 0, 220, 255);
+        printf(" -> [BÉ HỌC HƯỚNG: THẮP SÁNG CẠNH %u HÌNH VUÔNG (0x%02X)]\r\n", (unsigned int)side, kc);
+        return true;
+    }
+
+    // 5. Phím ký tự & dấu câu (+, -, *, /, =, ?, !, @, #...)
     if (c != 0 && c != '\r' && c != '\n' && c != '\b' && c != '\t' && c != ' ' && sb_play_symbol(c)) {
-        led_effects_color_burst(100, 220, 255);
+        led_effects_piano_key((c >> 3) & 3, c & 7, 2, 80, 220, 255);
         printf(" -> [BÉ HỌC DẤU CÂU & KÝ TỰ: '%c']\r\n", c);
         return true;
     }
 
-    // 5. Phím chức năng & điều hướng đặc biệt (ESC, F1..F9, Space, Enter, Backspace, Tab, Mũi tên, Shift, Ctrl, Alt...)
+    // 6. Phím chức năng đặc biệt (ESC, F1..F9, Space, Enter, Backspace, Tab, Shift, Ctrl, Alt...)
     if (sb_play_special_key(kc)) {
-        led_effects_color_burst(255, 215, 0);
-        printf(" -> [BÉ HỌC PHÍM CHỨC NĂNG & ĐIỀU HƯỚNG: 0x%02X]\r\n", kc);
+        led_effects_piano_key((kc >> 3) & 3, kc & 7, 0, 255, 215, 0);
+        printf(" -> [BÉ HỌC PHÍM CHỨC NĂNG: 0x%02X]\r\n", kc);
         return true;
     }
 
-    // 6. Khám phá các phím khác
+    // 7. Khám phá các phím khác
     audio_play_special_key(kc);
     led_effects_spark();
     printf(" -> [BÉ KHÁM PHÁ BÀN PHÍM: 0x%02X]\r\n", kc);
@@ -109,11 +114,10 @@ static void mode_phonics_handle_action(void) {
     led_effects_celebration();
 }
 
-// Cấu hình Driver cho Chế độ 9
 const toy_mode_driver_t g_mode_phonics_driver = {
     .id                 = 8,
     .name               = "9. BÉ HỌC ĐÁNH VẦN CHỮ CÁI & TẬP ĐẾM SỐ (PHONICS & COUNTING)",
-    .short_desc         = "Phát âm chuẩn tiếng Việt bảng chữ cái 26 chữ, tập đếm 0-10 và khám phá mọi phím chức năng",
+    .short_desc         = "Bản đồ chữ cái cầu vồng 4 cạnh, tập đếm 0-10 và học 4 hướng trên khung vuông",
     .init               = NULL,
     .on_enter           = mode_phonics_on_enter,
     .on_exit            = NULL,
