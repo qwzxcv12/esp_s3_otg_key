@@ -77,11 +77,22 @@ static bool mode_phonics_handle_key(uint8_t kc, uint8_t mod, char c) {
 
     // 4. 4 Phím Mũi Tên: Học phương hướng trực quan trên 4 Cạnh Hình Vuông (Trên / Phải / Dưới / Trái)
     if (kc >= 0x4F && kc <= 0x52) {
-        uint8_t side = (kc == 0x52) ? 0 : (kc == 0x4F) ? 1 : (kc == 0x51) ? 2 : 3;
+        // Đảo 0x52 (Lên) <-> 0x51 (Xuống) cho đúng hướng quét thực tế của người dùng:
+        // - Mũi tên Lên (0x52): Quét từ Cạnh Dưới (side 2) bốc LÊN Cạnh Trên
+        // - Mũi tên Xuống (0x51): Quét từ Cạnh Trên (side 0) dội XUỐNG Cạnh Dưới
+        // - Mũi tên Phải (0x4F): Quét từ Cạnh Phải (side 1) sang Cạnh Trái
+        // - Mũi tên Trái (0x50): Quét từ Cạnh Trái (side 3) sang Cạnh Phải
+        uint8_t side = (kc == 0x52) ? 2 : (kc == 0x4F) ? 1 : (kc == 0x51) ? 0 : 3;
+        uint8_t r = 0, g = 220, b = 255;
+        if (kc == 0x52)      { r = 50;  g = 255; b = 80;  } // Lên: Xanh lá tươi
+        else if (kc == 0x51) { r = 255; g = 100; b = 0;   } // Xuống: Cam rực rỡ
+        else if (kc == 0x4F) { r = 0;   g = 180; b = 255; } // Phải: Xanh cyan biển
+        else if (kc == 0x50) { r = 255; g = 50;  b = 200; } // Trái: Hồng sen cánh chuồn
+
         if (!sb_play_special_key(kc)) {
             audio_play_special_key(kc);
         }
-        led_effects_direction_sweep(side, 0, 220, 255);
+        led_effects_direction_sweep(side, r, g, b);
         printf(" -> [BÉ HỌC HƯỚNG: QUÉT TỪ TÂM CẠNH %u SANG TÂM CẠNH ĐỐI DIỆN (0x%02X)]\r\n", (unsigned int)side, kc);
         return true;
     }
