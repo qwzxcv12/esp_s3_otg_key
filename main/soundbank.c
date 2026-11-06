@@ -434,6 +434,7 @@ bool soundbank_available(void) { return s_mounted; }
 
 void soundbank_set_mode(uint8_t mode_index) {
     if (!s_mounted || !s_loader_task) return;
+    if (mode_index >= 9) return; // Mode 10 (USB MP3 Player) khong dung soundbank LittleFS
     s_target_mode = mode_index % 9;
     xTaskNotifyGive(s_loader_task);
 }

@@ -749,16 +749,13 @@ void app_main(void)
     // 4. Initialize 6 Push Buttons (BTN 1..6 on GPIO 41, 21, 48, 42, 45, 47)
     ESP_ERROR_CHECK(button_driver_init(on_button_event));
 
-    // 5. Khởi tạo Mode Manager & Đăng ký toàn bộ 9 chế độ chuẩn hóa
+    // 5. Khởi tạo Mode Manager & Đăng ký toàn bộ 10 chế độ
     ESP_ERROR_CHECK(mode_manager_init());
 
     // 6. Start toy background monitor task (gọi led_effects_tick & mode_manager_tick)
     xTaskCreate(toy_background_task, "toy_bg", 3072, NULL, 4, NULL);
 
-    // 7. Chuyển vào chế độ đầu tiên: Mode 1 (Đàn Piano Diệu Kỳ)
-    mode_manager_switch_to(0);
-
-    // 8. Start USB Host Library & HID Driver (Core 0)
+    // 7. Start USB Host Library & Drivers (Core 0)
     BaseType_t task_created = xTaskCreatePinnedToCore(usb_lib_task,
                                                       "usb_events",
                                                       4096,
@@ -775,7 +772,6 @@ void app_main(void)
         .callback = hid_host_device_callback,
         .callback_arg = NULL
     };
-
     ESP_ERROR_CHECK(hid_host_install(&hid_host_driver_config));
 
     const msc_host_driver_config_t msc_host_driver_config = {
@@ -792,9 +788,12 @@ void app_main(void)
     ESP_LOGI(TAG, "USB HOST READY! Cam ban phim USB hoac USB Flash Drive vao Type-C");
     ESP_LOGI(TAG, "==========================================================");
 
+    bool initial_mode_set = false;
+    TickType_t wait_ticks = pdMS_TO_TICKS(500); // Chờ 500ms xem có USB Flash Drive cắm sẵn không
+
     app_event_queue_t evt_queue;
     while (1) {
-        if (xQueueReceive(app_event_queue, &evt_queue, portMAX_DELAY)) {
+        if (xQueueReceive(app_event_queue, &evt_queue, wait_ticks)) {
             if (APP_EVENT_HID_HOST == evt_queue.event_group) {
                 hid_host_device_event(evt_queue.hid_host_device.handle,
                                       evt_queue.hid_host_device.event,
@@ -859,6 +858,17 @@ void app_main(void)
                         break;
                     }
                     case BUTTON_ACTION_SONG: {
+                        if (ptype == BUTTON_LONG_PRESS && mode_manager_get_current_index() == 9) {
+                            mp3_player_toggle_pause();
+                            if (mp3_player_get_state() == MP3_STATE_PAUSED) {
+                                printf("\r\n>>> [BTN 6 NHẤN GIỮ: TẠM DỪNG NHẠC (PAUSE)] <<<\r\n");
+                                led_effects_color_burst(255, 200, 0);
+                            } else {
+                                printf("\r\n>>> [BTN 6 NHẤN GIỮ: TIẾP TỤC PHÁT (RESUME)] <<<\r\n");
+                                led_effects_color_burst(0, 255, 100);
+                            }
+                            break;
+                        }
                         printf("\r\n>>> [BTN 6 - GPIO %d: KÍCH HOẠT ACTION / ĐỔI BÀI HÁT] <<<\r\n", PIN_BTN_ACTION_SONG);
                         mode_manager_dispatch_action();
                         break;
@@ -883,8 +893,9 @@ void app_main(void)
                         int count = mp3_player_scan_usb("/usb");
                         printf("\r\n>>> [USB ĐÃ CẮM: TÌM THẤY %d BÀI HÁT TẠI /usb] <<<\r\n", count);
                         if (mp3_player_is_usb_mounted() && s_msc_device_handle != NULL) {
-                            audio_play_action_feedback();
-                            s_prev_mode_before_usb = mode_manager_get_current_index();
+                            s_prev_mode_before_usb = initial_mode_set ? mode_manager_get_current_index() : 0;
+                            initial_mode_set = true;
+                            wait_ticks = portMAX_DELAY;
                             mode_manager_switch_to(9); // Chuyển sang Mode 10 (Chỉ mục 9)
                         } else {
                             ESP_LOGW(TAG, "USB disconnected during scan, skipping mode switch");
@@ -913,6 +924,13 @@ void app_main(void)
                 if (mode_manager_get_current_index() == 9) {
                     mode_manager_switch_to(s_prev_mode_before_usb);
                 }
+            }
+        } else {
+            // Hết 500ms chờ khởi động mà không có USB cắm sẵn -> Mặc định vào Chế độ 1 (Đàn Piano Diệu Kỳ)
+            if (!initial_mode_set) {
+                initial_mode_set = true;
+                wait_ticks = portMAX_DELAY;
+                mode_manager_switch_to(0);
             }
         }
     }

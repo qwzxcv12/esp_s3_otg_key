@@ -40,16 +40,17 @@ static void mode_usb_player_on_enter(void) {
                mp3_player_get_current_index() + 1, total, mp3_player_get_current_filename());
         printf("--------------------------------------------------------\r\n");
         printf("  [NÚT CỨNG / ĐIỀU KHIỂN]:\r\n");
-        printf("   - BTN 6 (Action) 1 lần : Tạm dừng / Phát tiếp (Play/Pause)\r\n");
-        printf("   - BTN 6 (Action) đúp   : Chuyển bài kế tiếp (Next Track)\r\n");
-        printf("   - BTN 1 / BTN 2        : Tăng / Giảm âm lượng\r\n");
-        printf("   - BTN 4                : Đổi kiểu đèn nháy theo nhạc (Visualizer)\r\n");
+        printf("   - BTN 6 (Action)        : Đổi sang bài kế tiếp (Next Track)\r\n");
+        printf("   - BTN 6 (Nhấn giữ > 1s) : Tạm dừng / Phát tiếp (Play / Pause)\r\n");
+        printf("   - BTN 1 / BTN 2         : Tăng / Giảm âm lượng\r\n");
+        printf("   - BTN 4                 : Đổi kiểu đèn nháy theo nhạc (Visualizer)\r\n");
+        printf("   - BTN 5                 : Tắt tiếng (Mute) / Tắt mở âm thanh\r\n");
         printf("  [NẾU CẮM BÀN PHÍM QUA HUB]:\r\n");
-        printf("   - Phím SPACE           : Play / Pause\r\n");
-        printf("   - Mũi tên Phải / Enter : Next Track\r\n");
-        printf("   - Mũi tên Trái         : Prev Track\r\n");
-        printf("   - Phím 1..9            : Nhảy nhanh tới bài 1 đến 9\r\n");
-        printf("   - Phím R               : Đổi chế độ lặp (All / 1 bài / Ngẫu nhiên)\r\n");
+        printf("   - Phím SPACE            : Play / Pause\r\n");
+        printf("   - Mũi tên Phải / Enter  : Next Track\r\n");
+        printf("   - Mũi tên Trái          : Prev Track\r\n");
+        printf("   - Phím 1..9             : Nhảy nhanh tới bài 1 đến 9\r\n");
+        printf("   - Phím R                : Đổi chế độ lặp (All / 1 bài / Ngẫu nhiên)\r\n");
         printf("========================================================\r\n\r\n");
 
         if (mp3_player_get_state() != MP3_STATE_PLAYING) {
@@ -65,26 +66,9 @@ static void mode_usb_player_on_exit(void) {
 }
 
 static void mode_usb_player_handle_action(void) {
-    int64_t now = esp_timer_get_time() / 1000; // ms
-    int64_t diff = now - s_last_action_click_time;
-    s_last_action_click_time = now;
-
-    if (diff < 400) {
-        // Nhấn đúp (Double Click) -> Next Track
-        printf(">>> [BTN 6 NHẤN ĐÚP: CHUYỂN BÀI KẾ TIẾP (NEXT)] <<<\r\n");
-        mp3_player_next();
-        led_effects_color_burst(0, 255, 255);
-    } else {
-        // Nhấn đơn (Single Click) -> Play / Pause Toggle
-        mp3_player_toggle_pause();
-        if (mp3_player_get_state() == MP3_STATE_PAUSED) {
-            printf(">>> [BTN 6: TẠM DỪNG NHẠC (PAUSE)] <<<\r\n");
-            led_effects_color_burst(255, 200, 0);
-        } else {
-            printf(">>> [BTN 6: PHÁT TIẾP (RESUME)] <<<\r\n");
-            led_effects_color_burst(0, 255, 100);
-        }
-    }
+    printf("\r\n>>> [BTN 6: ĐỔI SANG BÀI HÁT KẾ TIẾP (NEXT TRACK)] <<<\r\n");
+    mp3_player_next();
+    led_effects_color_burst(0, 255, 255);
 }
 
 static bool mode_usb_player_handle_key(uint8_t kc, uint8_t mod, char c) {
