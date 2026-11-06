@@ -3,10 +3,18 @@
 #include "mode_interface.h"
 #include "audio_synth.h"
 #include "led_effects.h"
+#include "esp_timer.h"
+
+static int64_t s_last_key_press_us = 0;
+static int64_t s_celebration_until_us = 0;
+static bool s_need_song_intro = false;
 
 static void mode_mozart_on_enter(void) {
     mozart_play_info_t info;
     audio_mozart_get_info(&info);
+    s_last_key_press_us = 0;
+    s_celebration_until_us = 0;
+    s_need_song_intro = false;
     printf("\r\n>>> [BABY MOZART READY: 20 Tuyệt Phẩm Cổ Điển & Thiếu Nhi (Khung Vuông 4x8 LED)] <<<\r\n");
     printf(">>> [Bài mở đầu: \"%s\" - %s (%d nốt)] <<<\r\n", info.name, info.artist, (int)info.total_notes);
     printf(">>> [Phím tắt: Mũi tên Trái/Phải = Đổi bài | Tab/F10 = Đổi nhạc cụ | Enter = Hát Ru Auto-Play | Backspace = Chơi lại] <<<\r\n\r\n");
@@ -14,6 +22,8 @@ static void mode_mozart_on_enter(void) {
 
 static void mode_mozart_on_exit(void) {
     audio_mozart_set_autoplay(false);
+    s_celebration_until_us = 0;
+    s_need_song_intro = false;
 }
 
 static bool mode_mozart_handle_key(uint8_t kc, uint8_t mod, char c) {
@@ -21,6 +31,8 @@ static bool mode_mozart_handle_key(uint8_t kc, uint8_t mod, char c) {
 
     // 1. Phím Enter hoặc Mũi tên Lên: Bật / Tắt chế độ Auto-Play (Vòng xoáy Cực Quang 360°)
     if (kc == 0x28 || kc == 0x58 || kc == 0x52) {
+        s_celebration_until_us = 0;
+        s_need_song_intro = false;
         audio_mozart_toggle_autoplay();
         bool ap = audio_mozart_is_autoplay();
         printf("\r\n>>> [BABY MOZART: %s CHẾ ĐỘ TỰ ĐỘNG BIỂU DIỄN (AURORA AUTO-PLAY)] <<<\r\n",
@@ -33,6 +45,8 @@ static bool mode_mozart_handle_key(uint8_t kc, uint8_t mod, char c) {
 
     // 2. Phím Mũi tên Phải hoặc PageDown: Bài kế tiếp (Xoay 1 vòng thuận chiều kim đồng hồ quanh khung vuông)
     if (kc == 0x4F || kc == 0x4E) {
+        s_celebration_until_us = 0;
+        s_need_song_intro = false;
         audio_mozart_next_song();
         mozart_play_info_t info;
         audio_mozart_get_info(&info);
@@ -44,6 +58,8 @@ static bool mode_mozart_handle_key(uint8_t kc, uint8_t mod, char c) {
 
     // 3. Phím Mũi tên Trái hoặc PageUp: Lùi bài trước (Xoay 1 vòng ngược chiều kim đồng hồ quanh khung vuông)
     if (kc == 0x50 || kc == 0x4B) {
+        s_celebration_until_us = 0;
+        s_need_song_intro = false;
         audio_mozart_prev_song();
         mozart_play_info_t info;
         audio_mozart_get_info(&info);
@@ -66,30 +82,57 @@ static bool mode_mozart_handle_key(uint8_t kc, uint8_t mod, char c) {
 
     // 5. Phím Backspace hoặc Home: Chơi lại bài hiện tại từ đầu (Tua ngược vòng sáng về 0)
     if (kc == 0x2A || kc == 0x4A) {
+        s_celebration_until_us = 0;
+        s_need_song_intro = false;
         audio_mozart_restart_song();
         mozart_play_info_t info;
         audio_mozart_get_info(&info);
-        printf("\r\n>>> [BABY MOZART: CHƠI LẠI TỪ ĐẦU BÀI: \"%s\"] <<<\r\n", info.name);
+        printf("\r\n>>> [BABY MOZART: CHƠI LẠI TỪ ĐẦU BÀI: \"%s\" (%d nốt)] <<<\r\n", info.name, (int)info.total_notes);
         led_effects_square_spin(false, 80, 255, 120);
         return true;
     }
 
     // 6. Tổ hợp Ctrl/Alt + Phím số 1..9 và 0: Chọn nhanh bài hát 1..10 cho phụ huynh
     if (has_ctrl_or_alt && ((c >= '1' && c <= '9') || c == '0')) {
+        s_celebration_until_us = 0;
+        s_need_song_intro = false;
         uint8_t target = (c == '0') ? 9 : (uint8_t)(c - '1');
         audio_mozart_select_song(target);
         mozart_play_info_t info;
         audio_mozart_get_info(&info);
-        printf("\r\n>>> [BABY MOZART - CHỌN BÀI %d/%d: \"%s\" - %s] <<<\r\n",
-               (int)(info.song_idx + 1), (int)info.total_songs, info.name, info.artist);
+        printf("\r\n>>> [BABY MOZART - CHỌN BÀI %d/%d: \"%s\" - %s (%d nốt)] <<<\r\n",
+               (int)(info.song_idx + 1), (int)info.total_songs, info.name, info.artist, (int)info.total_notes);
         led_effects_mode_switch(target);
         return true;
     }
 
     // 7. Tất cả các phím còn lại: Gảy từng nốt nhạc + Sao chổi + 4 góc Bass + Vòng tiến độ 32 LED
+    int64_t now_us = esp_timer_get_time();
+
+    // Chống rung phím và chống bấm nhầm phím kép (< 65ms)
+    if ((now_us - s_last_key_press_us) < 65000LL) {
+        return true;
+    }
+    s_last_key_press_us = now_us;
+
+    // Nếu vừa hoàn thành bài và đang phát "Bé giỏi quá!" + hiệu ứng pháo hoa ăn mừng (1.2 giây):
+    // Các phím bấm theo quán tính của bé trong 1.2s này sẽ không ăn lẹm vào nốt đầu bài tiếp theo!
+    if (now_us < s_celebration_until_us) {
+        return true;
+    }
+
     if (audio_mozart_is_autoplay()) {
         audio_mozart_set_autoplay(false);
         printf(" -> [BABY MOZART: Bé bắt đầu tự tay gõ -> Chuyển sang chế độ Bé Tự Biểu Diễn!]\r\n");
+    }
+
+    if (s_need_song_intro) {
+        s_need_song_intro = false;
+        mozart_play_info_t next_info;
+        audio_mozart_get_info(&next_info);
+        printf("\r\n>>> [BÉ BẮT ĐẦU BÀI TIẾP THEO (%d/%d): \"%s\" - %s (%d nốt)] <<<\r\n",
+               (int)(next_info.song_idx + 1), (int)next_info.total_songs,
+               next_info.name, next_info.artist, (int)next_info.total_notes);
     }
 
     mozart_play_info_t info;
@@ -97,10 +140,12 @@ static bool mode_mozart_handle_key(uint8_t kc, uint8_t mod, char c) {
     led_effects_mozart_progress(info.freq, info.bass_freq, info.timbre, info.note_idx, info.total_notes, false);
 
     if (finished) {
+        s_celebration_until_us = now_us + 1200000LL; // Khung giờ vàng 1.2s ăn mừng
+        s_need_song_intro = true;
         audio_play_praise();
         led_effects_celebration();
-        printf(" -> [XUẤT SẮC! BÉ VỪA HOÀN THÀNH BÀI: \"%s\" (%s)!]\r\n",
-               info.name, info.artist);
+        printf(" -> [XUẤT SẮC! BÉ VỪA HOÀN THÀNH TRỌN VẸN BÀI: \"%s\" (%s) - %d nốt!]\r\n",
+               info.name, info.artist, (int)info.total_notes);
     } else {
         printf(" -> [BABY MOZART: \"%s\" | Nốt %d/%d: %.1f Hz %s| Đàn %s]\r\n",
                info.name, (int)info.note_idx, (int)info.total_notes, info.freq,
@@ -116,10 +161,13 @@ static void mode_mozart_background_tick(uint32_t delta_ms) {
 }
 
 static void mode_mozart_handle_action(void) {
+    s_celebration_until_us = 0;
+    s_need_song_intro = false;
     audio_mozart_next_song();
     mozart_play_info_t info;
     audio_mozart_get_info(&info);
-    printf("\r\n>>> [BTN 6 ACTION: MOZART ĐỔI BÀI HÁT: \"%s\" (%s)] <<<\r\n", info.name, info.artist);
+    printf("\r\n>>> [BTN 6 ACTION: MOZART ĐỔI BÀI HÁT: \"%s\" (%s) - %d nốt] <<<\r\n",
+           info.name, info.artist, (int)info.total_notes);
     fflush(stdout);
     audio_play_song_change_chime();
     audio_play_piano_note_dur(info.freq, audio_mozart_get_timbre(), 0, 350);
