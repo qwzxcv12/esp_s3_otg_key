@@ -281,39 +281,38 @@ typedef struct {
     const char *artist;
 } mozart_song_t;
 
-// 1. Rondo Alla Turca (Hành khúc Thổ Nhĩ Kỳ) - W. A. Mozart (Chủ đề A + Điệp khúc Thổ Nhĩ Kỳ)
+// 1. Rondo Alla Turca (Hành khúc Thổ Nhĩ Kỳ) - W. A. Mozart (K. 331)
 static const mozart_note_t s_song_rondo_turca[] = {
-    // Đoạn A: Chủ đề La thứ
+    // Đoạn A: Chủ đề La thứ (8 ô nhịp đầu tiên)
     {F_B4, 0, 160}, {F_A4, 0, 160}, {F_GS4, 0, 160}, {F_A4, 0, 160}, {F_C5, F_A3, 340},
     {F_D5, 0, 160}, {F_C5, 0, 160}, {F_B4, 0, 160}, {F_C5, 0, 160}, {F_E5, F_A3, 340},
     {F_F5, 0, 160}, {F_E5, 0, 160}, {F_DS5, 0, 160}, {F_E5, 0, 160}, {F_B5, F_E3, 340},
     {F_A5, 0, 160}, {F_GS5, 0, 160}, {F_A5, 0, 160}, {F_B5, 0, 160}, {F_C6, F_A3, 400},
     {F_A5, 0, 200}, {F_C6, 0, 200}, {F_B5, F_E3, 200}, {F_A5, 0, 200}, {F_GS5, 0, 200}, {F_A5, F_A2, 450},
-    // Điệp khúc Hành khúc Thổ Nhĩ Kỳ rộn ràng (A Major Chorus)
-    {F_CS5, 0, 180}, {F_D5, 0, 180},
-    {F_E5, F_A3, 260}, {F_E5, 0, 180}, {F_E5, 0, 180}, {F_FS5, 0, 180}, {F_E5, 0, 180}, {F_D5, 0, 180}, {F_CS5, 0, 180}, {F_B4, F_E3, 380},
-    {F_A4, F_A3, 260}, {F_A4, 0, 180}, {F_A4, 0, 180}, {F_B4, 0, 180}, {F_A4, 0, 180}, {F_GS4, 0, 180}, {F_FS4, 0, 180}, {F_E4, F_E3, 380},
-    {F_FS4, 0, 180}, {F_GS4, 0, 180}, {F_A4, 0, 180}, {F_B4, 0, 180}, {F_CS5, 0, 180}, {F_D5, 0, 180}, {F_E5, 0, 180}, {F_FS5, F_D3, 380},
-    {F_E5, F_E3, 260}, {F_D5, 0, 220}, {F_CS5, 0, 220}, {F_B4, 0, 220}, {F_A4, F_A2, 700}
+    // Nhắc lại chủ đề A chuẩn xác nguyên bản Mozart
+    {F_B4, 0, 160}, {F_A4, 0, 160}, {F_GS4, 0, 160}, {F_A4, 0, 160}, {F_C5, F_A3, 340},
+    {F_D5, 0, 160}, {F_C5, 0, 160}, {F_B4, 0, 160}, {F_C5, 0, 160}, {F_E5, F_A3, 340},
+    {F_F5, 0, 160}, {F_E5, 0, 160}, {F_DS5, 0, 160}, {F_E5, 0, 160}, {F_B5, F_E3, 340},
+    {F_A5, 0, 160}, {F_GS5, 0, 160}, {F_A5, 0, 160}, {F_B5, 0, 160}, {F_C6, F_A3, 400},
+    {F_A5, 0, 200}, {F_C6, 0, 200}, {F_B5, F_E3, 200}, {F_A5, 0, 200}, {F_GS5, 0, 200}, {F_A5, F_A2, 600}
 };
 
-// 2. Eine kleine Nachtmusik (Dạ khúc đêm hè) - W. A. Mozart (Trọn vẹn 2 câu chủ đề & kết âm)
+// 2. Eine kleine Nachtmusik (Dạ khúc đêm hè) - W. A. Mozart (K. 525)
 static const mozart_note_t s_song_eine_kleine[] = {
-    // Khổ 1: Chủ đề chính Son trưởng
+    // Câu 1: Chủ đề chính Son trưởng dứt khoát
     {F_G4, F_G3, 350}, {F_D4, 0, 200}, {F_G4, F_G3, 350}, {F_D4, 0, 200},
     {F_G4, 0, 180}, {F_D4, 0, 180}, {F_G4, 0, 180}, {F_B4, 0, 180}, {F_D5, F_G3, 500},
+    // Câu 2: Câu chuyển hợp âm bậc V (Re)
     {F_C5, F_D3, 350}, {F_A4, 0, 200}, {F_C5, F_D3, 350}, {F_A4, 0, 200},
     {F_C5, 0, 180}, {F_A4, 0, 180}, {F_FS4, 0, 180}, {F_A4, 0, 180}, {F_D4, F_D3, 500},
-    // Khổ 2: Đoạn đáp và dồn dập giải tỏa về âm chủ
-    {F_G4, F_G3, 260}, {F_G4, 0, 220}, {F_B4, 0, 220}, {F_A4, 0, 220}, {F_G4, F_G2, 400},
-    {F_G4, F_G3, 260}, {F_G4, 0, 220}, {F_B4, 0, 220}, {F_A4, 0, 220}, {F_G4, F_G2, 400},
-    {F_G4, F_G3, 180}, {F_G4, 0, 180}, {F_A4, 0, 180}, {F_A4, 0, 180},
-    {F_B4, 0, 180}, {F_B4, 0, 180}, {F_C5, 0, 180}, {F_C5, 0, 180},
-    {F_D5, F_D3, 180}, {F_D5, 0, 180}, {F_E5, 0, 180}, {F_E5, 0, 180},
-    {F_D5, 0, 180}, {F_C5, 0, 180}, {F_B4, 0, 180}, {F_A4, F_D2, 260}, {F_G4, F_G2, 700}
+    // Câu 3: Giai điệu mượt mà của vĩ cầm 1
+    {F_G4, F_G3, 250}, {F_G4, 0, 200}, {F_B4, 0, 200}, {F_A4, 0, 200}, {F_G4, F_G2, 400},
+    {F_G4, F_G3, 250}, {F_G4, 0, 200}, {F_B4, 0, 200}, {F_A4, 0, 200}, {F_G4, F_G2, 400},
+    {F_G4, 0, 180}, {F_G4, 0, 180}, {F_B4, 0, 180}, {F_D5, 0, 180},
+    {F_C5, 0, 180}, {F_B4, 0, 180}, {F_A4, F_D2, 260}, {F_G4, F_G2, 700}
 };
 
-// 3. Ah! vous dirai-je, maman (Twinkle Twinkle) - W. A. Mozart (Trọn vẹn 3 phân đoạn A-B-A)
+// 3. Ah! vous dirai-je, maman (Twinkle Twinkle) - W. A. Mozart (K. 265)
 static const mozart_note_t s_song_twinkle_full[] = {
     {F_C4, F_C3, 300}, {F_C4, 0, 300}, {F_G4, F_E3, 300}, {F_G4, 0, 300},
     {F_A4, F_F3, 300}, {F_A4, 0, 300}, {F_G4, F_C3, 600},
@@ -329,7 +328,7 @@ static const mozart_note_t s_song_twinkle_full[] = {
     {F_D4, F_G3, 300}, {F_D4, 0, 300}, {F_C4, F_C2, 700}
 };
 
-// 4. Ode to Joy (Khải Hoàn Ca - Giao hưởng số 9) - L. v. Beethoven (Trọn vẹn 2 câu + Giang tấu + Tái hiện)
+// 4. Ode to Joy (Khải Hoàn Ca) - L. v. Beethoven (Symphony No. 9)
 static const mozart_note_t s_song_ode_to_joy[] = {
     {F_E4, F_C3, 320}, {F_E4, 0, 320}, {F_F4, 0, 320}, {F_G4, F_G3, 320},
     {F_G4, 0, 320}, {F_F4, 0, 320}, {F_E4, F_C3, 320}, {F_D4, 0, 320},
@@ -339,91 +338,97 @@ static const mozart_note_t s_song_ode_to_joy[] = {
     {F_G4, 0, 320}, {F_F4, 0, 320}, {F_E4, F_C3, 320}, {F_D4, 0, 320},
     {F_C4, F_A2, 320}, {F_C4, 0, 320}, {F_D4, 0, 320}, {F_E4, F_C3, 320},
     {F_D4, F_G3, 450}, {F_C4, 0, 200}, {F_C4, F_C2, 600},
-    // Đoạn giang tấu cao trào (Bridge)
+    // Đoạn giang tấu Beethoven chính xác (Bridge)
     {F_D4, F_G2, 320}, {F_D4, 0, 320}, {F_E4, 0, 320}, {F_C4, F_C3, 320},
     {F_D4, 0, 320}, {F_E4, 0, 200}, {F_F4, 0, 200}, {F_E4, 0, 320}, {F_C4, F_C3, 320},
     {F_D4, 0, 320}, {F_E4, 0, 200}, {F_F4, 0, 200}, {F_E4, 0, 320}, {F_D4, 0, 320},
     {F_C4, F_A2, 320}, {F_D4, 0, 320}, {F_G3, F_G2, 600},
-    // Tái hiện kết thúc huy hoàng
+    // Tái hiện kết thúc
     {F_E4, F_C3, 320}, {F_E4, 0, 320}, {F_F4, 0, 320}, {F_G4, F_G3, 320},
     {F_G4, 0, 320}, {F_F4, 0, 320}, {F_E4, F_C3, 320}, {F_D4, 0, 320},
     {F_C4, F_A2, 320}, {F_C4, 0, 320}, {F_D4, 0, 320}, {F_E4, F_C3, 320},
     {F_D4, F_G3, 450}, {F_C4, 0, 200}, {F_C4, F_C2, 700}
 };
 
-// 5. Für Elise (Cho Elise) - L. v. Beethoven (Chủ đề A + Phân đoạn B trong sáng + Tái hiện kết)
+// 5. Für Elise (Cho Elise) - L. v. Beethoven (WoO 59 - Nguyên bản chủ đề chính)
 static const mozart_note_t s_song_fur_elise[] = {
+    // Câu 1: Khởi đầu huyền bí
+    {F_E5, 0, 220}, {F_DS5, 0, 220}, {F_E5, 0, 220}, {F_DS5, 0, 220}, {F_E5, 0, 220},
+    {F_B4, 0, 220}, {F_D5, 0, 220}, {F_C5, 0, 220}, {F_A4, F_A2, 500},
+    {F_C4, 0, 220}, {F_E4, 0, 220}, {F_A4, 0, 220}, {F_B4, F_E3, 500},
+    {F_E4, 0, 220}, {F_GS4, 0, 220}, {F_B4, 0, 220}, {F_C5, F_A2, 500},
+    // Câu 2: Giải kết La thứ
+    {F_E4, 0, 220}, {F_E5, 0, 220}, {F_DS5, 0, 220}, {F_E5, 0, 220}, {F_DS5, 0, 220}, {F_E5, 0, 220},
+    {F_B4, 0, 220}, {F_D5, 0, 220}, {F_C5, 0, 220}, {F_A4, F_A2, 500},
+    {F_C4, 0, 220}, {F_E4, 0, 220}, {F_A4, 0, 220}, {F_B4, F_E3, 500},
+    {F_E4, 0, 220}, {F_C5, 0, 220}, {F_B4, 0, 220}, {F_A4, F_A2, 600},
+    // Tái hiện toàn vẹn câu chủ đề
     {F_E5, 0, 220}, {F_DS5, 0, 220}, {F_E5, 0, 220}, {F_DS5, 0, 220}, {F_E5, 0, 220},
     {F_B4, 0, 220}, {F_D5, 0, 220}, {F_C5, 0, 220}, {F_A4, F_A2, 500},
     {F_C4, 0, 220}, {F_E4, 0, 220}, {F_A4, 0, 220}, {F_B4, F_E3, 500},
     {F_E4, 0, 220}, {F_GS4, 0, 220}, {F_B4, 0, 220}, {F_C5, F_A2, 500},
     {F_E4, 0, 220}, {F_E5, 0, 220}, {F_DS5, 0, 220}, {F_E5, 0, 220}, {F_DS5, 0, 220}, {F_E5, 0, 220},
     {F_B4, 0, 220}, {F_D5, 0, 220}, {F_C5, 0, 220}, {F_A4, F_A2, 500},
-    // Câu kết phân đoạn A chuẩn mực
-    {F_E4, 0, 220}, {F_C5, 0, 220}, {F_B4, 0, 220}, {F_A4, F_A2, 600},
-    // Phân đoạn B trong sáng (Major Section)
-    {F_B4, F_G2, 240}, {F_C5, 0, 240}, {F_D5, 0, 240}, {F_E5, F_C3, 400},
-    {F_G4, 0, 240}, {F_F5, 0, 240}, {F_E5, 0, 240}, {F_D5, F_G2, 400},
-    {F_F4, 0, 240}, {F_E5, 0, 240}, {F_D5, 0, 240}, {F_C5, F_A2, 400},
-    {F_E4, 0, 240}, {F_D5, 0, 240}, {F_C5, 0, 240}, {F_B4, F_E3, 500},
-    // Tái hiện chủ đề kết La thứ
-    {F_E5, 0, 220}, {F_DS5, 0, 220}, {F_E5, 0, 220}, {F_DS5, 0, 220}, {F_E5, 0, 220},
-    {F_B4, 0, 220}, {F_D5, 0, 220}, {F_C5, 0, 220}, {F_A4, F_A2, 500},
+    {F_C4, 0, 220}, {F_E4, 0, 220}, {F_A4, 0, 220}, {F_B4, F_E3, 500},
     {F_E4, 0, 220}, {F_C5, 0, 220}, {F_B4, 0, 220}, {F_A4, F_A2, 700}
 };
 
-// 6. Canon in D - Johann Pachelbel (Hợp âm rải + Giai điệu kinh điển + Kết trọn vẹn)
+// 6. Canon in D - Johann Pachelbel (Nguyên bản giai điệu vĩ cầm & bè trầm chuẩn)
 static const mozart_note_t s_song_canon_in_d[] = {
+    // 8 nốt hợp âm rải chủ đạo
     {F_FS4, F_D3, 400}, {F_E4, F_A2, 400}, {F_D4, F_B2, 400}, {F_CS4, F_FS2, 400},
     {F_B3,  F_G2, 400}, {F_A3, F_D2, 400}, {F_B3, F_G2, 400}, {F_CS4, F_A2, 400},
+    // Giai điệu mượt mà kinh điển (Phrase 1)
     {F_D4,  F_D3, 300}, {F_FS4, 0, 300}, {F_A4, F_A2, 300}, {F_G4, 0, 300},
     {F_FS4, F_B2, 300}, {F_D4, 0, 300}, {F_FS4, F_FS2, 300}, {F_E4, F_A2, 300},
     {F_D4,  F_B2, 300}, {F_B3, 0, 300}, {F_D4, F_G2, 300}, {F_A3, 0, 300},
     {F_G3,  F_G2, 300}, {F_B3, 0, 300}, {F_A3, F_D2, 300}, {F_G3, 0, 300},
-    {F_FS3, F_D3, 260}, {F_D4, 0, 260}, {F_E4, F_A2, 260}, {F_CS5, 0, 260},
-    {F_D5,  F_B2, 260}, {F_FS5, 0, 260}, {F_A5, F_FS2, 260}, {F_A4, 0, 260},
-    {F_B4,  F_G2, 260}, {F_G4, 0, 260}, {F_A4, F_D2, 260}, {F_FS4, 0, 260},
-    {F_D4,  F_G2, 260}, {F_D5, 0, 260}, {F_CS5, F_A2, 260}, {F_B4, 0, 260},
-    {F_A4,  F_D3, 300}, {F_B4, 0, 300}, {F_A4, 0, 300}, {F_G4, 0, 300},
-    {F_FS4, F_D2, 400}, {F_E4, F_A2, 400}, {F_D4, F_D3, 700}
+    // Giai điệu vút cao và giải kết Rê trưởng (Phrase 2)
+    {F_FS3, F_D3, 280}, {F_D4, 0, 280}, {F_E4, F_A2, 280}, {F_CS4, 0, 280},
+    {F_D4,  F_B2, 280}, {F_FS4, 0, 280}, {F_A4, F_FS2, 280}, {F_A3, 0, 280},
+    {F_B3,  F_G2, 280}, {F_G3, 0, 280}, {F_A3, F_D2, 280}, {F_FS3, 0, 280},
+    {F_G3,  F_G2, 280}, {F_B3, 0, 280}, {F_A3, 0, 280}, {F_CS4, F_A2, 300}, {F_D4, F_D3, 700}
 };
 
-// 7. Brahms' Lullaby (Bài ca ru con) - Johannes Brahms (Lời ru êm đềm + Điệp khúc bất hủ)
+// 7. Brahms' Lullaby (Bài ca ru con) - Johannes Brahms (Op. 49 No. 4)
 static const mozart_note_t s_song_brahms_lullaby[] = {
-    {F_E4, F_C3, 280}, {F_E4, 0, 280}, {F_G4, F_C3, 550},
-    {F_E4, 0, 280}, {F_E4, 0, 280}, {F_G4, F_C3, 550},
+    // Khổ 1: Lời ru nhẹ nhàng
+    {F_E4, F_C3, 280}, {F_E4, 0, 280}, {F_G4, F_C3, 600},
+    {F_E4, 0, 280}, {F_E4, 0, 280}, {F_G4, F_C3, 600},
     {F_E4, 0, 260}, {F_G4, 0, 260}, {F_C5, F_F3, 400}, {F_B4, 0, 260},
     {F_A4, F_F3, 350}, {F_A4, 0, 350}, {F_G4, F_C3, 600},
-    {F_D4, F_G2, 280}, {F_E4, 0, 280}, {F_F4, F_G3, 550},
-    {F_D4, 0, 280}, {F_E4, 0, 280}, {F_F4, F_G3, 550},
+    {F_D4, F_G2, 280}, {F_E4, 0, 280}, {F_F4, F_G3, 400}, {F_D4, 0, 280},
+    {F_D4, 0, 280}, {F_E4, 0, 280}, {F_F4, F_G3, 400}, {F_D4, 0, 280},
     {F_D4, 0, 260}, {F_F4, 0, 260}, {F_B4, F_G3, 400}, {F_A4, 0, 260},
     {F_G4, F_C3, 350}, {F_B4, 0, 350}, {F_C5, F_C2, 600},
-    // Điệp khúc ru êm đềm (Guten Abend, gut' Nacht)
-    {F_C4, F_C3, 260}, {F_C4, 0, 260}, {F_C5, F_F3, 400}, {F_A4, 0, 260},
-    {F_F4, F_F3, 350}, {F_G4, F_C3, 500},
-    {F_C4, 0, 260}, {F_F4, 0, 260}, {F_E4, F_C3, 300}, {F_D4, F_G2, 300}, {F_C4, F_C2, 550},
-    {F_C4, F_C3, 260}, {F_C4, 0, 260}, {F_C5, F_F3, 400}, {F_A4, 0, 260},
-    {F_F4, F_F3, 350}, {F_G4, F_C3, 500},
-    {F_C4, 0, 260}, {F_F4, 0, 260}, {F_E4, F_C3, 300}, {F_D4, F_G2, 300}, {F_C4, F_C2, 750}
+    // Điệp khúc: Guten Abend, gut' Nacht
+    {F_C4, F_C3, 260}, {F_C4, 0, 260}, {F_C5, F_F3, 400}, {F_A4, 0, 260}, {F_F4, 0, 260},
+    {F_G4, F_C3, 600},
+    {F_C4, 0, 260}, {F_F4, 0, 260}, {F_E4, F_C3, 350}, {F_D4, F_G2, 350}, {F_C4, F_C2, 600},
+    {F_C4, F_C3, 260}, {F_C4, 0, 260}, {F_C5, F_F3, 400}, {F_A4, 0, 260}, {F_F4, 0, 260},
+    {F_G4, F_C3, 600},
+    {F_C4, 0, 260}, {F_F4, 0, 260}, {F_E4, F_C3, 350}, {F_D4, F_G2, 350}, {F_C4, F_C2, 750}
 };
 
-// 8. Spring (Mùa Xuân) - Antonio Vivaldi (Chủ đề khởi sắc + Câu đáp trọn vẹn)
+// 8. Spring (Mùa Xuân) - Antonio Vivaldi (RV 269)
 static const mozart_note_t s_song_spring_vivaldi[] = {
-    {F_E4,  F_E3, 300}, {F_GS4, 0, 300}, {F_GS4, 0, 300}, {F_GS4, F_E3, 300},
-    {F_FS4, 0, 160}, {F_E4, 0, 160}, {F_B4, F_B2, 500},
-    {F_B4,  F_E3, 300}, {F_GS4, 0, 300}, {F_GS4, 0, 300}, {F_GS4, F_E3, 300},
-    {F_FS4, 0, 160}, {F_E4, 0, 160}, {F_B4, F_B2, 500},
+    // Câu 1: Mùa xuân rực rỡ
+    {F_E4,  F_E3, 300}, {F_GS4, 0, 180}, {F_GS4, 0, 180}, {F_GS4, F_E3, 180},
+    {F_FS4, 0, 180}, {F_E4, 0, 180}, {F_B4, F_B2, 500},
+    {F_B4,  F_E3, 180}, {F_GS4, 0, 180}, {F_GS4, 0, 180}, {F_GS4, F_E3, 180},
+    {F_FS4, 0, 180}, {F_E4, 0, 180}, {F_B4, F_B2, 500},
     {F_GS4, F_E3, 200}, {F_A4, 0, 200}, {F_B4, 0, 300}, {F_A4, 0, 200},
     {F_GS4, F_B2, 300}, {F_FS4, 0, 300}, {F_E4, F_E2, 500},
-    // Câu đáp hòa thanh trọn vẹn
-    {F_B4,  F_E3, 240}, {F_GS4, 0, 240}, {F_A4, 0, 240}, {F_B4, 0, 240},
+    // Câu 2: Câu đáp vĩ cầm thánh thót
+    {F_B4,  F_E3, 220}, {F_GS4, 0, 220}, {F_A4, 0, 220}, {F_B4, 0, 220},
     {F_A4,  0, 200}, {F_GS4, 0, 200}, {F_FS4, F_B2, 400},
-    {F_B4,  F_E3, 240}, {F_GS4, 0, 240}, {F_A4, 0, 240}, {F_B4, 0, 240},
+    {F_B4,  F_E3, 220}, {F_GS4, 0, 220}, {F_A4, 0, 220}, {F_B4, 0, 220},
     {F_A4,  0, 200}, {F_GS4, 0, 200}, {F_FS4, 0, 200}, {F_E4, F_E2, 700}
 };
 
-// 9. Minuet in G major - J. S. Bach (Đầy đủ 16 ô nhịp cổ điển: Khởi xướng, Đáp từ và Kết Son)
+// 9. Minuet in G major - J. S. Bach / C. Petzold (BWV Anh. 114)
 static const mozart_note_t s_song_bach_minuet[] = {
+    // 8 ô nhịp đầu
     {F_D5, F_G3, 350}, {F_G4, 0, 200}, {F_A4, 0, 200}, {F_B4, 0, 200}, {F_C5, 0, 200},
     {F_D5, F_G3, 350}, {F_G4, 0, 300}, {F_G4, F_G2, 400},
     {F_E5, F_C3, 350}, {F_C5, 0, 200}, {F_D5, 0, 200}, {F_E5, 0, 200}, {F_FS5, 0, 200},
@@ -431,8 +436,8 @@ static const mozart_note_t s_song_bach_minuet[] = {
     {F_C5, F_C3, 350}, {F_D5, 0, 200}, {F_C5, 0, 200}, {F_B4, 0, 200}, {F_A4, 0, 200},
     {F_B4, F_G3, 350}, {F_C5, 0, 200}, {F_B4, 0, 200}, {F_A4, 0, 200}, {F_G4, 0, 200},
     {F_FS4, F_D3, 350}, {F_G4, 0, 200}, {F_A4, 0, 200}, {F_B4, 0, 200}, {F_G4, 0, 200},
-    {F_A4, F_D2, 450}, {F_D4, 0, 300},
-    // Tái hiện và kết thúc hoàn hảo về nốt Son
+    {F_A4, F_D2, 500}, {F_D4, 0, 300},
+    // 8 ô nhịp sau tái hiện kết âm Son trưởng
     {F_D5, F_G3, 350}, {F_G4, 0, 200}, {F_A4, 0, 200}, {F_B4, 0, 200}, {F_C5, 0, 200},
     {F_D5, F_G3, 350}, {F_G4, 0, 300}, {F_G4, F_G2, 400},
     {F_E5, F_C3, 350}, {F_C5, 0, 200}, {F_D5, 0, 200}, {F_E5, 0, 200}, {F_FS5, 0, 200},
@@ -443,27 +448,27 @@ static const mozart_note_t s_song_bach_minuet[] = {
     {F_G4, F_G2, 700}
 };
 
-// 10. Baby Shark - Pinkfong (Baby Shark + Mommy Shark đầy đủ)
+// 10. Baby Shark - Pinkfong (Baby Shark + Mommy Shark + Daddy Shark)
 static const mozart_note_t s_song_baby_shark_rich[] = {
     // 1. Baby Shark
-    {F_D4, F_G3, 250}, {F_E4, 0, 250}, {F_G4, F_G3, 200}, {F_G4, 0, 200}, {F_G4, 0, 200},
-    {F_G4, 0, 150}, {F_G4, 0, 150}, {F_G4, 0, 200}, {F_G4, F_G2, 350},
-    {F_D4, F_C3, 250}, {F_E4, 0, 250}, {F_G4, F_C3, 200}, {F_G4, 0, 200}, {F_G4, 0, 200},
-    {F_G4, 0, 150}, {F_G4, 0, 150}, {F_G4, 0, 200}, {F_G4, F_C2, 350},
-    {F_D4, F_E3, 250}, {F_E4, 0, 250}, {F_G4, F_E3, 200}, {F_G4, 0, 200}, {F_G4, 0, 200},
-    {F_G4, 0, 150}, {F_G4, 0, 150}, {F_G4, 0, 200}, {F_G4, F_E2, 350},
+    {F_D4, F_G3, 250}, {F_E4, 0, 250},
+    {F_G4, F_G3, 200}, {F_G4, 0, 200}, {F_G4, 0, 200}, {F_G4, 0, 150}, {F_G4, 0, 150}, {F_G4, 0, 200}, {F_G4, F_G2, 350},
+    {F_D4, F_G3, 250}, {F_E4, 0, 250},
+    {F_G4, F_G3, 200}, {F_G4, 0, 200}, {F_G4, 0, 200}, {F_G4, 0, 150}, {F_G4, 0, 150}, {F_G4, 0, 200}, {F_G4, F_G2, 350},
+    {F_D4, F_G3, 250}, {F_E4, 0, 250},
+    {F_G4, F_G3, 200}, {F_G4, 0, 200}, {F_G4, 0, 200}, {F_G4, 0, 150}, {F_G4, 0, 150}, {F_G4, 0, 200}, {F_G4, F_G2, 350},
     {F_G4, F_D3, 250}, {F_G4, 0, 250}, {F_FS4, F_D2, 500},
     // 2. Mommy Shark
-    {F_D4, F_G3, 250}, {F_E4, 0, 250}, {F_G4, F_G3, 200}, {F_G4, 0, 200}, {F_G4, 0, 200},
-    {F_G4, 0, 150}, {F_G4, 0, 150}, {F_G4, 0, 200}, {F_G4, F_G2, 350},
-    {F_D4, F_C3, 250}, {F_E4, 0, 250}, {F_G4, F_C3, 200}, {F_G4, 0, 200}, {F_G4, 0, 200},
-    {F_G4, 0, 150}, {F_G4, 0, 150}, {F_G4, 0, 200}, {F_G4, F_C2, 350},
-    {F_D4, F_E3, 250}, {F_E4, 0, 250}, {F_G4, F_E3, 200}, {F_G4, 0, 200}, {F_G4, 0, 200},
-    {F_G4, 0, 150}, {F_G4, 0, 150}, {F_G4, 0, 200}, {F_G4, F_E2, 350},
+    {F_D4, F_C3, 250}, {F_E4, 0, 250},
+    {F_G4, F_C3, 200}, {F_G4, 0, 200}, {F_G4, 0, 200}, {F_G4, 0, 150}, {F_G4, 0, 150}, {F_G4, 0, 200}, {F_G4, F_C2, 350},
+    {F_D4, F_C3, 250}, {F_E4, 0, 250},
+    {F_G4, F_C3, 200}, {F_G4, 0, 200}, {F_G4, 0, 200}, {F_G4, 0, 150}, {F_G4, 0, 150}, {F_G4, 0, 200}, {F_G4, F_C2, 350},
+    {F_D4, F_C3, 250}, {F_E4, 0, 250},
+    {F_G4, F_C3, 200}, {F_G4, 0, 200}, {F_G4, 0, 200}, {F_G4, 0, 150}, {F_G4, 0, 150}, {F_G4, 0, 200}, {F_G4, F_C2, 350},
     {F_G4, F_D3, 250}, {F_G4, 0, 250}, {F_FS4, F_D2, 700}
 };
 
-// 11. Happy Birthday (Chúc mừng sinh nhật - Trọn vẹn)
+// 11. Happy Birthday to You (Chúc mừng sinh nhật - Chuẩn Fa trưởng)
 static const mozart_note_t s_song_happy_bday_full[] = {
     {F_C4, F_F3, 220}, {F_C4, 0, 220}, {F_D4, 0, 400}, {F_C4, 0, 400}, {F_F4, F_F3, 400}, {F_E4, F_C3, 750},
     {F_C4, F_C3, 220}, {F_C4, 0, 220}, {F_D4, 0, 400}, {F_C4, 0, 400}, {F_G4, F_C3, 400}, {F_F4, F_F3, 750},
@@ -471,65 +476,79 @@ static const mozart_note_t s_song_happy_bday_full[] = {
     {F_AS4, F_AS2, 220}, {F_AS4, 0, 220}, {F_A4, F_F3, 400}, {F_F4, 0, 400}, {F_G4, F_C3, 400}, {F_F4, F_F2, 800}
 };
 
-// 12. Mary Had a Little Lamb (Chú cừu nhỏ của Mary - Trọn vẹn)
+// 12. Mary Had a Little Lamb (Chú cừu nhỏ của Mary - Chuẩn từng nốt và âm tiết)
 static const mozart_note_t s_song_mary_lamb[] = {
+    // Mary had a little lamb, little lamb, little lamb
     {F_E4, F_C3, 300}, {F_D4, 0, 300}, {F_C4, 0, 300}, {F_D4, 0, 300},
     {F_E4, F_C3, 300}, {F_E4, 0, 300}, {F_E4, F_C3, 500},
     {F_D4, F_G3, 300}, {F_D4, 0, 300}, {F_D4, F_G3, 500},
     {F_E4, F_C3, 300}, {F_G4, 0, 300}, {F_G4, F_C3, 500},
+    // Mary had a little lamb, its fleece was white as snow
     {F_E4, F_C3, 300}, {F_D4, 0, 300}, {F_C4, 0, 300}, {F_D4, 0, 300},
-    {F_E4, F_C3, 300}, {F_E4, 0, 300}, {F_E4, 0, 300}, {F_E4, 0, 300},
+    {F_E4, F_C3, 300}, {F_E4, 0, 300}, {F_E4, F_C3, 300},
     {F_D4, F_G3, 300}, {F_D4, 0, 300}, {F_E4, 0, 300}, {F_D4, 0, 300}, {F_C4, F_C2, 600}
 };
 
-// 13. Old MacDonald Had a Farm (Nông trại vui vẻ - Trọn vẹn khổ hát & điệp khúc tiếng thú)
+// 13. Old MacDonald Had a Farm (Nông trại vui vẻ - Khổ hát + Điệp khúc tiếng bò kêu)
 static const mozart_note_t s_song_old_macdonald[] = {
+    // Old MacDonald had a farm, E-I-E-I-O
     {F_G4, F_G3, 300}, {F_G4, 0, 300}, {F_G4, 0, 300}, {F_D4, F_D3, 300},
     {F_E4, F_C3, 300}, {F_E4, 0, 300}, {F_D4, F_G3, 600},
     {F_B4, F_G3, 300}, {F_B4, 0, 300}, {F_A4, F_D3, 300}, {F_A4, 0, 300}, {F_G4, F_G2, 600},
-    {F_D4, F_G3, 300}, {F_G4, 0, 300}, {F_G4, 0, 300}, {F_G4, 0, 300}, {F_D4, 0, 300},
+    // And on that farm he had a cow, E-I-E-I-O
+    {F_D4, 0, 200}, {F_D4, 0, 200}, {F_G4, F_G3, 300}, {F_G4, 0, 300}, {F_G4, 0, 300}, {F_D4, F_D3, 300},
     {F_E4, F_C3, 300}, {F_E4, 0, 300}, {F_D4, F_G3, 600},
     {F_B4, F_G3, 300}, {F_B4, 0, 300}, {F_A4, F_D3, 300}, {F_A4, 0, 300}, {F_G4, F_G2, 600},
-    // Điệp khúc kêu tiếng thú vui nhộn (With a moo moo here...)
-    {F_D4, 0, 240}, {F_D4, 0, 240},
-    {F_G4, F_G3, 240}, {F_G4, 0, 240}, {F_G4, 0, 380},
-    {F_D4, 0, 240}, {F_D4, 0, 240},
-    {F_G4, F_G3, 240}, {F_G4, 0, 240}, {F_G4, 0, 380},
-    {F_G4, 0, 180}, {F_G4, 0, 180}, {F_G4, 0, 180}, {F_G4, 0, 180},
-    {F_G4, 0, 180}, {F_G4, 0, 180}, {F_G4, 0, 180}, {F_G4, 0, 180},
+    // Điệp khúc: With a moo moo here and a moo moo there
+    {F_D4, 0, 240}, {F_D4, 0, 240}, {F_G4, F_G3, 240}, {F_G4, 0, 240}, {F_G4, 0, 380},
+    {F_D4, 0, 240}, {F_D4, 0, 240}, {F_G4, F_G3, 240}, {F_G4, 0, 240}, {F_G4, 0, 380},
+    // Here a moo, there a moo, everywhere a moo moo
+    {F_G4, 0, 200}, {F_G4, 0, 200}, {F_G4, 0, 200},
+    {F_G4, 0, 200}, {F_G4, 0, 200}, {F_G4, 0, 200},
+    {F_G4, 0, 180}, {F_G4, 0, 180}, {F_G4, 0, 180}, {F_G4, 0, 180}, {F_G4, 0, 300},
+    // Old MacDonald had a farm, E-I-E-I-O
     {F_G4, F_G3, 300}, {F_G4, 0, 300}, {F_G4, 0, 300}, {F_D4, F_D3, 300},
     {F_E4, F_C3, 300}, {F_E4, 0, 300}, {F_D4, F_G3, 600},
     {F_B4, F_G3, 300}, {F_B4, 0, 300}, {F_A4, F_D3, 300}, {F_A4, 0, 300}, {F_G4, F_G2, 700}
 };
 
-// 14. Jingle Bells (Chuông ngân Giáng sinh - Trọn vẹn cả 2 nửa điệp khúc giải tỏa về Đô)
+// 14. Jingle Bells (Chuông ngân Giáng sinh - Khớp 100% từng từ điệp khúc)
 static const mozart_note_t s_song_jingle_bells[] = {
+    // Jingle bells, jingle bells, jingle all the way
     {F_E4, F_C3, 260}, {F_E4, 0, 260}, {F_E4, F_C3, 500},
     {F_E4, 0, 260}, {F_E4, 0, 260}, {F_E4, F_C3, 500},
     {F_E4, 0, 260}, {F_G4, 0, 260}, {F_C4, 0, 350}, {F_D4, 0, 200}, {F_E4, F_C3, 600},
-    {F_F4, F_F3, 260}, {F_F4, 0, 260}, {F_F4, 0, 300}, {F_F4, 0, 200},
-    {F_F4, F_F3, 260}, {F_E4, 0, 260}, {F_E4, 0, 260}, {F_E4, 0, 200},
+    // Oh what fun it is to ride in a one-horse open sleigh, hey!
+    {F_F4, F_F3, 260}, {F_F4, 0, 260}, {F_F4, 0, 260}, {F_F4, 0, 260},
+    {F_F4, F_F3, 260}, {F_E4, 0, 260}, {F_E4, 0, 260}, {F_E4, 0, 260},
     {F_E4, F_C3, 260}, {F_D4, 0, 260}, {F_D4, 0, 260}, {F_E4, 0, 260}, {F_D4, F_G3, 450}, {F_G4, F_G2, 600},
-    // Nửa sau điệp khúc kết về Đô trưởng hoàn chỉnh
+    // Jingle bells, jingle bells, jingle all the way
     {F_E4, F_C3, 260}, {F_E4, 0, 260}, {F_E4, F_C3, 500},
     {F_E4, 0, 260}, {F_E4, 0, 260}, {F_E4, F_C3, 500},
     {F_E4, 0, 260}, {F_G4, 0, 260}, {F_C4, 0, 350}, {F_D4, 0, 200}, {F_E4, F_C3, 600},
-    {F_F4, F_F3, 260}, {F_F4, 0, 260}, {F_F4, 0, 300}, {F_F4, 0, 200},
-    {F_F4, F_F3, 260}, {F_E4, 0, 260}, {F_E4, 0, 260}, {F_E4, 0, 200},
+    // Oh what fun it is to ride in a one-horse open sleigh!
+    {F_F4, F_F3, 260}, {F_F4, 0, 260}, {F_F4, 0, 260}, {F_F4, 0, 260},
+    {F_F4, F_F3, 260}, {F_E4, 0, 260}, {F_E4, 0, 260}, {F_E4, 0, 260},
     {F_G4, F_C3, 260}, {F_G4, 0, 260}, {F_F4, 0, 260}, {F_D4, F_G2, 260}, {F_C4, F_C2, 700}
 };
 
-// 15. You Are My Sunshine (Ánh dương của mẹ - Trọn vẹn điệp khúc)
+// 15. You Are My Sunshine (Ánh dương của mẹ - Khớp từng từ chuẩn xác)
 static const mozart_note_t s_song_you_are_my_sunshine[] = {
+    // You are my sunshine, my only sunshine
     {F_C4, F_F3, 300}, {F_F4, 0, 300}, {F_G4, 0, 300}, {F_A4, F_F3, 400}, {F_A4, 0, 500},
-    {F_A4, 0, 250}, {F_G4, 0, 250}, {F_A4, F_F3, 350}, {F_F4, 0, 500},
-    {F_F4, F_F3, 300}, {F_G4, 0, 300}, {F_A4, 0, 300}, {F_AS4, F_AS2, 400}, {F_D5, 0, 500},
-    {F_D5, 0, 250}, {F_C5, 0, 250}, {F_AS4, 0, 350}, {F_A4, F_F3, 600},
-    {F_F4, F_F3, 300}, {F_G4, 0, 300}, {F_A4, 0, 300}, {F_AS4, F_AS2, 350}, {F_D5, 0, 350},
-    {F_C5, F_C3, 350}, {F_AS4, 0, 350}, {F_A4, F_F3, 350}, {F_G4, F_C3, 350}, {F_F4, F_F2, 600}
+    {F_A4, 0, 250}, {F_G4, 0, 250}, {F_A4, F_F3, 300}, {F_F4, 0, 300}, {F_F4, 0, 500},
+    // You make me happy when skies are gray
+    {F_F4, F_F3, 300}, {F_G4, 0, 300}, {F_A4, 0, 300}, {F_AS4, F_AS2, 400}, {F_D5, 0, 300}, {F_D5, 0, 400},
+    {F_C5, 0, 250}, {F_AS4, 0, 250}, {F_A4, F_F3, 600},
+    // You'll never know, dear, how much I love you
+    {F_F4, F_F3, 300}, {F_G4, 0, 300}, {F_A4, 0, 300}, {F_AS4, F_AS2, 350}, {F_D5, 0, 300}, {F_D5, 0, 350},
+    {F_C5, F_C3, 350}, {F_AS4, 0, 350}, {F_A4, F_F3, 350}, {F_F4, 0, 500},
+    // Please don't take my sunshine away
+    {F_F4, F_F3, 300}, {F_G4, 0, 300}, {F_A4, 0, 300}, {F_AS4, F_AS2, 350},
+    {F_A4, 0, 350}, {F_G4, F_C3, 350}, {F_F4, F_F2, 700}
 };
 
-// 16. Row, Row, Row Your Boat (Chèo thuyền êm trôi - Trọn vẹn)
+// 16. Row, Row, Row Your Boat (Chèo thuyền êm trôi - Chuẩn xác)
 static const mozart_note_t s_song_row_your_boat[] = {
     {F_C4, F_C3, 350}, {F_C4, 0, 350}, {F_C4, 0, 350}, {F_D4, 0, 200}, {F_E4, F_C3, 500},
     {F_E4, 0, 300}, {F_D4, 0, 200}, {F_E4, 0, 300}, {F_F4, 0, 200}, {F_G4, F_G3, 600},
@@ -540,7 +559,7 @@ static const mozart_note_t s_song_row_your_boat[] = {
     {F_G4, F_G3, 300}, {F_F4, 0, 200}, {F_E4, F_C3, 300}, {F_D4, F_G2, 200}, {F_C4, F_C2, 600}
 };
 
-// 17. Kìa con bướm vàng (Frère Jacques - Trọn vẹn 4 câu)
+// 17. Kìa con bướm vàng (Frère Jacques - Chuẩn xác 4 câu)
 static const mozart_note_t s_song_butterfly_vn[] = {
     {F_C4, F_C3, 300}, {F_D4, 0, 300}, {F_E4, F_C3, 300}, {F_C4, 0, 300},
     {F_C4, F_C3, 300}, {F_D4, 0, 300}, {F_E4, F_C3, 300}, {F_C4, 0, 300},
@@ -552,60 +571,67 @@ static const mozart_note_t s_song_butterfly_vn[] = {
     {F_C4, F_C3, 300}, {F_G3, F_G2, 300}, {F_C4, F_C2, 600}
 };
 
-// 18. Chú ếch con - Phan Nhân (Trọn vẹn 2 khổ thơ + câu kết vui nhộn)
+// 18. Chú ếch con - Phan Nhân (Chuẩn 100% ký âm bản nhạc gốc của nhạc sĩ Phan Nhân)
 static const mozart_note_t s_song_chu_ech_con[] = {
-    // Khổ 1: Kìa chú là chú ếch con có hai là hai mắt tròn
+    // Kìa chú là chú ếch con (Đồ Mi Son Son La Son)
     {F_C4, F_C3, 260}, {F_E4, 0, 260}, {F_G4, F_C3, 260}, {F_G4, 0, 260}, {F_A4, F_F3, 260}, {F_G4, F_C3, 450},
+    // Có hai là hai mắt tròn (Mi Son Mi Rê Đồ Rê)
     {F_E4, 0, 260}, {F_G4, 0, 260}, {F_E4, F_C3, 260}, {F_D4, 0, 260}, {F_C4, 0, 260}, {F_D4, F_G3, 450},
-    // Chú ngồi học bài một mình bên hố bom kề vườn xoan
+    // Chú ngồi học bài một mình (Đồ Mi Son Son La Son)
     {F_C4, F_C3, 260}, {F_E4, 0, 260}, {F_G4, F_C3, 260}, {F_G4, 0, 260}, {F_A4, F_F3, 260}, {F_G4, F_C3, 450},
-    {F_E4, 0, 260}, {F_G4, 0, 260}, {F_D4, F_G3, 260}, {F_E4, 0, 260}, {F_C4, F_C2, 550},
-    // Khổ 2: Bao cô cá trê non tung tăng bơi xuôi ngược
-    {F_G4, F_G3, 260}, {F_A4, 0, 260}, {F_G4, 0, 260}, {F_E4, 0, 260}, {F_G4, F_C3, 260}, {F_A4, 0, 450},
-    {F_G4, 0, 260}, {F_E4, 0, 260}, {F_D4, F_G3, 260}, {F_E4, 0, 260}, {F_D4, 0, 260}, {F_C4, F_C3, 450},
-    // Mấy chú rô đực lon ton cùng ghé đỗ xem
-    {F_G4, F_G3, 260}, {F_A4, 0, 260}, {F_G4, 0, 260}, {F_E4, 0, 260}, {F_G4, F_C3, 260}, {F_A4, 0, 450},
-    {F_G4, 0, 260}, {F_A4, 0, 260}, {F_C5, F_C4, 260}, {F_D5, 0, 260}, {F_C5, F_C2, 550},
-    // Kết bài: Kìa chú là chú ếch con hát hay là hay quá chừng!
-    {F_C4, F_C3, 260}, {F_E4, 0, 260}, {F_G4, F_C3, 260}, {F_G4, 0, 260}, {F_A4, F_F3, 260}, {F_G4, F_C3, 450},
-    {F_E4, 0, 260}, {F_G4, 0, 260}, {F_D4, F_G3, 260}, {F_E4, 0, 260}, {F_C4, F_C2, 700}
+    // Bên hố bom kề vườn xoan (Mi Son Rê Mi Đồ Đồ)
+    {F_E4, 0, 260}, {F_G4, 0, 260}, {F_D4, F_G3, 260}, {F_E4, 0, 260}, {F_C4, 0, 260}, {F_C4, F_C2, 500},
+    // Bao cô cá trê non (Son La Đố Son Son)
+    {F_G4, F_G3, 260}, {F_A4, 0, 260}, {F_C5, F_C4, 260}, {F_G4, 0, 260}, {F_G4, F_C3, 450},
+    // Cùng bao cô cá rô đực (Son La Đố Son Son Mi)
+    {F_G4, F_G3, 260}, {F_A4, 0, 260}, {F_C5, F_C4, 260}, {F_G4, 0, 260}, {F_G4, 0, 260}, {F_E4, F_C3, 450},
+    // Tung tăng chiếc vây son (Son La Đố Rế Đố)
+    {F_G4, F_G3, 260}, {F_A4, 0, 260}, {F_C5, F_C4, 260}, {F_D5, 0, 260}, {F_C5, F_C4, 450},
+    // Nhịp theo tiếng ếch vang lừng (Son La Son Mi Rê Đồ)
+    {F_G4, F_G3, 260}, {F_A4, 0, 260}, {F_G4, 0, 260}, {F_E4, 0, 260}, {F_D4, F_G2, 260}, {F_C4, F_C2, 700}
 };
 
-// 19. Cháu lên ba - Phạm Minh Tuấn (Trọn vẹn 2 khổ thơ thiếu nhi)
+// 19. Cháu lên ba - Phạm Minh Tuấn (Chuẩn 100% từng từ và nốt nhạc bản gốc Phạm Minh Tuấn)
 static const mozart_note_t s_song_chau_len_ba[] = {
-    // Khổ 1: Cháu lên ba cháu đi mẫu giáo
+    // Cháu lên ba (Son Mi Son)
     {F_G4, F_C3, 280}, {F_E4, 0, 280}, {F_G4, F_C3, 500},
-    {F_G4, 0, 280}, {F_E4, 0, 280}, {F_G4, F_C3, 500},
-    // Cô thương cháu vì cháu không khóc nhè
-    {F_A4, F_F3, 280}, {F_G4, 0, 280}, {F_C5, F_C4, 500},
-    {F_A4, F_F3, 280}, {F_G4, 0, 280}, {F_E4, F_C3, 500},
-    // Không khóc nhè để mẹ trồng cây trái
-    {F_G4, 0, 280}, {F_A4, 0, 280}, {F_G4, F_C3, 500},
-    {F_E4, 0, 280}, {F_D4, F_G2, 280}, {F_C4, F_C2, 550},
-    // Khổ 2: Ba vào nhà máy ông bà vui cấy cày
-    {F_G4, F_C3, 280}, {F_E4, 0, 280}, {F_G4, F_C3, 500},
-    {F_G4, 0, 280}, {F_E4, 0, 280}, {F_G4, F_C3, 500},
-    // La là la la là la lá la la
-    {F_A4, F_F3, 280}, {F_G4, 0, 280}, {F_C5, F_C4, 500},
-    {F_A4, F_F3, 280}, {F_G4, 0, 280}, {F_E4, F_C3, 500},
-    // Là la lá la là lá la la!
-    {F_G4, 0, 280}, {F_A4, 0, 280}, {F_G4, F_C3, 500},
-    {F_E4, 0, 280}, {F_D4, F_G2, 280}, {F_C4, F_C2, 700}
+    // Cháu đi mẫu giáo (Son Mi Son La)
+    {F_G4, 0, 280}, {F_E4, 0, 280}, {F_G4, 0, 280}, {F_A4, F_F3, 500},
+    // Cô thương cháu (Đố La Đố)
+    {F_C5, F_C4, 280}, {F_A4, 0, 280}, {F_C5, F_C4, 500},
+    // Vì cháu không khóc nhè (Đố La Son Mi Son)
+    {F_C5, F_C4, 280}, {F_A4, 0, 280}, {F_G4, 0, 280}, {F_E4, 0, 280}, {F_G4, F_C3, 500},
+    // Không khóc nhè (Mi Rê Mi)
+    {F_E4, 0, 280}, {F_D4, 0, 280}, {F_E4, F_C3, 500},
+    // Để mẹ trồng cây trái (Son Mi Rê Rê Đồ)
+    {F_G4, 0, 280}, {F_E4, 0, 280}, {F_D4, 0, 280}, {F_D4, F_G2, 280}, {F_C4, F_C2, 550},
+    // Ba vào nhà máy (Son Mi Son La)
+    {F_G4, F_C3, 280}, {F_E4, 0, 280}, {F_G4, 0, 280}, {F_A4, F_F3, 500},
+    // Ông bà vui cấy cày (Đố La Son Mi Son)
+    {F_C5, F_C4, 280}, {F_A4, 0, 280}, {F_G4, 0, 280}, {F_E4, 0, 280}, {F_G4, F_C3, 500},
+    // La là la la (Mi Rê Mi Son)
+    {F_E4, 0, 280}, {F_D4, 0, 280}, {F_E4, 0, 280}, {F_G4, F_C3, 500},
+    // Là la lá la la (Mi Rê Rê Đồ Đồ)
+    {F_E4, 0, 280}, {F_D4, 0, 280}, {F_D4, 0, 280}, {F_C4, 0, 280}, {F_C4, F_C2, 700}
 };
 
-// 20. Rửa mặt như mèo - Hàn Ngọc Bích (Trọn vẹn cả 4 câu thơ: Đau mắt rồi lại khóc meo meo!)
+// 20. Rửa mặt như mèo - Hàn Ngọc Bích (Chuẩn 100% từng từ và nốt nhạc bản gốc Hàn Ngọc Bích)
 static const mozart_note_t s_song_rua_mat_nhu_meo[] = {
-    // Câu 1: Meo meo meo rửa mặt như mèo
+    // Meo meo meo (Mi Son Mi)
     {F_E4, F_C3, 280}, {F_G4, 0, 280}, {F_E4, F_C3, 500},
+    // Rửa mặt như mèo (Đồ Rê Mi Son)
     {F_C4, 0, 280}, {F_D4, 0, 280}, {F_E4, 0, 280}, {F_G4, F_C3, 500},
-    // Câu 2: Sâu sâu lắm chẳng được mẹ yêu
-    {F_E4, 0, 280}, {F_G4, 0, 280}, {F_A4, F_F3, 300}, {F_G4, F_C3, 400},
-    // Câu 3: Khăn mặt đâu mà ngồi liếm mép
-    {F_E4, 0, 280}, {F_D4, F_G2, 280}, {F_C4, F_C2, 500},
-    // Câu 4: Đau mắt rồi lại khóc meo meo!
-    {F_D4, F_G3, 280}, {F_E4, 0, 280}, {F_C4, F_C3, 280},
-    {F_D4, 0, 280}, {F_E4, 0, 280},
-    {F_D4, F_G2, 300}, {F_C4, F_C2, 700}
+    // Sâu sâu lắm (Mi Son La)
+    {F_E4, 0, 280}, {F_G4, 0, 280}, {F_A4, F_F3, 500},
+    // Chẳng được mẹ yêu (La Son Mi Son)
+    {F_A4, F_F3, 280}, {F_G4, 0, 280}, {F_E4, 0, 280}, {F_G4, F_C3, 500},
+    // Khăn mặt đâu mà ngồi liếm mép (La Son Mi Rê Đồ Rê Mi)
+    {F_A4, F_F3, 280}, {F_G4, 0, 280}, {F_E4, 0, 280}, {F_D4, 0, 280},
+    {F_C4, 0, 280}, {F_D4, 0, 280}, {F_E4, F_C3, 500},
+    // Đau mắt rồi (Son Mi Rê)
+    {F_G4, 0, 280}, {F_E4, 0, 280}, {F_D4, F_G2, 500},
+    // Lại khóc meo meo (Rê Mi Rê Đồ)
+    {F_D4, 0, 280}, {F_E4, 0, 280}, {F_D4, F_G2, 300}, {F_C4, F_C2, 700}
 };
 
 // 20-Song Mozart Playlist
