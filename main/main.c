@@ -789,7 +789,7 @@ void app_main(void)
     ESP_LOGI(TAG, "==========================================================");
 
     bool initial_mode_set = false;
-    TickType_t wait_ticks = pdMS_TO_TICKS(500); // Chờ 500ms xem có USB Flash Drive cắm sẵn không
+    TickType_t wait_ticks = pdMS_TO_TICKS(1200); // Chờ 1.2s xem có USB Flash Drive cắm sẵn lúc bật nguồn không
 
     app_event_queue_t evt_queue;
     while (1) {
@@ -844,6 +844,17 @@ void app_main(void)
                         if (ptype == BUTTON_LONG_PRESS) {
                             printf("\r\n>>> [BTN 5 - GPIO %d NHẤN GIỮ: CHỦ ĐỘNG VÀO CHẾ ĐỘ NGỦ (SLEEP)] <<<\r\n", PIN_BTN_MUTE_OFF);
                             power_manager_force_sleep();
+                            break;
+                        }
+                        if (mode_manager_get_current_index() == 9) {
+                            mp3_player_toggle_pause();
+                            if (mp3_player_get_state() == MP3_STATE_PAUSED) {
+                                printf("\r\n>>> [BTN 5 - GPIO %d: TẠM DỪNG NHẠC (PAUSE)] <<<\r\n", PIN_BTN_MUTE_OFF);
+                                led_effects_color_burst(255, 200, 0);
+                            } else {
+                                printf("\r\n>>> [BTN 5 - GPIO %d: TIẾP TỤC PHÁT (RESUME)] <<<\r\n", PIN_BTN_MUTE_OFF);
+                                led_effects_color_burst(0, 255, 100);
+                            }
                             break;
                         }
                         bool muted = audio_synth_toggle_mute();

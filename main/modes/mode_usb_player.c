@@ -41,10 +41,10 @@ static void mode_usb_player_on_enter(void) {
         printf("--------------------------------------------------------\r\n");
         printf("  [NÚT CỨNG / ĐIỀU KHIỂN]:\r\n");
         printf("   - BTN 6 (Action)        : Đổi sang bài kế tiếp (Next Track)\r\n");
-        printf("   - BTN 6 (Nhấn giữ > 1s) : Tạm dừng / Phát tiếp (Play / Pause)\r\n");
-        printf("   - BTN 1 / BTN 2         : Tăng / Giảm âm lượng\r\n");
+        printf("   - BTN 5 (Mute / Pause)  : Tạm dừng / Phát tiếp (Play / Pause)\r\n");
+        printf("   - BTN 1 / BTN 2         : Giảm / Tăng âm lượng\r\n");
         printf("   - BTN 4                 : Đổi kiểu đèn nháy theo nhạc (Visualizer)\r\n");
-        printf("   - BTN 5                 : Tắt tiếng (Mute) / Tắt mở âm thanh\r\n");
+        printf("   - BTN 3                 : Chuyển sang chế độ tiếp theo\r\n");
         printf("  [NẾU CẮM BÀN PHÍM QUA HUB]:\r\n");
         printf("   - Phím SPACE            : Play / Pause\r\n");
         printf("   - Mũi tên Phải / Enter  : Next Track\r\n");
