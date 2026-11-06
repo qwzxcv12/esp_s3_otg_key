@@ -34,6 +34,12 @@ esp_err_t mp3_player_init(void);
 int mp3_player_scan_usb(const char *mount_path);
 
 /**
+ * @brief Đánh dấu trạng thái cắm / rút ổ đĩa USB Flash Drive
+ */
+void mp3_player_set_usb_mounted(bool mounted);
+bool mp3_player_is_usb_mounted(void);
+
+/**
  * @brief Xóa toàn bộ danh sách phát khi rút USB
  */
 void mp3_player_clear_playlist(void);

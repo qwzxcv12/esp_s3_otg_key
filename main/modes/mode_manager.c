@@ -5,6 +5,7 @@
 #include "audio_synth.h"
 #include "soundbank.h"
 #include "led_effects.h"
+#include "mp3_player.h"
 
 static const char *TAG = "mode_mgr";
 
@@ -49,6 +50,13 @@ void mode_manager_switch_to(uint8_t mode_index) {
     if (s_mode_count == 0) return;
     uint8_t new_idx = mode_index % s_mode_count;
 
+    // Bảo vệ: Nếu chuyển vào Mode 10 (chỉ mục 9) nhưng chưa cắm USB Flash Drive
+    if (new_idx == 9 && !mp3_player_is_usb_mounted()) {
+        printf("\r\n>>> [MODE MANAGER]: Chưa cắm USB Flash Drive chứa nhạc! Không thể vào Chế độ 10 <<<\r\n");
+        led_effects_color_burst(255, 120, 0);
+        return;
+    }
+
     const toy_mode_driver_t *prev = s_modes[s_current_index];
     const toy_mode_driver_t *curr = s_modes[new_idx];
 
@@ -86,12 +94,22 @@ void mode_manager_switch_to(uint8_t mode_index) {
 
 void mode_manager_next(void) {
     if (s_mode_count == 0) return;
-    mode_manager_switch_to((s_current_index + 1) % s_mode_count);
+    uint8_t next_idx = (s_current_index + 1) % s_mode_count;
+    // Nếu chưa cắm USB, bỏ qua Mode 10 (chỉ mục 9) và quay về Mode 1 (chỉ mục 0)
+    if (next_idx == 9 && !mp3_player_is_usb_mounted()) {
+        next_idx = 0;
+    }
+    mode_manager_switch_to(next_idx);
 }
 
 void mode_manager_prev(void) {
     if (s_mode_count == 0) return;
-    mode_manager_switch_to((s_current_index + s_mode_count - 1) % s_mode_count);
+    uint8_t prev_idx = (s_current_index + s_mode_count - 1) % s_mode_count;
+    // Nếu chưa cắm USB, bỏ qua Mode 10 (chỉ mục 9) và lùi về Mode 9 (chỉ mục 8)
+    if (prev_idx == 9 && !mp3_player_is_usb_mounted()) {
+        prev_idx = 8;
+    }
+    mode_manager_switch_to(prev_idx);
 }
 
 bool mode_manager_dispatch_key(uint8_t keycode, uint8_t modifier, char ascii_char) {

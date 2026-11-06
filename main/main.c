@@ -254,14 +254,19 @@ static void handle_toy_key(uint8_t kc, uint8_t mod, char c) {
         }
     }
 
-    if (kc >= 0x3A && kc <= 0x42) { // F1 - F9
+    if (kc >= 0x3A && kc <= 0x43) { // F1 - F10 (kc 0x3A = F1 ... 0x43 = F10)
+        uint8_t target_mode = kc - 0x3A;
+        if (target_mode == 9 && !mp3_player_is_usb_mounted()) {
+            printf("\r\n>>> [PHÍM F10]: Chưa cắm USB Flash Drive chứa nhạc! Hãy cắm USB vào cổng Type-C <<<\r\n");
+            led_effects_color_burst(255, 120, 0);
+            return;
+        }
         if (is_mode_9 && !has_ctrl_or_alt) {
-            // Trong Mode 9, nhấn F1..F9 đơn lẻ cho phép bé học tên phím F1..F9
-            // Nếu giữ Ctrl/Alt + F1..F9 thì nhảy sang chế độ tương ứng
+            // Trong Mode 9, nhấn F1..F10 đơn lẻ cho phép bé học tên phím
         } else {
             if ((now_us - s_last_mode_switch_us) > 400000LL) {
                 s_last_mode_switch_us = now_us;
-                mode_manager_switch_to(kc - 0x3A);
+                mode_manager_switch_to(target_mode);
             }
             return;
         }
@@ -874,6 +879,7 @@ void app_main(void)
                     err = msc_host_vfs_register(s_msc_device_handle, "/usb", &mount_config, &s_msc_vfs_handle);
                     if (err == ESP_OK) {
                         ESP_LOGI(TAG, "USB Flash Drive mounted at /usb successfully!");
+                        mp3_player_set_usb_mounted(true);
                         int count = mp3_player_scan_usb("/usb");
                         printf("\r\n>>> [USB ĐÃ CẮM: TÌM THẤY %d BÀI HÁT TẠI /usb] <<<\r\n", count);
                         audio_play_action_feedback();
@@ -889,6 +895,7 @@ void app_main(void)
                 }
             } else if (APP_EVENT_MSC_DISCONNECTED == evt_queue.event_group) {
                 printf("\r\n>>> [USB FLASH DRIVE ĐÃ RÚT RA] <<<\r\n");
+                mp3_player_set_usb_mounted(false);
                 mp3_player_clear_playlist();
                 if (s_msc_vfs_handle) {
                     msc_host_vfs_unregister(s_msc_vfs_handle);

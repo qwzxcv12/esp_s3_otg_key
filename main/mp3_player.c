@@ -49,10 +49,24 @@ static uint16_t s_total_tracks = 0;
 static uint16_t s_current_index = 0;
 static mp3_player_state_t s_state = MP3_STATE_STOPPED;
 static repeat_mode_t s_repeat_mode = REPEAT_MODE_ALL;
+static bool s_usb_mounted = false;
 
 static QueueHandle_t s_cmd_queue = NULL;
 static TaskHandle_t s_player_task_handle = NULL;
 static SemaphoreHandle_t s_player_mutex = NULL;
+
+void mp3_player_set_usb_mounted(bool mounted) {
+    s_usb_mounted = mounted;
+    if (!mounted) {
+        s_total_tracks = 0;
+        s_current_index = 0;
+        s_state = MP3_STATE_STOPPED;
+    }
+}
+
+bool mp3_player_is_usb_mounted(void) {
+    return s_usb_mounted;
+}
 
 static bool is_audio_file(const char *name) {
     size_t len = strlen(name);
