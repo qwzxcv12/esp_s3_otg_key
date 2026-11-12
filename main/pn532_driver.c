@@ -7,7 +7,7 @@
 #include "driver/uart.h"
 #include "driver/gpio.h"
 
-static const char *TAG = "PN532_UART";
+static const char *TAG = "PN532_HSU";
 
 #define PN532_PREAMBLE                      (0x00)
 #define PN532_STARTCODE1                    (0x00)
@@ -31,9 +31,12 @@ static TaskHandle_t s_scanner_task_handle = NULL;
 static bool s_is_connected = false;
 static bool s_scanner_active = true;
 
+// Mặc định: Chân SDA của PN532 là TXD -> nối GPIO 6 (RX), chân SCL của PN532 là RXD -> nối GPIO 5 (TX)
+static int s_current_rx_pin = PIN_PN532_GPIO_B; // GPIO 6
+static int s_current_tx_pin = PIN_PN532_GPIO_A; // GPIO 5
+
 /**
- * @brief Đánh thức PN532 trong chế độ UART / HSU.
- * Chuỗi xung 0x55 0x55 0x00... giúp đồng bộ tần số baud và kích hoạt dao động thạch anh.
+ * @brief Đánh thức PN532 trong chế độ UART HSU.
  */
 static void pn532_wakeup(void) {
     uint8_t wakeup_seq[] = {0x55, 0x55, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
@@ -43,7 +46,7 @@ static void pn532_wakeup(void) {
 }
 
 /**
- * @brief Đọc và kiểm tra gói tin ACK từ PN532 qua UART.
+ * @brief Đọc và kiểm tra gói tin ACK từ PN532.
  */
 static esp_err_t pn532_read_ack(void) {
     uint8_t buf[16] = {0};
@@ -91,7 +94,7 @@ static esp_err_t pn532_write_command(const uint8_t *cmd, uint8_t cmd_len) {
 }
 
 /**
- * @brief Đọc gói phản hồi từ PN532 qua UART.
+ * @brief Đọc gói phản hồi từ PN532 qua UART HSU.
  */
 static esp_err_t pn532_read_response(uint8_t expected_cmd, uint8_t *out_data, uint8_t *out_len, uint32_t timeout_ms) {
     uint8_t rx_buf[64] = {0};
@@ -172,7 +175,7 @@ static esp_err_t pn532_sam_config(void) {
 }
 
 /**
- * @brief Cài đặt MaxRetries = 1 lần để hàm quét thẻ không bị treo khi không có thẻ.
+ * @brief Cài đặt MaxRetries = 1 lần.
  */
 static esp_err_t pn532_set_passive_activation_retries(uint8_t max_retries) {
     uint8_t cmd[5] = {PN532_CMD_RFCONFIGURATION, 0x05, 0xFF, 0x01, max_retries};
@@ -185,7 +188,7 @@ static esp_err_t pn532_set_passive_activation_retries(uint8_t max_retries) {
 }
 
 /**
- * @brief Quét thẻ Mifare / NTAG Type A qua UART.
+ * @brief Quét thẻ Mifare / NTAG Type A qua UART HSU.
  */
 static bool pn532_read_passive_target_id(uint8_t *uid, uint8_t *uid_len) {
     uint8_t cmd[3] = {PN532_CMD_INLISTPASSIVETARGET, 0x01, 0x00};
@@ -200,7 +203,7 @@ static bool pn532_read_passive_target_id(uint8_t *uid, uint8_t *uid_len) {
     }
 
     if (resp_len < 6 || resp[0] == 0) {
-        return false; // Không có thẻ
+        return false;
     }
 
     uint8_t id_len = resp[5];
@@ -232,6 +235,7 @@ static esp_err_t pn532_try_connect(void) {
 
     ESP_LOGI(TAG, "==========================================================");
     ESP_LOGI(TAG, ">>> [PN532 UART HSU] KET NOI THANH CONG! <<<");
+    ESP_LOGI(TAG, ">>> Pin RX (nhan tu SDA): GPIO %d | Pin TX (phat vao SCL): GPIO %d", s_current_rx_pin, s_current_tx_pin);
     ESP_LOGI(TAG, ">>> Chip: PN5%02X | Firmware: v%d.%d | Ho tro: 0x%02X", ic, ver, rev, sup);
     ESP_LOGI(TAG, "==========================================================");
 
@@ -243,7 +247,7 @@ static esp_err_t pn532_try_connect(void) {
 }
 
 /**
- * @brief Task FreeRTOS chạy ngầm quét thẻ RFID/NFC liên tục qua UART.
+ * @brief Task FreeRTOS chạy ngầm quét thẻ RFID/NFC liên tục (Hỗ trợ Tự Đảo Chiều Chân).
  */
 static void pn532_scanner_task(void *arg) {
     uint8_t last_uid[10] = {0};
@@ -259,18 +263,25 @@ static void pn532_scanner_task(void *arg) {
             continue;
         }
 
-        // Tự động kết nối lại nếu ban đầu chưa bật nguồn hoặc cắm nhầm dây
+        // Tự động kết nối lại nếu chưa nhận diện
         if (!s_is_connected) {
             if (pn532_try_connect() == ESP_OK) {
                 ESP_LOGI(TAG, ">>> PN532 DA SAN SANG QUET THE (UART HSU)! <<<");
             } else {
                 retry_count++;
-                if (retry_count % 5 == 0) {
-                    ESP_LOGW(TAG, "Dang cho PN532... [Luu y DIP Switch HSU: Switch 1 = 0 (OFF), Switch 2 = 0 (OFF)]");
-                    ESP_LOGW(TAG, "                      [Day: GPIO 5 -> TXD cua PN532, GPIO 6 -> RXD cua PN532]");
+                
+                // Tự động đảo chân RX <-> TX giữa GPIO 5 và GPIO 6 mỗi lần thử để chống cắm ngược!
+                int temp = s_current_rx_pin;
+                s_current_rx_pin = s_current_tx_pin;
+                s_current_tx_pin = temp;
+                uart_set_pin(PN532_UART_PORT, s_current_tx_pin, s_current_rx_pin, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
+
+                if (retry_count % 4 == 0) {
+                    ESP_LOGW(TAG, "Dang tim PN532... [Hay dam bao DIP Switch: Switch 1 = 0 (OFF), Switch 2 = 0 (OFF)]");
+                    ESP_LOGW(TAG, "                      [Dang thu TX=GPIO %d, RX=GPIO %d (Tu dong dao chan)]", s_current_tx_pin, s_current_rx_pin);
                 }
             }
-            vTaskDelay(pdMS_TO_TICKS(2000));
+            vTaskDelay(pdMS_TO_TICKS(1500));
             continue;
         }
 
@@ -307,8 +318,8 @@ static void pn532_scanner_task(void *arg) {
 esp_err_t pn532_driver_init(pn532_card_cb_t card_cb) {
     s_card_callback = card_cb;
 
-    ESP_LOGI(TAG, "Initializing PN532 UART HSU Driver (TX=GPIO %d, RX=GPIO %d, Baud %d)...",
-             PIN_PN532_TX, PIN_PN532_RX, PN532_UART_BAUD);
+    ESP_LOGI(TAG, "Initializing PN532 UART HSU Driver on GPIO %d and GPIO %d (Baud %d)...",
+             PIN_PN532_GPIO_A, PIN_PN532_GPIO_B, PN532_UART_BAUD);
 
     uart_config_t uart_config = {
         .baud_rate = PN532_UART_BAUD,
@@ -320,23 +331,13 @@ esp_err_t pn532_driver_init(pn532_card_cb_t card_cb) {
     };
 
     esp_err_t ret = uart_param_config(PN532_UART_PORT, &uart_config);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "uart_param_config failed: %s", esp_err_to_name(ret));
-        return ret;
-    }
+    if (ret != ESP_OK) return ret;
 
-    ret = uart_set_pin(PN532_UART_PORT, PIN_PN532_TX, PIN_PN532_RX, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "uart_set_pin failed: %s", esp_err_to_name(ret));
-        return ret;
-    }
+    ret = uart_set_pin(PN532_UART_PORT, s_current_tx_pin, s_current_rx_pin, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
+    if (ret != ESP_OK) return ret;
 
-    // Cài đặt driver với bộ đệm RX 512 bytes, TX 512 bytes
     ret = uart_driver_install(PN532_UART_PORT, 512, 512, 0, NULL, 0);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "uart_driver_install failed: %s", esp_err_to_name(ret));
-        return ret;
-    }
+    if (ret != ESP_OK) return ret;
 
     vTaskDelay(pdMS_TO_TICKS(100));
 
