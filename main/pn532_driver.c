@@ -31,27 +31,30 @@ static TaskHandle_t s_scanner_task_handle = NULL;
 static bool s_is_connected = false;
 static bool s_scanner_active = true;
 
-// Mặc định: Chân SDA của PN532 là TXD -> nối GPIO 6 (RX), chân SCL của PN532 là RXD -> nối GPIO 5 (TX)
-static int s_current_rx_pin = PIN_PN532_GPIO_B; // GPIO 6
+// 2 chân GPIO kết nối: thử cả 2 chiều
 static int s_current_tx_pin = PIN_PN532_GPIO_A; // GPIO 5
+static int s_current_rx_pin = PIN_PN532_GPIO_B; // GPIO 6
 
 /**
- * @brief Đánh thức PN532 trong chế độ UART HSU.
+ * @brief Chuỗi xung đánh thức chuẩn của Adafruit PN532 HSU.
  */
 static void pn532_wakeup(void) {
-    uint8_t wakeup_seq[] = {0x55, 0x55, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-    uart_write_bytes(PN532_UART_PORT, (const char *)wakeup_seq, sizeof(wakeup_seq));
-    vTaskDelay(pdMS_TO_TICKS(15));
+    uint8_t w[3] = {0x55, 0x00, 0x00};
+    uart_write_bytes(PN532_UART_PORT, (const char *)w, 3);
+    vTaskDelay(pdMS_TO_TICKS(10));
     uart_flush_input(PN532_UART_PORT);
 }
 
 /**
- * @brief Đọc và kiểm tra gói tin ACK từ PN532.
+ * @brief Đọc và kiểm tra gói tin ACK từ PN532 (Timeout 600ms).
  */
 static esp_err_t pn532_read_ack(void) {
-    uint8_t buf[16] = {0};
-    int read_len = uart_read_bytes(PN532_UART_PORT, buf, sizeof(buf), pdMS_TO_TICKS(80));
+    uint8_t buf[32] = {0};
+    int read_len = uart_read_bytes(PN532_UART_PORT, buf, sizeof(buf), pdMS_TO_TICKS(600));
     if (read_len < 6) {
+        if (read_len > 0) {
+            ESP_LOGD(TAG, "Received partial bytes (%d): %02X %02X", read_len, buf[0], buf[1]);
+        }
         return ESP_ERR_TIMEOUT;
     }
 
@@ -94,7 +97,7 @@ static esp_err_t pn532_write_command(const uint8_t *cmd, uint8_t cmd_len) {
 }
 
 /**
- * @brief Đọc gói phản hồi từ PN532 qua UART HSU.
+ * @brief Đọc gói phản hồi từ PN532 qua UART HSU (Timeout 800ms).
  */
 static esp_err_t pn532_read_response(uint8_t expected_cmd, uint8_t *out_data, uint8_t *out_len, uint32_t timeout_ms) {
     uint8_t rx_buf[64] = {0};
@@ -148,7 +151,7 @@ static esp_err_t pn532_get_firmware_version(uint32_t *version_out) {
 
     uint8_t resp[4] = {0};
     uint8_t resp_len = sizeof(resp);
-    ret = pn532_read_response(PN532_CMD_GETFIRMWAREVERSION, resp, &resp_len, 100);
+    ret = pn532_read_response(PN532_CMD_GETFIRMWAREVERSION, resp, &resp_len, 800);
     if (ret == ESP_OK && resp_len >= 4) {
         if (version_out) {
             *version_out = ((uint32_t)resp[0] << 24) |
@@ -171,7 +174,7 @@ static esp_err_t pn532_sam_config(void) {
 
     uint8_t resp[2] = {0};
     uint8_t resp_len = sizeof(resp);
-    return pn532_read_response(PN532_CMD_SAMCONFIGURATION, resp, &resp_len, 100);
+    return pn532_read_response(PN532_CMD_SAMCONFIGURATION, resp, &resp_len, 300);
 }
 
 /**
@@ -184,7 +187,7 @@ static esp_err_t pn532_set_passive_activation_retries(uint8_t max_retries) {
 
     uint8_t resp[2] = {0};
     uint8_t resp_len = sizeof(resp);
-    return pn532_read_response(PN532_CMD_RFCONFIGURATION, resp, &resp_len, 100);
+    return pn532_read_response(PN532_CMD_RFCONFIGURATION, resp, &resp_len, 300);
 }
 
 /**
@@ -198,7 +201,7 @@ static bool pn532_read_passive_target_id(uint8_t *uid, uint8_t *uid_len) {
 
     uint8_t resp[24] = {0};
     uint8_t resp_len = sizeof(resp);
-    if (pn532_read_response(PN532_CMD_INLISTPASSIVETARGET, resp, &resp_len, 80) != ESP_OK) {
+    if (pn532_read_response(PN532_CMD_INLISTPASSIVETARGET, resp, &resp_len, 100) != ESP_OK) {
         return false;
     }
 
@@ -217,7 +220,7 @@ static bool pn532_read_passive_target_id(uint8_t *uid, uint8_t *uid_len) {
 }
 
 /**
- * @brief Thử kết nối với module PN532 qua giao thức UART HSU.
+ * @brief Thử kết nối với module PN532.
  */
 static esp_err_t pn532_try_connect(void) {
     pn532_wakeup();
@@ -235,7 +238,7 @@ static esp_err_t pn532_try_connect(void) {
 
     ESP_LOGI(TAG, "==========================================================");
     ESP_LOGI(TAG, ">>> [PN532 UART HSU] KET NOI THANH CONG! <<<");
-    ESP_LOGI(TAG, ">>> Pin RX (nhan tu SDA): GPIO %d | Pin TX (phat vao SCL): GPIO %d", s_current_rx_pin, s_current_tx_pin);
+    ESP_LOGI(TAG, ">>> Huong chan khop: ESP32 TX=GPIO %d | ESP32 RX=GPIO %d", s_current_tx_pin, s_current_rx_pin);
     ESP_LOGI(TAG, ">>> Chip: PN5%02X | Firmware: v%d.%d | Ho tro: 0x%02X", ic, ver, rev, sup);
     ESP_LOGI(TAG, "==========================================================");
 
@@ -247,7 +250,7 @@ static esp_err_t pn532_try_connect(void) {
 }
 
 /**
- * @brief Task FreeRTOS chạy ngầm quét thẻ RFID/NFC liên tục (Hỗ trợ Tự Đảo Chiều Chân).
+ * @brief Task FreeRTOS chạy ngầm quét thẻ RFID/NFC liên tục.
  */
 static void pn532_scanner_task(void *arg) {
     uint8_t last_uid[10] = {0};
@@ -270,16 +273,14 @@ static void pn532_scanner_task(void *arg) {
             } else {
                 retry_count++;
                 
-                // Tự động đảo chân RX <-> TX giữa GPIO 5 và GPIO 6 mỗi lần thử để chống cắm ngược!
+                // Đảo chiều chân TX <-> RX để thử chiều ngược lại
                 int temp = s_current_rx_pin;
                 s_current_rx_pin = s_current_tx_pin;
                 s_current_tx_pin = temp;
                 uart_set_pin(PN532_UART_PORT, s_current_tx_pin, s_current_rx_pin, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
 
-                if (retry_count % 4 == 0) {
-                    ESP_LOGW(TAG, "Dang tim PN532... [Hay dam bao DIP Switch: Switch 1 = 0 (OFF), Switch 2 = 0 (OFF)]");
-                    ESP_LOGW(TAG, "                      [Dang thu TX=GPIO %d, RX=GPIO %d (Tu dong dao chan)]", s_current_tx_pin, s_current_rx_pin);
-                }
+                ESP_LOGW(TAG, "Dang tim PN532... [Dang thu ESP32 TX=GPIO %d, RX=GPIO %d]",
+                         s_current_tx_pin, s_current_rx_pin);
             }
             vTaskDelay(pdMS_TO_TICKS(1500));
             continue;
@@ -340,9 +341,6 @@ esp_err_t pn532_driver_init(pn532_card_cb_t card_cb) {
     if (ret != ESP_OK) return ret;
 
     vTaskDelay(pdMS_TO_TICKS(100));
-
-    // Thử kết nối lần đầu
-    pn532_try_connect();
 
     // Khởi chạy task quét thẻ
     BaseType_t task_ret = xTaskCreate(pn532_scanner_task, "pn532_scan", 4096, NULL, 3, &s_scanner_task_handle);
