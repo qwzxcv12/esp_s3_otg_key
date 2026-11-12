@@ -32,7 +32,7 @@
 #include "soundbank.h"
 #include "mode_manager.h"
 #include "power_manager.h"
-#include "pn532_driver.h"
+// #include "pn532_driver.h"  // TẠM TẮT - module PN532 chưa kết nối được
 #include "msc_host.h"
 #include "msc_host_vfs.h"
 #include "esp_vfs_fat.h"
@@ -196,7 +196,7 @@ static void on_pm_enter_sleep(void) {
     // 2. Tắt clock I2S MAX98357A đưa về Hardware Shutdown (< 10uA)
     audio_synth_enter_low_power();
     // 3. Tạm dừng quét thẻ RFID/NFC PN532 để tiết kiệm điện
-    pn532_set_scanner_active(false);
+    // pn532_set_scanner_active(false);  // TẠM TẮT
 }
 
 static void on_pm_wake_up(void) {
@@ -204,7 +204,7 @@ static void on_pm_wake_up(void) {
     // 1. Mở lại clock I2S MAX98357A
     audio_synth_exit_low_power();
     // 2. Kích hoạt lại tiến trình quét thẻ PN532
-    pn532_set_scanner_active(true);
+    // pn532_set_scanner_active(true);  // TẠM TẮT
     // 2. Khôi phục đèn NumLock trên bàn phím USB
     s_num_lock = true;
     trigger_led_update();
@@ -843,7 +843,7 @@ void app_main(void)
     ESP_ERROR_CHECK(mode_manager_init());
 
     // 5.1 Khởi tạo module NFC / RFID PN532 (I2C: SDA=GPIO 6, SCL=GPIO 5)
-    pn532_driver_init(on_rfid_card_event);
+    // pn532_driver_init(on_rfid_card_event);  // TẠM TẮT - khi nào PN532 kết nối được thì bật lại
 
     // 6. Start toy background monitor task (gọi led_effects_tick & mode_manager_tick)
     xTaskCreate(toy_background_task, "toy_bg", 3072, NULL, 4, NULL);

@@ -5,7 +5,7 @@ idf_component_register(SRCS "main.c"
                             "led_effects.c"
                             "button_driver.c"
                             "power_manager.c"
-                            "pn532_driver.c"
+                            # "pn532_driver.c"  # TẠM TẮT
                             "wifi_ota.c"
                             "modes/mode_manager.c"
                             "modes/mode_registry.c"
