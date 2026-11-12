@@ -296,7 +296,33 @@ static void on_wifi_ready(const char *ip) {
 
 static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data) {
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
-        ESP_LOGI(TAG, "Wi-Fi Station started, connecting to %s...", CONFIG_WIFI_OTA_SSID);
+        ESP_LOGI(TAG, "Wi-Fi Station started, scanning for SSID '%s'...", CONFIG_WIFI_OTA_SSID);
+        wifi_scan_config_t scan_cfg = {0};
+        esp_wifi_scan_start(&scan_cfg, false);
+    } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_SCAN_DONE) {
+        uint16_t ap_count = 0;
+        esp_wifi_scan_get_ap_num(&ap_count);
+        ESP_LOGI(TAG, "Wi-Fi Scan done: %d AP(s) in range", ap_count);
+        if (ap_count > 0) {
+            wifi_ap_record_t *ap_records = (wifi_ap_record_t *)malloc(sizeof(wifi_ap_record_t) * ap_count);
+            if (ap_records) {
+                esp_wifi_scan_get_ap_records(&ap_count, ap_records);
+                bool found = false;
+                for (int i = 0; i < ap_count; i++) {
+                    if (strstr((char *)ap_records[i].ssid, "HG") || strstr((char *)ap_records[i].ssid, "156") ||
+                        strcmp((char *)ap_records[i].ssid, CONFIG_WIFI_OTA_SSID) == 0) {
+                        ESP_LOGI(TAG, ">>> [AP PHAT HIEN] SSID: '%s' | Kenh: %d | RSSI: %d dBm | Auth: %d",
+                                 ap_records[i].ssid, ap_records[i].primary, ap_records[i].rssi, ap_records[i].authmode);
+                        found = true;
+                    }
+                }
+                if (!found) {
+                    ESP_LOGW(TAG, ">>> [CANH BAO] Khong tim thay SSID '%s' trong tam song!", CONFIG_WIFI_OTA_SSID);
+                }
+                free(ap_records);
+            }
+        }
+        ESP_LOGI(TAG, "Dang ket noi toi %s...", CONFIG_WIFI_OTA_SSID);
         esp_wifi_connect();
     } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_CONNECTED) {
         ESP_LOGI(TAG, "Wi-Fi Station connected to AP");
@@ -350,6 +376,7 @@ esp_err_t wifi_ota_init(void) {
 #endif
 
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+    cfg.wifi_task_stack_size = 8192;
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
 
     ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT,
@@ -367,10 +394,9 @@ esp_err_t wifi_ota_init(void) {
     strncpy((char *)wifi_config.sta.ssid, CONFIG_WIFI_OTA_SSID, sizeof(wifi_config.sta.ssid) - 1);
     strncpy((char *)wifi_config.sta.password, CONFIG_WIFI_OTA_PASS, sizeof(wifi_config.sta.password) - 1);
     wifi_config.sta.threshold.authmode = WIFI_AUTH_WPA_PSK;
-    wifi_config.sta.pmf_cfg.capable = false;
+    wifi_config.sta.sae_pwe_h2e = WPA3_SAE_PWE_BOTH;
+    wifi_config.sta.pmf_cfg.capable = true;
     wifi_config.sta.pmf_cfg.required = false;
-    wifi_config.sta.scan_method = WIFI_ALL_CHANNEL_SCAN;
-    wifi_config.sta.sort_method = WIFI_CONNECT_AP_BY_SIGNAL;
 
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
