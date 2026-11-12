@@ -288,10 +288,37 @@ static void pn532_scanner_task(void *arg) {
                 ESP_LOGI(TAG, ">>> PN532 DA SAN SANG QUET THE NFC/RFID! <<<");
                 continue;
             } else {
-                int lvl_a = gpio_get_level((gpio_num_t)PIN_PN532_GPIO_A);
-                int lvl_b = gpio_get_level((gpio_num_t)PIN_PN532_GPIO_B);
-                ESP_LOGW(TAG, "Chua phan hoi... (Dien ap: GPIO5=%d, GPIO6=%d) -> Luu y: Can cong tac gat I0=1(ON), I1=0(OFF)",
-                         lvl_a, lvl_b);
+                // Quét xem có bất kỳ thiết bị I2C nào phản hồi trên bus không
+                int found_count = 0;
+                uint8_t found_addr = 0;
+                for (uint16_t addr = 0x08; addr <= 0x77; addr++) {
+                    if (s_i2c_bus && i2c_master_probe(s_i2c_bus, addr, 15) == ESP_OK) {
+                        found_count++;
+                        found_addr = (uint8_t)addr;
+                        ESP_LOGI(TAG, ">>> TIM THAY THIET BI I2C TAI DIA CHI: 0x%02X! <<<", addr);
+                    }
+                }
+
+                pn532_i2c_cleanup();
+
+                // Kiểm tra trở kéo ngoài (external pull-up) trên GPIO 5 và 6
+                gpio_set_direction((gpio_num_t)PIN_PN532_GPIO_A, GPIO_MODE_INPUT);
+                gpio_set_direction((gpio_num_t)PIN_PN532_GPIO_B, GPIO_MODE_INPUT);
+                gpio_set_pull_mode((gpio_num_t)PIN_PN532_GPIO_A, GPIO_PULLDOWN_ONLY);
+                gpio_set_pull_mode((gpio_num_t)PIN_PN532_GPIO_B, GPIO_PULLDOWN_ONLY);
+                vTaskDelay(pdMS_TO_TICKS(15));
+                int pd_5 = gpio_get_level((gpio_num_t)PIN_PN532_GPIO_A);
+                int pd_6 = gpio_get_level((gpio_num_t)PIN_PN532_GPIO_B);
+
+                if (found_count > 0) {
+                    ESP_LOGI(TAG, "Phan hoi I2C tai dia chi 0x%02X nhung khong phai PN532 tieu chuan!", found_addr);
+                } else if (pd_5 == 0 && pd_6 == 0) {
+                    ESP_LOGE(TAG, ">>> CANH BAO: KHONG CO TRO KEO NGOAI! GPIO5=0, GPIO6=0 khi Pull-down! <<<");
+                    ESP_LOGE(TAG, "-> Wires chua tiep xuc voi PN532 hoac PN532 chua duoc cap dien VCC/GND!");
+                } else {
+                    ESP_LOGW(TAG, "Tro keo ngoai OK (GPIO5=%d, GPIO6=%d), nhung chip chua ACK 0x24 (Kiem tra switch I0=ON, I1=OFF)",
+                             pd_5, pd_6);
+                }
             }
             vTaskDelay(pdMS_TO_TICKS(2000));
             continue;
