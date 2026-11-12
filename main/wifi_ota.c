@@ -27,6 +27,7 @@ static const char *TAG = "WIFI_OTA";
 #endif
 
 static bool s_connected = false;
+static bool s_ota_started = false;
 static char s_ip_str[32] = "0.0.0.0";
 static httpd_handle_t s_http_server = NULL;
 static TaskHandle_t s_udp_task_handle = NULL;
@@ -253,10 +254,54 @@ static void udp_discovery_task(void *pvParameters) {
     vTaskDelete(NULL);
 }
 
+static void on_wifi_ready(const char *ip) {
+    if (s_ota_started) {
+        s_connected = true;
+        return;
+    }
+    s_connected = true;
+    s_ota_started = true;
+    s_retry_count = 0;
+    if (ip && strlen(ip) > 0) {
+        strncpy(s_ip_str, ip, sizeof(s_ip_str) - 1);
+    }
+    
+    ESP_LOGI(TAG, "==========================================================");
+    ESP_LOGI(TAG, ">>> [WIFI OTA READY]");
+    ESP_LOGI(TAG, ">>> Connected to: %s", CONFIG_WIFI_OTA_SSID);
+    ESP_LOGI(TAG, ">>> IP Address  : %s", s_ip_str);
+    ESP_LOGI(TAG, ">>> Web OTA URL : http://%s/ (or http://%s.local/)", s_ip_str, WIFI_OTA_HOSTNAME);
+    ESP_LOGI(TAG, "==========================================================");
+    
+    // Start mDNS service
+    esp_err_t mdns_err = mdns_init();
+    if (mdns_err == ESP_OK) {
+        mdns_hostname_set(WIFI_OTA_HOSTNAME);
+        mdns_instance_name_set("ESP32-S3 Toy Synthesizer");
+        mdns_service_add(NULL, "_http", "_tcp", WIFI_OTA_HTTP_PORT, NULL, 0);
+        ESP_LOGI(TAG, "mDNS responder started: %s.local", WIFI_OTA_HOSTNAME);
+    } else {
+        ESP_LOGW(TAG, "mDNS init failed: %s", esp_err_to_name(mdns_err));
+    }
+    
+    // Start Web Server
+    start_ota_webserver();
+    
+    // Start UDP Discovery responder
+    if (!s_udp_task_handle) {
+        xTaskCreate(udp_discovery_task, "udp_ota_disc", 3072, NULL, 3, &s_udp_task_handle);
+    }
+}
+
 static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data) {
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
         ESP_LOGI(TAG, "Wi-Fi Station started, connecting to %s...", CONFIG_WIFI_OTA_SSID);
         esp_wifi_connect();
+    } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_CONNECTED) {
+        ESP_LOGI(TAG, "Wi-Fi Station connected to AP");
+#ifdef CONFIG_WIFI_STATIC_IP
+        on_wifi_ready(CONFIG_WIFI_STATIC_IP);
+#endif
     } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
         wifi_event_sta_disconnected_t *disconn = (wifi_event_sta_disconnected_t *)event_data;
         s_connected = false;
@@ -265,35 +310,9 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t e
         esp_wifi_connect();
     } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
         ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
-        snprintf(s_ip_str, sizeof(s_ip_str), IPSTR, IP2STR(&event->ip_info.ip));
-        s_connected = true;
-        s_retry_count = 0;
-        
-        ESP_LOGI(TAG, "==========================================================");
-        ESP_LOGI(TAG, ">>> [WIFI OTA READY]");
-        ESP_LOGI(TAG, ">>> Connected to: %s", CONFIG_WIFI_OTA_SSID);
-        ESP_LOGI(TAG, ">>> IP Address  : %s", s_ip_str);
-        ESP_LOGI(TAG, ">>> Web OTA URL : http://%s/ (or http://%s.local/)", s_ip_str, WIFI_OTA_HOSTNAME);
-        ESP_LOGI(TAG, "==========================================================");
-        
-        // Start mDNS service
-        esp_err_t mdns_err = mdns_init();
-        if (mdns_err == ESP_OK) {
-            mdns_hostname_set(WIFI_OTA_HOSTNAME);
-            mdns_instance_name_set("ESP32-S3 Toy Synthesizer");
-            mdns_service_add(NULL, "_http", "_tcp", WIFI_OTA_HTTP_PORT, NULL, 0);
-            ESP_LOGI(TAG, "mDNS responder started: %s.local", WIFI_OTA_HOSTNAME);
-        } else {
-            ESP_LOGW(TAG, "mDNS init failed: %s", esp_err_to_name(mdns_err));
-        }
-        
-        // Start Web Server
-        start_ota_webserver();
-        
-        // Start UDP Discovery responder
-        if (!s_udp_task_handle) {
-            xTaskCreate(udp_discovery_task, "udp_ota_disc", 3072, NULL, 3, &s_udp_task_handle);
-        }
+        char ip[32];
+        snprintf(ip, sizeof(ip), IPSTR, IP2STR(&event->ip_info.ip));
+        on_wifi_ready(ip);
     }
 }
 
@@ -312,7 +331,22 @@ esp_err_t wifi_ota_init(void) {
         ESP_ERROR_CHECK(ret);
     }
 
-    esp_netif_create_default_wifi_sta();
+    esp_netif_t *sta_netif = esp_netif_create_default_wifi_sta();
+#if defined(CONFIG_WIFI_STATIC_IP)
+    esp_netif_dhcpc_stop(sta_netif);
+    esp_netif_ip_info_t ip_info;
+    memset(&ip_info, 0, sizeof(ip_info));
+    ip_info.ip.addr = inet_addr(CONFIG_WIFI_STATIC_IP);
+    ip_info.gw.addr = inet_addr(CONFIG_WIFI_GATEWAY);
+    ip_info.netmask.addr = inet_addr(CONFIG_WIFI_NETMASK);
+    esp_netif_set_ip_info(sta_netif, &ip_info);
+
+    esp_netif_dns_info_t dns_info;
+    dns_info.ip.type = ESP_IPADDR_TYPE_V4;
+    dns_info.ip.u_addr.ip4.addr = inet_addr(CONFIG_WIFI_GATEWAY);
+    esp_netif_set_dns_info(sta_netif, ESP_NETIF_DNS_MAIN, &dns_info);
+    ESP_LOGI(TAG, "Static IP configured: %s (Gateway: %s)", CONFIG_WIFI_STATIC_IP, CONFIG_WIFI_GATEWAY);
+#endif
 
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
