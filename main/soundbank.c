@@ -19,9 +19,9 @@ static const char *TAG = "SOUNDBANK";
 #define ALWAYS          0x8000u          // loaded in every mode
 
 typedef enum {
-    SND_CHIME, SND_COIN,
+    SND_CHIME, SND_COIN, SND_STARTUP,
     SND_MODE_1, SND_MODE_2, SND_MODE_3, SND_MODE_4, SND_MODE_5,
-    SND_MODE_6, SND_MODE_7, SND_MODE_8, SND_MODE_9,
+    SND_MODE_6, SND_MODE_7, SND_MODE_8, SND_MODE_9, SND_MODE_10,
     SND_PIANO_C2, SND_PIANO_FS2, SND_PIANO_C3, SND_PIANO_FS3,
     SND_PIANO_C4, SND_PIANO_D4, SND_PIANO_E4, SND_PIANO_F4, SND_PIANO_G4, SND_PIANO_A4, SND_PIANO_B4,
     SND_PIANO_C5, SND_PIANO_FS5, SND_PIANO_C6, SND_PIANO_C7,
@@ -103,10 +103,11 @@ static void reg(snd_id_t id, const char *rel_path, uint16_t modes) {
 
 static void build_table(void) {
     memset(s_snd, 0, sizeof(s_snd));
-    reg(SND_CHIME, "common/chime.wav", ALWAYS);
-    reg(SND_COIN,  "common/coin.wav",  ALWAYS);
+    reg(SND_CHIME,   "common/chime.wav",   ALWAYS);
+    reg(SND_COIN,    "common/coin.wav",    ALWAYS);
+    reg(SND_STARTUP, "common/startup.wav", ALWAYS);
 
-    for (int i = 0; i < 9; i++) {
+    for (int i = 0; i < 10; i++) {
         char p[40];
         snprintf(p, sizeof(p), "common/mode_%d.wav", i + 1);
         reg((snd_id_t)(SND_MODE_1 + i), p, ALWAYS);
@@ -419,7 +420,7 @@ esp_err_t soundbank_init(void) {
     ESP_LOGI(TAG, "LittleFS mounted: %u KB used of %u KB", (unsigned)(used / 1024), (unsigned)(total / 1024));
 
     // Preload ALWAYS assets synchronously on startup so first mode announcement plays immediately
-    for (int i = 0; i <= SND_MODE_9; i++) {
+    for (int i = 0; i <= SND_MODE_10; i++) {
         pcm_asset_t a;
         if (load_wav(s_snd[i].path, &a) == ESP_OK) {
             s_snd[i].asset = a;
@@ -495,8 +496,13 @@ bool sb_play_piano(float freq_hz, uint8_t timbre, uint8_t owner_key) {
     return sb_play_piano_dur(freq_hz, timbre, owner_key, 0);
 }
 
+bool sb_play_startup(void) {
+    if (!s_mounted || !is_loaded(SND_STARTUP)) return false;
+    return play_id(SND_STARTUP, 1.40f, 0, false, CHOKE_NONE, 0, 0, 0);
+}
+
 bool sb_play_mode_name(uint8_t mode_index) {
-    if (!s_mounted || mode_index >= 9) return false;
+    if (!s_mounted || mode_index >= 10) return false;
     snd_id_t id = (snd_id_t)(SND_MODE_1 + mode_index);
     if (!is_loaded(id)) return false;
     return play_id(id, 1.40f, 0, false, CHOKE_SPEECH, 0, 0, 0);

@@ -2238,6 +2238,19 @@ void audio_play_goodbye_lullaby(void) {
     vTaskDelay(pdMS_TO_TICKS(580)); // Đợi nốt ngân kết thúc mượt mà trước khi ngắt clock
 }
 
+void audio_play_startup_sound(void) {
+    if (s_is_muted) return;
+    // Chime khởi động đồ chơi lấp lánh: C5 -> E5 -> G5 -> C6 -> E6
+    trigger_voice_internal(VOICE_TONE_ADSR, 523.25f, 0, 0, 0.75f, 200, TIMBRE_MUSIC_BOX);
+    vTaskDelay(pdMS_TO_TICKS(110));
+    trigger_voice_internal(VOICE_TONE_ADSR, 659.25f, 0, 0, 0.80f, 200, TIMBRE_MUSIC_BOX);
+    vTaskDelay(pdMS_TO_TICKS(110));
+    trigger_voice_internal(VOICE_TONE_ADSR, 783.99f, 0, 0, 0.85f, 220, TIMBRE_MUSIC_BOX);
+    vTaskDelay(pdMS_TO_TICKS(130));
+    trigger_voice_internal(VOICE_TONE_ADSR, 1046.50f, 0, 0, 0.95f, 380, TIMBRE_MUSIC_BOX);
+    trigger_voice_internal(VOICE_TONE_ADSR, 1318.51f, 0, 0, 0.85f, 380, TIMBRE_MUSIC_BOX);
+}
+
 void audio_play_wake_chime(void) {
     if (s_is_muted) return;
     // Chime đánh thức vui tươi: C5 (523Hz) -> G5 (784Hz) -> C6 (1046Hz)

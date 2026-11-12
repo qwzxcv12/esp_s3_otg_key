@@ -1,7 +1,9 @@
 #include <stdio.h>
 #include <string.h>
 #include "esp_log.h"
+#include "esp_random.h"
 #include "mode_manager.h"
+#include "mode_demo.h"
 #include "audio_synth.h"
 #include "soundbank.h"
 #include "led_effects.h"
@@ -12,6 +14,7 @@ static const char *TAG = "mode_mgr";
 static const toy_mode_driver_t *s_modes[MAX_TOY_MODES] = { 0 };
 static uint8_t s_mode_count = 0;
 static uint8_t s_current_index = 0;
+static bool    s_in_standby = true;
 
 // Các driver chế độ khai báo extern từ mode_registry.c hoặc từng file mode
 extern void mode_registry_register_all(void);
@@ -31,6 +34,7 @@ esp_err_t mode_manager_register(const toy_mode_driver_t *driver) {
 esp_err_t mode_manager_init(void) {
     s_mode_count = 0;
     s_current_index = 0;
+    s_in_standby = true;
 
     // Đăng ký toàn bộ các mode từ bảng Registry
     mode_registry_register_all();
@@ -42,8 +46,26 @@ esp_err_t mode_manager_init(void) {
         }
     }
 
-    ESP_LOGI(TAG, "Mode Manager initialized with %d modes", s_mode_count);
+    // Khởi tạo hệ thống biểu diễn Demo 30s
+    mode_demo_init();
+
+    ESP_LOGI(TAG, "Mode Manager initialized with %d modes (Standby state)", s_mode_count);
     return ESP_OK;
+}
+
+bool mode_manager_is_in_standby(void) {
+    return s_in_standby;
+}
+
+void mode_manager_enter_standby(void) {
+    mode_demo_stop();
+    if (!s_in_standby && s_modes[s_current_index] && s_modes[s_current_index]->on_exit) {
+        s_modes[s_current_index]->on_exit();
+    }
+    s_in_standby = true;
+    audio_synth_stop_all_background();
+    led_effects_standby(true);
+    printf("\r\n>>> [HỆ THỐNG VÀO TRẠNG THÁI CHỜ - BẤM NÚT CHẾ ĐỘ ĐỂ BẮT ĐẦU] <<<\r\n");
 }
 
 void mode_manager_switch_to(uint8_t mode_index) {
@@ -57,14 +79,19 @@ void mode_manager_switch_to(uint8_t mode_index) {
         return;
     }
 
+    // Dừng bản demo đang chạy (nếu có)
+    mode_demo_stop();
+
     const toy_mode_driver_t *prev = s_modes[s_current_index];
     const toy_mode_driver_t *curr = s_modes[new_idx];
 
-    // 1. Gọi hook on_exit của chế độ cũ (để tắt còi cứu hỏa, tắt autoplay, dừng timer...)
-    if (prev && prev->on_exit) {
+    // 1. Gọi hook on_exit của chế độ cũ nếu trước đó đang ở trong một chế độ
+    if (!s_in_standby && prev && prev->on_exit) {
         prev->on_exit();
     }
 
+    s_in_standby = false;
+    led_effects_standby(false);
     s_current_index = new_idx;
 
     printf("\r\n\r\n========================================================\r\n");
@@ -90,10 +117,48 @@ void mode_manager_switch_to(uint8_t mode_index) {
     if (curr && curr->on_enter) {
         curr->on_enter();
     }
+
+    // 5. Khởi động bản Demo 30s đặc sắc cho chế độ này!
+    mode_demo_start(s_current_index);
+}
+
+void mode_manager_random(void) {
+    if (s_mode_count == 0) return;
+    if (s_in_standby) {
+        mode_manager_switch_to(0);
+        return;
+    }
+
+    uint8_t max_modes = s_mode_count;
+    if (!mp3_player_is_usb_mounted() && max_modes > 9) {
+        max_modes = 9; // Không random vào Mode 10 nếu chưa cắm USB
+    }
+    if (max_modes <= 1) {
+        mode_manager_switch_to(0);
+        return;
+    }
+
+    uint8_t next_idx = s_current_index;
+    for (int retry = 0; retry < 10; retry++) {
+        uint8_t candidate = (uint8_t)(esp_random() % max_modes);
+        if (candidate != s_current_index) {
+            next_idx = candidate;
+            break;
+        }
+    }
+    if (next_idx == s_current_index) {
+        next_idx = (s_current_index + 1) % max_modes;
+    }
+
+    mode_manager_switch_to(next_idx);
 }
 
 void mode_manager_next(void) {
     if (s_mode_count == 0) return;
+    if (s_in_standby) {
+        mode_manager_switch_to(0);
+        return;
+    }
     uint8_t next_idx = (s_current_index + 1) % s_mode_count;
     // Nếu chưa cắm USB, bỏ qua Mode 10 (chỉ mục 9) và quay về Mode 1 (chỉ mục 0)
     if (next_idx == 9 && !mp3_player_is_usb_mounted()) {
@@ -104,6 +169,10 @@ void mode_manager_next(void) {
 
 void mode_manager_prev(void) {
     if (s_mode_count == 0) return;
+    if (s_in_standby) {
+        mode_manager_switch_to(0);
+        return;
+    }
     uint8_t prev_idx = (s_current_index + s_mode_count - 1) % s_mode_count;
     // Nếu chưa cắm USB, bỏ qua Mode 10 (chỉ mục 9) và lùi về Mode 9 (chỉ mục 8)
     if (prev_idx == 9 && !mp3_player_is_usb_mounted()) {
@@ -113,6 +182,18 @@ void mode_manager_prev(void) {
 }
 
 bool mode_manager_dispatch_key(uint8_t keycode, uint8_t modifier, char ascii_char) {
+    if (s_in_standby) {
+        audio_play_praise();
+        led_effects_color_burst(0, 200, 255);
+        printf("\r\n>>> [BÉ ĐANG Ở MÀN HÌNH CHỜ: HÃY BẤM NÚT 'CHUYỂN CHẾ ĐỘ' (BTN 3) ĐỂ BẮT ĐẦU CHƠI NHÉ!] <<<\r\n");
+        return true;
+    }
+
+    // Nếu đang phát bản Demo 30s: dừng demo ngay lập tức để bé gõ phím biểu diễn tự do!
+    if (mode_demo_is_active()) {
+        mode_demo_stop();
+    }
+
     if (s_mode_count == 0) return false;
     const toy_mode_driver_t *curr = s_modes[s_current_index];
     if (curr && curr->handle_key) {
@@ -122,6 +203,7 @@ bool mode_manager_dispatch_key(uint8_t keycode, uint8_t modifier, char ascii_cha
 }
 
 void mode_manager_dispatch_release(uint8_t keycode) {
+    if (s_in_standby) return;
     if (s_mode_count == 0) return;
     const toy_mode_driver_t *curr = s_modes[s_current_index];
     if (curr && curr->handle_key_release) {
@@ -130,20 +212,26 @@ void mode_manager_dispatch_release(uint8_t keycode) {
 }
 
 void mode_manager_dispatch_action(void) {
-    if (s_mode_count == 0) return;
-    const toy_mode_driver_t *curr = s_modes[s_current_index];
-    if (curr && curr->handle_action) {
-        curr->handle_action();
+    if (s_in_standby) {
+        mode_manager_switch_to(0);
+        return;
+    }
+
+    // Nút ACTION (BTN 6): nếu đang phát Demo 30s thì dừng, nếu đang dừng thì bật lại Demo 30s!
+    if (mode_demo_is_active()) {
+        mode_demo_stop();
     } else {
-        // Fallback âm thanh phản hồi nếu mode chưa có action riêng
-        audio_play_praise();
-        led_effects_color_burst(255, 215, 0); // Vàng kim lấp lánh
-        printf("\r\n>>> [BTN 6 ACTION: %s PHẢN HỒI MẶC ĐỊNH] <<<\r\n", curr && curr->name ? curr->name : "TOY");
-        fflush(stdout);
+        printf("\r\n>>> [BTN 6 ACTION: KÍCH HOẠT LẠI DEMO 30S ĐẶC SẮC] <<<\r\n");
+        mode_demo_start(s_current_index);
     }
 }
 
 void mode_manager_tick(uint32_t delta_ms) {
+    if (s_in_standby) return;
+
+    // Cập nhật sequencer cho bản Demo 30s
+    mode_demo_tick(delta_ms);
+
     if (s_mode_count == 0) return;
     const toy_mode_driver_t *curr = s_modes[s_current_index];
     if (curr && curr->background_tick) {

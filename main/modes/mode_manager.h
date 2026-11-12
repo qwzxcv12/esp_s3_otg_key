@@ -31,6 +31,21 @@ esp_err_t mode_manager_register(const toy_mode_driver_t *driver);
 void mode_manager_switch_to(uint8_t mode_index);
 
 /**
+ * @brief Chuyển sang một chế độ ngẫu nhiên khác chế độ hiện tại.
+ */
+void mode_manager_random(void);
+
+/**
+ * @brief Kiểm tra xem hệ thống có đang ở trạng thái chờ khởi động (Standby) không.
+ */
+bool mode_manager_is_in_standby(void);
+
+/**
+ * @brief Đưa hệ thống về trạng thái chờ khởi động (Standby).
+ */
+void mode_manager_enter_standby(void);
+
+/**
  * @brief Chuyển sang chế độ tiếp theo (vòng tròn).
  */
 void mode_manager_next(void);

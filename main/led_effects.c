@@ -358,7 +358,8 @@ esp_err_t led_effects_init(void) {
     }
 
     led_strip_clear(s_led_strip);
-    led_effects_mode_switch(0);
+    led_effects_startup();
+    led_effects_standby(true);
     ESP_LOGI(TAG, "WS2812B 4x8 Square Engine (40 FPS) initialized!");
     return ESP_OK;
 }
@@ -614,6 +615,12 @@ void led_effects_tick(uint32_t delta_ms) {
         if (s_style_step % 4 == 0) {
             led_effects_spark();
         }
+    }
+
+    // Nếu đang ở trạng thái Standby và không chạy animation đặc biệt: chạy hiệu ứng thở đối xứng êm dịu
+    if (s_standby_mode && s_anim_type == LED_ANIM_NONE) {
+        led_effects_idle_step();
+        return;
     }
 
     // 2. Xử lý đếm số đồng bộ theo thời gian thực (Mode 9 Counting)
@@ -1108,6 +1115,27 @@ void led_effects_tick(uint32_t delta_ms) {
 // ============================================================================
 // CÁC HÀM HIỆU ỨNG DÙNG CHUNG & TƯƠNG THÍCH HỆ THỐNG
 // ============================================================================
+
+static bool s_standby_mode = true;
+
+void led_effects_standby(bool active) {
+    s_standby_mode = active;
+    if (active) {
+        s_anim_type = LED_ANIM_NONE;
+    }
+}
+
+void led_effects_startup(void) {
+    if (s_current_style != LED_STYLE_REACTIVE && s_current_style != LED_STYLE_STARRY) {
+        return;
+    }
+    s_anim_hue = 0;
+    s_anim_step = 0;
+    s_decay_rate = 190;
+    s_anim_type = LED_ANIM_CELEBRATION; // Rực rỡ pháo hoa 4 góc & xoay cầu vồng
+    s_idle_elapsed_ms = 0;
+    s_canvas_active = true;
+}
 
 void led_effects_mode_switch(uint8_t mode_index) {
     if (s_current_style != LED_STYLE_REACTIVE && s_current_style != LED_STYLE_STARRY) {

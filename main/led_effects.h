@@ -53,6 +53,8 @@ led_style_t led_effects_get_current_style(void);
 
 // Hiệu ứng hệ thống & dùng chung (Đã nâng cấp lên Engine 40 FPS trên Khung Vuông 4x8)
 void led_effects_mode_switch(uint8_t mode_index);
+void led_effects_startup(void);
+void led_effects_standby(bool active);
 void led_effects_note(uint8_t note_idx, uint8_t total_notes, uint8_t r, uint8_t g, uint8_t b);
 void led_effects_beat(void);
 void led_effects_music_energy(float energy);

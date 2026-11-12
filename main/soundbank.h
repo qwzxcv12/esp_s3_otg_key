@@ -49,7 +49,8 @@ typedef enum {
 } cockpit_sfx_t;
 
 // Sample playback helpers (all non-blocking)
-bool sb_play_mode_name(uint8_t mode_index);                              // voice announcement: "Chế độ 1: Đàn Piano diệu kỳ!"
+bool sb_play_startup(void);                                              // power-on startup fanfare
+bool sb_play_mode_name(uint8_t mode_index);                              // voice announcement: "Chế độ 1: Piano"
 bool sb_play_piano(float freq_hz, uint8_t timbre, uint8_t owner_key);   // real piano / bells, pitch shifted
 bool sb_play_piano_dur(float freq_hz, uint8_t timbre, uint8_t owner_key, uint32_t max_ms);
 bool sb_play_chime(uint8_t mode_index);

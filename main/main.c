@@ -256,13 +256,17 @@ static void handle_toy_key(uint8_t kc, uint8_t mod, char c) {
     }
 
     if (kc == 0x29) { // ESC
+        if (mode_manager_is_in_standby()) {
+            mode_manager_switch_to(0);
+            return;
+        }
         if (is_mode_9 && !has_ctrl_or_alt) {
             // Trong Mode 9 (Bé Học Đánh Vần), bấm ESC đơn lẻ đọc "Phím Escape",
-            // bấm đúp ESC trong vòng 650ms sẽ chuyển chế độ!
+            // bấm đúp ESC trong vòng 650ms sẽ chuyển chế độ ngẫu nhiên!
             if ((now_us - s_last_esc_press_us) < 650000LL) {
                 s_last_esc_press_us = 0;
                 s_last_mode_switch_us = now_us;
-                mode_manager_next();
+                mode_manager_random();
                 return;
             }
             s_last_esc_press_us = now_us;
@@ -270,7 +274,7 @@ static void handle_toy_key(uint8_t kc, uint8_t mod, char c) {
         } else {
             if ((now_us - s_last_mode_switch_us) > 400000LL) {
                 s_last_mode_switch_us = now_us;
-                mode_manager_next();
+                mode_manager_random();
             }
             return;
         }
@@ -842,6 +846,12 @@ void app_main(void)
     // 5. Khởi tạo Mode Manager & Đăng ký toàn bộ 10 chế độ
     ESP_ERROR_CHECK(mode_manager_init());
 
+    // 5.1 Phát âm thanh khởi động đồ chơi vui tươi, chưa vào chế độ nào cả!
+    if (!sb_play_startup()) {
+        audio_play_startup_sound();
+    }
+    led_effects_startup();
+
     // 5.1 Khởi tạo module NFC / RFID PN532 (I2C: SDA=GPIO 6, SCL=GPIO 5)
     // pn532_driver_init(on_rfid_card_event);  // TẠM TẮT - khi nào PN532 kết nối được thì bật lại
 
@@ -918,12 +928,17 @@ void app_main(void)
                         break;
                     }
                     case BUTTON_MODE: {
-                        if (ptype == BUTTON_LONG_PRESS) {
-                            printf("\r\n>>> [BTN 3 - GPIO %d NHẤN GIỮ: LÙI VỀ CHẾ ĐỘ TRƯỚC ĐÓ]\r\n", PIN_BTN_MODE);
-                            mode_manager_prev();
+                        if (mode_manager_is_in_standby()) {
+                            printf("\r\n>>> [BTN 3: KHỞI ĐỘNG VÀO CHẾ ĐỘ 1: ĐÀN PIANO] <<<\r\n");
+                            mode_manager_switch_to(0);
                         } else {
-                            printf("\r\n>>> [BTN 3 - GPIO %d NHẤN: CHUYỂN CHẾ ĐỘ TIẾP THEO]\r\n", PIN_BTN_MODE);
-                            mode_manager_next();
+                            if (ptype == BUTTON_LONG_PRESS) {
+                                printf("\r\n>>> [BTN 3 - GPIO %d NHẤN GIỮ: CHUYỂN TUẦN TỰ KẾ TIẾP]\r\n", PIN_BTN_MODE);
+                                mode_manager_next();
+                            } else {
+                                printf("\r\n>>> [BTN 3 - GPIO %d NHẤN: CHUYỂN CHẾ ĐỘ NGẪU NHIÊN]\r\n", PIN_BTN_MODE);
+                                mode_manager_random();
+                            }
                         }
                         break;
                     }
@@ -1030,11 +1045,14 @@ void app_main(void)
                 }
             }
         } else {
-            // Hết 500ms chờ khởi động mà không có USB cắm sẵn -> Mặc định vào Chế độ 1 (Đàn Piano Diệu Kỳ)
+            // Hết 1.2s chờ ban đầu nếu không có USB cắm sẵn: Duy trì trạng thái chờ (Standby)
             if (!initial_mode_set) {
                 initial_mode_set = true;
                 wait_ticks = portMAX_DELAY;
-                mode_manager_switch_to(0);
+                printf("\r\n======================================================\r\n");
+                printf(">>> [HỆ THỐNG ĐÃ KHỞI ĐỘNG XONG - TRẠNG THÁI CHỜ] <<<\r\n");
+                printf(">>> Hãy nhấn nút CHUYỂN CHẾ ĐỘ (BTN 3) để vào Chế độ 1! <<<\r\n");
+                printf("======================================================\r\n\n");
             }
         }
     }
