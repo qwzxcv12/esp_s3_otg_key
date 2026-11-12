@@ -32,12 +32,17 @@ static bool s_ota_started = false;
 static char s_ip_str[32] = "0.0.0.0";
 static httpd_handle_t s_http_server = NULL;
 static TaskHandle_t s_udp_task_handle = NULL;
-static TimerHandle_t s_reconnect_timer = NULL;
+static TaskHandle_t s_reconnect_task_handle = NULL;
 static int s_retry_count = 0;
 
-static void reconnect_timer_cb(TimerHandle_t xTimer) {
-    ESP_LOGI(TAG, "Executing reconnection to Wi-Fi (attempt #%d)...", s_retry_count);
-    esp_wifi_connect();
+static void wifi_reconnect_task(void *pvParameters) {
+    while (1) {
+        ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+        int delay_sec = (s_retry_count <= 2) ? 2 : 4;
+        vTaskDelay(pdMS_TO_TICKS(delay_sec * 1000));
+        ESP_LOGI(TAG, "Executing reconnection to Wi-Fi (attempt #%d)...", s_retry_count);
+        esp_wifi_connect();
+    }
 }
 
 /* HTML Web page for browser-based manual OTA upload */
@@ -314,8 +319,6 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t e
             wifi_ap_record_t *ap_records = (wifi_ap_record_t *)malloc(sizeof(wifi_ap_record_t) * ap_count);
             if (ap_records) {
                 esp_wifi_scan_get_ap_records(&ap_count, ap_records);
-                int best_idx = -1;
-                int best_rssi = -120;
                 for (int i = 0; i < ap_count; i++) {
                     if (strcmp((char *)ap_records[i].ssid, CONFIG_WIFI_OTA_SSID) == 0) {
                         ESP_LOGI(TAG, ">>> [AP PHAT HIEN] SSID: '%s' | Kenh: %d | RSSI: %d dBm | BSSID: %02x:%02x:%02x:%02x:%02x:%02x | Auth: %d",
@@ -323,24 +326,7 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t e
                                  ap_records[i].bssid[0], ap_records[i].bssid[1], ap_records[i].bssid[2],
                                  ap_records[i].bssid[3], ap_records[i].bssid[4], ap_records[i].bssid[5],
                                  ap_records[i].authmode);
-                        if (ap_records[i].rssi > best_rssi) {
-                            best_rssi = ap_records[i].rssi;
-                            best_idx = i;
-                        }
                     }
-                }
-                if (best_idx >= 0) {
-                    wifi_config_t cur_conf;
-                    if (esp_wifi_get_config(WIFI_IF_STA, &cur_conf) == ESP_OK) {
-                        cur_conf.sta.channel = ap_records[best_idx].primary;
-                        memcpy(cur_conf.sta.bssid, ap_records[best_idx].bssid, 6);
-                        cur_conf.sta.bssid_set = 1;
-                        esp_wifi_set_config(WIFI_IF_STA, &cur_conf);
-                        ESP_LOGI(TAG, "Khoa ket noi toi Kenh %d (RSSI: %d dBm) de tranh nhay kenh yeu",
-                                 cur_conf.sta.channel, best_rssi);
-                    }
-                } else {
-                    ESP_LOGW(TAG, ">>> [CANH BAO] Khong tim thay SSID '%s' trong tam song!", CONFIG_WIFI_OTA_SSID);
                 }
                 free(ap_records);
             }
@@ -348,24 +334,16 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t e
         ESP_LOGI(TAG, "Dang ket noi toi %s...", CONFIG_WIFI_OTA_SSID);
         esp_wifi_connect();
     } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_CONNECTED) {
-        ESP_LOGI(TAG, "Wi-Fi Station connected to AP");
+        ESP_LOGI(TAG, "Wi-Fi Station connected to AP (Layer 2)");
         s_retry_count = 0;
-        if (s_reconnect_timer) {
-            xTimerStop(s_reconnect_timer, 0);
-        }
-#ifdef CONFIG_WIFI_STATIC_IP
-        on_wifi_ready(CONFIG_WIFI_STATIC_IP);
-#endif
     } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
         wifi_event_sta_disconnected_t *disconn = (wifi_event_sta_disconnected_t *)event_data;
         s_connected = false;
         s_retry_count++;
-        int delay_sec = (s_retry_count <= 2) ? 2 : 4;
-        ESP_LOGW(TAG, "Wi-Fi disconnected (reason %d). Reconnecting in %ds (attempt #%d)...", 
-                 disconn->reason, delay_sec, s_retry_count);
-        if (s_reconnect_timer) {
-            xTimerChangePeriod(s_reconnect_timer, pdMS_TO_TICKS(delay_sec * 1000), 0);
-            xTimerStart(s_reconnect_timer, 0);
+        ESP_LOGW(TAG, "Wi-Fi disconnected (reason %d). Reconnecting (attempt #%d)...", 
+                 disconn->reason, s_retry_count);
+        if (s_reconnect_task_handle) {
+            xTaskNotifyGive(s_reconnect_task_handle);
         } else {
             esp_wifi_connect();
         }
@@ -427,12 +405,15 @@ esp_err_t wifi_ota_init(void) {
     strncpy((char *)wifi_config.sta.ssid, CONFIG_WIFI_OTA_SSID, sizeof(wifi_config.sta.ssid) - 1);
     strncpy((char *)wifi_config.sta.password, CONFIG_WIFI_OTA_PASS, sizeof(wifi_config.sta.password) - 1);
     wifi_config.sta.threshold.authmode = WIFI_AUTH_WPA_PSK;
+    wifi_config.sta.threshold.rssi = -75; // Loc bo AP phu song yeu (-82dBm tren Kenh 2), uu tien AP chinh song manh (-38dBm)
+    wifi_config.sta.sort_method = WIFI_CONNECT_AP_BY_SIGNAL;
+    wifi_config.sta.scan_method = WIFI_FAST_SCAN;
     wifi_config.sta.sae_pwe_h2e = WPA3_SAE_PWE_BOTH;
     wifi_config.sta.pmf_cfg.capable = true;
     wifi_config.sta.pmf_cfg.required = false;
 
-    if (!s_reconnect_timer) {
-        s_reconnect_timer = xTimerCreate("wifi_recon_tmr", pdMS_TO_TICKS(2000), pdFALSE, NULL, reconnect_timer_cb);
+    if (!s_reconnect_task_handle) {
+        xTaskCreate(wifi_reconnect_task, "wifi_recon", 4096, NULL, 3, &s_reconnect_task_handle);
     }
 
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
