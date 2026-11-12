@@ -4,10 +4,10 @@
 #include "freertos/task.h"
 #include "esp_log.h"
 #include "esp_timer.h"
-#include "driver/uart.h"
 #include "driver/gpio.h"
+#include "driver/i2c_master.h"
 
-static const char *TAG = "PN532_HSU";
+static const char *TAG = "PN532_I2C";
 
 #define PN532_PREAMBLE                      (0x00)
 #define PN532_STARTCODE1                    (0x00)
@@ -16,6 +16,8 @@ static const char *TAG = "PN532_HSU";
 
 #define PN532_HOSTTOPN532                   (0xD4)
 #define PN532_PN532TOHOST                   (0xD5)
+
+#define PN532_I2C_READY                     (0x01)
 
 // PN532 Commands
 #define PN532_CMD_GETFIRMWAREVERSION        (0x02)
@@ -26,61 +28,98 @@ static const char *TAG = "PN532_HSU";
 // ACK Frame: 0x00 0x00 0xFF 0x00 0xFF 0x00
 static const uint8_t PN532_ACK[6] = {0x00, 0x00, 0xFF, 0x00, 0xFF, 0x00};
 
+static i2c_master_bus_handle_t s_i2c_bus = NULL;
+static i2c_master_dev_handle_t s_pn532_dev = NULL;
 static pn532_card_cb_t s_card_callback = NULL;
 static TaskHandle_t s_scanner_task_handle = NULL;
 static bool s_is_connected = false;
 static bool s_scanner_active = true;
+static int s_active_scl_pin = -1;
+static int s_active_sda_pin = -1;
 
-// Mặc định: SDA là TXD -> nối GPIO 6 (RX), SCL là RXD -> nối GPIO 5 (TX)
-static int s_current_tx_pin = PIN_PN532_GPIO_A; // GPIO 5
-static int s_current_rx_pin = PIN_PN532_GPIO_B; // GPIO 6
-
-static void pn532_wakeup(void) {
-    // Chuẩn NXP UM0701-04 HSU Wakeup: Tạo đủ 5 xung sườn lên (0x55 0x55 + dummy zeros)
-    // để kích hoạt bộ đếm phần cứng nội bộ đánh thức thạch anh và PLL của PN532
-    uint8_t w[16] = {0x55, 0x55, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-    uart_write_bytes(PN532_UART_PORT, (const char *)w, sizeof(w));
-    vTaskDelay(pdMS_TO_TICKS(25)); // Đợi bộ dao động PN532 ổn định
-    uart_flush_input(PN532_UART_PORT);
+static void pn532_i2c_cleanup(void) {
+    if (s_pn532_dev) {
+        i2c_master_bus_rm_device(s_pn532_dev);
+        s_pn532_dev = NULL;
+    }
+    if (s_i2c_bus) {
+        i2c_del_master_bus(s_i2c_bus);
+        s_i2c_bus = NULL;
+    }
+    if (s_active_scl_pin >= 0) {
+        gpio_reset_pin((gpio_num_t)s_active_scl_pin);
+        s_active_scl_pin = -1;
+    }
+    if (s_active_sda_pin >= 0) {
+        gpio_reset_pin((gpio_num_t)s_active_sda_pin);
+        s_active_sda_pin = -1;
+    }
 }
 
-// Đọc ACK chính xác byte-by-byte: dừng ngay khi khớp xong 6 byte ACK
-// Tuyệt đối không đọc dư thừa làm mất gói tin Response tiếp theo trong FIFO!
-static esp_err_t pn532_read_ack(uint32_t timeout_ms) {
-    uint8_t match_idx = 0;
+static esp_err_t pn532_i2c_setup_bus(int scl_pin, int sda_pin) {
+    pn532_i2c_cleanup();
+
+    i2c_master_bus_config_t bus_cfg = {
+        .i2c_port = I2C_NUM_0,
+        .sda_io_num = (gpio_num_t)sda_pin,
+        .scl_io_num = (gpio_num_t)scl_pin,
+        .clk_source = I2C_CLK_SRC_DEFAULT,
+        .glitch_ignore_cnt = 7,
+        .flags.enable_internal_pullup = true,
+    };
+    esp_err_t ret = i2c_new_master_bus(&bus_cfg, &s_i2c_bus);
+    if (ret != ESP_OK) return ret;
+
+    i2c_device_config_t dev_cfg = {
+        .dev_addr_length = I2C_ADDR_BIT_LEN_7,
+        .device_address = PN532_I2C_ADDRESS,
+        .scl_speed_hz = 50000, // 50kHz ổn định cao
+        .scl_wait_us = 35000,  // 35ms cho clock stretching của PN532
+    };
+    ret = i2c_master_bus_add_device(s_i2c_bus, &dev_cfg, &s_pn532_dev);
+    if (ret != ESP_OK) {
+        pn532_i2c_cleanup();
+        return ret;
+    }
+
+    s_active_scl_pin = scl_pin;
+    s_active_sda_pin = sda_pin;
+    return ESP_OK;
+}
+
+static bool pn532_i2c_wait_ready(uint32_t timeout_ms) {
+    if (!s_pn532_dev) return false;
     int64_t start_time = esp_timer_get_time();
     int64_t timeout_us = (int64_t)timeout_ms * 1000;
-    int total_bytes = 0;
-    uint8_t last_byte = 0;
 
     while ((esp_timer_get_time() - start_time) < timeout_us) {
-        uint8_t ch = 0;
-        int r = uart_read_bytes(PN532_UART_PORT, &ch, 1, pdMS_TO_TICKS(10));
-        if (r > 0) {
-            total_bytes++;
-            last_byte = ch;
-            if (ch == PN532_ACK[match_idx]) {
-                match_idx++;
-                if (match_idx == sizeof(PN532_ACK)) {
-                    return ESP_OK; // Khớp đủ 6 byte ACK! Gói response tiếp theo an toàn trong ring buffer.
-                }
-            } else {
-                if (ch == PN532_ACK[0]) {
-                    match_idx = 1;
-                } else {
-                    match_idx = 0;
-                }
-            }
+        uint8_t status = 0;
+        esp_err_t ret = i2c_master_receive(s_pn532_dev, &status, 1, 50);
+        if (ret == ESP_OK && (status & 0x01) == PN532_I2C_READY) {
+            return true;
         }
+        vTaskDelay(pdMS_TO_TICKS(10));
     }
-    if (total_bytes > 0) {
-        ESP_LOGW(TAG, "Nhan %d bytes tren UART nhung khong khop ACK (byte cuoi=0x%02X)", total_bytes, last_byte);
-    }
-    return ESP_ERR_TIMEOUT;
+    return false;
 }
 
-static esp_err_t pn532_write_command(const uint8_t *cmd, uint8_t cmd_len) {
-    uart_flush_input(PN532_UART_PORT);
+static esp_err_t pn532_i2c_read_ack(uint32_t timeout_ms) {
+    if (!pn532_i2c_wait_ready(timeout_ms)) {
+        return ESP_ERR_TIMEOUT;
+    }
+    uint8_t ack_buf[7] = {0};
+    esp_err_t ret = i2c_master_receive(s_pn532_dev, ack_buf, 7, 50);
+    if (ret != ESP_OK) return ret;
+
+    // ack_buf[0] là byte RDY (0x01), ack_buf[1..6] là chuỗi ACK chuẩn
+    if (memcmp(&ack_buf[1], PN532_ACK, 6) != 0) {
+        return ESP_ERR_INVALID_RESPONSE;
+    }
+    return ESP_OK;
+}
+
+static esp_err_t pn532_i2c_write_command(const uint8_t *cmd, uint8_t cmd_len) {
+    if (!s_pn532_dev) return ESP_ERR_INVALID_STATE;
 
     uint8_t packet[64];
     if (cmd_len + 8 > sizeof(packet)) return ESP_ERR_INVALID_SIZE;
@@ -101,63 +140,38 @@ static esp_err_t pn532_write_command(const uint8_t *cmd, uint8_t cmd_len) {
     packet[6 + cmd_len] = (uint8_t)(~sum + 1); // Data Checksum (DCS)
     packet[7 + cmd_len] = PN532_POSTAMBLE;
 
-    uart_write_bytes(PN532_UART_PORT, (const char *)packet, cmd_len + 8);
+    esp_err_t ret = i2c_master_transmit(s_pn532_dev, packet, cmd_len + 8, 100);
+    if (ret != ESP_OK) return ret;
 
-    return pn532_read_ack(250);
+    // Đợi và xác nhận ACK giống Adafruit sendCommandCheckAck
+    return pn532_i2c_read_ack(150);
 }
 
-static esp_err_t pn532_read_response(uint8_t expected_cmd, uint8_t *out_data, uint8_t *out_len, uint32_t timeout_ms) {
-    int64_t start_time = esp_timer_get_time();
-    int64_t timeout_us = (int64_t)timeout_ms * 1000;
-
-    // 1. Tìm start code 0x00 0xFF
-    uint8_t prev = 0xFF;
-    bool found_start = false;
-    while ((esp_timer_get_time() - start_time) < timeout_us) {
-        uint8_t ch = 0;
-        int r = uart_read_bytes(PN532_UART_PORT, &ch, 1, pdMS_TO_TICKS(10));
-        if (r > 0) {
-            if (prev == 0x00 && ch == 0xFF) {
-                found_start = true;
-                break;
-            }
-            prev = ch;
-        }
-    }
-    if (!found_start) return ESP_ERR_TIMEOUT;
-
-    // 2. Đọc LEN và LCS
-    uint8_t len_lcs[2] = {0};
-    if (uart_read_bytes(PN532_UART_PORT, len_lcs, 2, pdMS_TO_TICKS(50)) < 2) {
+static esp_err_t pn532_i2c_read_response(uint8_t expected_cmd, uint8_t *out_data, uint8_t *out_len, uint32_t timeout_ms) {
+    if (!pn532_i2c_wait_ready(timeout_ms)) {
         return ESP_ERR_TIMEOUT;
     }
-    uint8_t len = len_lcs[0];
-    uint8_t lcs = len_lcs[1];
+    uint8_t rx[64] = {0};
+    esp_err_t ret = i2c_master_receive(s_pn532_dev, rx, sizeof(rx), 100);
+    if (ret != ESP_OK) return ret;
+
+    // Tìm start code 0x00 0xFF (bỏ qua byte RDY 0x01 ở đầu)
+    int start_idx = -1;
+    for (int i = 0; i <= (int)sizeof(rx) - 6; i++) {
+        if (rx[i] == 0x00 && rx[i + 1] == 0xFF) {
+            start_idx = i;
+            break;
+        }
+    }
+    if (start_idx < 0) return ESP_ERR_NOT_FOUND;
+
+    uint8_t len = rx[start_idx + 2];
+    uint8_t lcs = rx[start_idx + 3];
     if ((uint8_t)(len + lcs) != 0) return ESP_ERR_INVALID_CRC;
     if (len < 2) return ESP_ERR_INVALID_SIZE;
 
-    // 3. Đọc dữ liệu (TFI, CMD, Payload)
-    uint8_t payload[64];
-    if (len > sizeof(payload)) return ESP_ERR_NO_MEM;
-    if (uart_read_bytes(PN532_UART_PORT, payload, len, pdMS_TO_TICKS(100)) < len) {
-        return ESP_ERR_TIMEOUT;
-    }
-
-    // 4. Đọc DCS và Postamble
-    uint8_t dcs_post[2] = {0};
-    if (uart_read_bytes(PN532_UART_PORT, dcs_post, 2, pdMS_TO_TICKS(50)) < 1) {
-        return ESP_ERR_TIMEOUT;
-    }
-    uint8_t dcs = dcs_post[0];
-
-    uint8_t sum = 0;
-    for (int i = 0; i < len; i++) {
-        sum += payload[i];
-    }
-    if ((uint8_t)(sum + dcs) != 0) return ESP_ERR_INVALID_CRC;
-
-    uint8_t tfi = payload[0];
-    uint8_t resp_cmd = payload[1];
+    uint8_t tfi = rx[start_idx + 4];
+    uint8_t resp_cmd = rx[start_idx + 5];
     if (tfi != PN532_PN532TOHOST || resp_cmd != (expected_cmd + 1)) {
         return ESP_ERR_INVALID_RESPONSE;
     }
@@ -165,21 +179,20 @@ static esp_err_t pn532_read_response(uint8_t expected_cmd, uint8_t *out_data, ui
     uint8_t data_len = len - 2;
     if (out_data && out_len) {
         if (data_len > *out_len) data_len = *out_len;
-        memcpy(out_data, &payload[2], data_len);
+        memcpy(out_data, &rx[start_idx + 6], data_len);
         *out_len = data_len;
     }
-
     return ESP_OK;
 }
 
 static esp_err_t pn532_get_firmware_version(uint32_t *version_out) {
     uint8_t cmd = PN532_CMD_GETFIRMWAREVERSION;
-    esp_err_t ret = pn532_write_command(&cmd, 1);
+    esp_err_t ret = pn532_i2c_write_command(&cmd, 1);
     if (ret != ESP_OK) return ret;
 
     uint8_t resp[4] = {0};
     uint8_t resp_len = sizeof(resp);
-    ret = pn532_read_response(PN532_CMD_GETFIRMWAREVERSION, resp, &resp_len, 500);
+    ret = pn532_i2c_read_response(PN532_CMD_GETFIRMWAREVERSION, resp, &resp_len, 300);
     if (ret == ESP_OK && resp_len >= 4) {
         if (version_out) {
             *version_out = ((uint32_t)resp[0] << 24) |
@@ -193,173 +206,134 @@ static esp_err_t pn532_get_firmware_version(uint32_t *version_out) {
 }
 
 static esp_err_t pn532_sam_config(void) {
-    uint8_t cmd[4] = {PN532_CMD_SAMCONFIGURATION, 0x01, 0x14, 0x01};
-    esp_err_t ret = pn532_write_command(cmd, sizeof(cmd));
+    uint8_t cmd[] = {PN532_CMD_SAMCONFIGURATION, 0x01, 0x14, 0x01};
+    esp_err_t ret = pn532_i2c_write_command(cmd, sizeof(cmd));
     if (ret != ESP_OK) return ret;
 
-    uint8_t resp[2] = {0};
+    uint8_t resp[8] = {0};
     uint8_t resp_len = sizeof(resp);
-    return pn532_read_response(PN532_CMD_SAMCONFIGURATION, resp, &resp_len, 200);
+    return pn532_i2c_read_response(PN532_CMD_SAMCONFIGURATION, resp, &resp_len, 200);
 }
 
-static esp_err_t pn532_set_passive_activation_retries(uint8_t max_retries) {
-    uint8_t cmd[5] = {PN532_CMD_RFCONFIGURATION, 0x05, 0xFF, 0x01, max_retries};
-    esp_err_t ret = pn532_write_command(cmd, sizeof(cmd));
+static esp_err_t pn532_set_passive_retries(uint8_t max_retries) {
+    // RFCONFIGURATION: item 0x05 (MaxRetries: MxRtyATR, MxRtyPSL, MxRtyPassiveActivation)
+    uint8_t cmd[] = {PN532_CMD_RFCONFIGURATION, 0x05, 0xFF, 0x01, max_retries};
+    return pn532_i2c_write_command(cmd, sizeof(cmd));
+}
+
+static esp_err_t pn532_read_passive_target_id(uint8_t *uid, uint8_t *uid_len) {
+    // 0x4A: InListPassiveTarget, MaxTargets=1, BrTy=0x00 (106 kbps ISO14443A Mifare)
+    uint8_t cmd[] = {PN532_CMD_INLISTPASSIVETARGET, 0x01, 0x00};
+    esp_err_t ret = pn532_i2c_write_command(cmd, sizeof(cmd));
     if (ret != ESP_OK) return ret;
 
-    uint8_t resp[2] = {0};
+    uint8_t resp[32] = {0};
     uint8_t resp_len = sizeof(resp);
-    return pn532_read_response(PN532_CMD_RFCONFIGURATION, resp, &resp_len, 200);
-}
+    ret = pn532_i2c_read_response(PN532_CMD_INLISTPASSIVETARGET, resp, &resp_len, 100);
+    if (ret != ESP_OK) return ret;
 
-static bool pn532_read_passive_target_id(uint8_t *uid, uint8_t *uid_len) {
-    uint8_t cmd[3] = {PN532_CMD_INLISTPASSIVETARGET, 0x01, 0x00};
-    if (pn532_write_command(cmd, sizeof(cmd)) != ESP_OK) {
-        return false;
+    // resp[0] là NbTg (số thẻ phát hiện)
+    if (resp_len < 1 || resp[0] < 1) {
+        return ESP_ERR_NOT_FOUND; // Không có thẻ
     }
 
-    uint8_t resp[24] = {0};
-    uint8_t resp_len = sizeof(resp);
-    if (pn532_read_response(PN532_CMD_INLISTPASSIVETARGET, resp, &resp_len, 100) != ESP_OK) {
-        return false;
-    }
-
-    if (resp_len < 6 || resp[0] == 0) {
-        return false;
-    }
-
+    // resp: [0]=NbTg(1), [1]=Tg(1), [2]=SENS_RES, [3]=SENS_RES, [4]=SEL_RES, [5]=NFCIDLength, [6..]=UID
+    if (resp_len < 6) return ESP_ERR_INVALID_SIZE;
     uint8_t id_len = resp[5];
-    if (id_len > 10 || resp_len < 6 + id_len) {
-        return false;
+    if (id_len == 0 || id_len > 7 || (6 + id_len) > resp_len) return ESP_ERR_INVALID_SIZE;
+
+    if (uid && uid_len) {
+        if (id_len > *uid_len) id_len = *uid_len;
+        memcpy(uid, &resp[6], id_len);
+        *uid_len = id_len;
     }
-
-    memcpy(uid, &resp[6], id_len);
-    *uid_len = id_len;
-    return true;
-}
-
-static esp_err_t pn532_try_connect(void) {
-    pn532_wakeup();
-
-    uint32_t fw_version = 0;
-    esp_err_t ret = pn532_get_firmware_version(&fw_version);
-    if (ret != ESP_OK || ((fw_version >> 24) & 0xFF) != 0x32) {
-        return ESP_ERR_NOT_FOUND;
-    }
-
-    uint8_t ic  = (fw_version >> 24) & 0xFF;
-    uint8_t ver = (fw_version >> 16) & 0xFF;
-    uint8_t rev = (fw_version >> 8)  & 0xFF;
-    uint8_t sup = fw_version & 0xFF;
-
-    ESP_LOGI(TAG, "==========================================================");
-    ESP_LOGI(TAG, ">>> [PN532 UART HSU] KET NOI THANH CONG! <<<");
-    ESP_LOGI(TAG, ">>> Huong chan khop: ESP32 TX=GPIO %d | ESP32 RX=GPIO %d", s_current_tx_pin, s_current_rx_pin);
-    ESP_LOGI(TAG, ">>> Chip: PN5%02X | Firmware: v%d.%d | Ho tro: 0x%02X", ic, ver, rev, sup);
-    ESP_LOGI(TAG, "==========================================================");
-
-    pn532_sam_config();
-    pn532_set_passive_activation_retries(0x01);
-
-    s_is_connected = true;
     return ESP_OK;
 }
 
-static void pn532_scanner_task(void *arg) {
-    uint8_t last_uid[10] = {0};
-    uint8_t last_uid_len = 0;
-    int64_t last_seen_us = 0;
-    int retry_count = 0;
+static esp_err_t pn532_try_init_config(int scl_pin, int sda_pin) {
+    esp_err_t ret = pn532_i2c_setup_bus(scl_pin, sda_pin);
+    if (ret != ESP_OK) return ret;
 
-    ESP_LOGI(TAG, "PN532 RFID/NFC UART Scanner Task running at 10Hz");
+    vTaskDelay(pdMS_TO_TICKS(30));
 
-    while (1) {
-        if (!s_scanner_active) {
-            vTaskDelay(pdMS_TO_TICKS(200));
-            continue;
-        }
+    uint32_t ver = 0;
+    ret = pn532_get_firmware_version(&ver);
+    if (ret == ESP_OK && ((ver >> 24) & 0xFF) == 0x32) {
+        ESP_LOGI(TAG, ">>> KET NOI THANH CONG! Chip: PN5%02X, Firmware Ver: %d.%d, SCL=GPIO %d, SDA=GPIO %d <<<",
+                 (unsigned int)((ver >> 24) & 0xFF),
+                 (int)((ver >> 16) & 0xFF),
+                 (int)((ver >> 8) & 0xFF),
+                 scl_pin, sda_pin);
 
-        if (!s_is_connected) {
-            int lvl_5 = gpio_get_level((gpio_num_t)PIN_PN532_GPIO_A);
-            int lvl_6 = gpio_get_level((gpio_num_t)PIN_PN532_GPIO_B);
-
-            if (pn532_try_connect() == ESP_OK) {
-                ESP_LOGI(TAG, ">>> PN532 DA SAN SANG QUET THE (UART HSU)! <<<");
-            } else {
-                retry_count++;
-                
-                // Đảo chiều chân TX <-> RX
-                int temp = s_current_rx_pin;
-                s_current_rx_pin = s_current_tx_pin;
-                s_current_tx_pin = temp;
-                uart_set_pin(PN532_UART_PORT, s_current_tx_pin, s_current_rx_pin, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
-                vTaskDelay(pdMS_TO_TICKS(10));
-                uart_flush_input(PN532_UART_PORT);
-
-                ESP_LOGW(TAG, "Dang tim PN532... [TX=GPIO %d, RX=GPIO %d] | Dien ap: GPIO5=%d, GPIO6=%d",
-                         s_current_tx_pin, s_current_rx_pin, lvl_5, lvl_6);
-            }
-            vTaskDelay(pdMS_TO_TICKS(1500));
-            continue;
-        }
-
-        uint8_t uid[10] = {0};
-        uint8_t uid_len = 0;
-        bool found = pn532_read_passive_target_id(uid, &uid_len);
-        int64_t now_us = esp_timer_get_time();
-
-        if (found && uid_len > 0) {
-            bool is_same_card = (uid_len == last_uid_len && memcmp(uid, last_uid, uid_len) == 0);
-            int64_t elapsed_ms = (now_us - last_seen_us) / 1000;
-
-            if (!is_same_card || elapsed_ms > 1500) {
-                memcpy(last_uid, uid, uid_len);
-                last_uid_len = uid_len;
-                last_seen_us = now_us;
-
-                if (s_card_callback) {
-                    s_card_callback(uid, uid_len);
-                }
-            } else {
-                last_seen_us = now_us;
-            }
-        } else {
-            if ((now_us - last_seen_us) > 400000LL) {
-                last_uid_len = 0;
-            }
-        }
-
-        vTaskDelay(pdMS_TO_TICKS(100)); // Quét 10 lần mỗi giây
+        pn532_sam_config();
+        pn532_set_passive_retries(0x02); // 2 lần quét nhanh, không nghẽn loop
+        s_is_connected = true;
+        return ESP_OK;
     }
+    return ESP_FAIL;
+}
+
+static void pn532_scanner_task(void *arg) {
+    ESP_LOGI(TAG, "PN532 I2C Scanner Task Started on GPIO 5 & GPIO 6");
+
+    int probe_step = 0;
+    while (s_scanner_active) {
+        if (!s_is_connected) {
+            int scl = (probe_step % 2 == 0) ? PIN_PN532_GPIO_A : PIN_PN532_GPIO_B;
+            int sda = (probe_step % 2 == 0) ? PIN_PN532_GPIO_B : PIN_PN532_GPIO_A;
+            probe_step++;
+
+            ESP_LOGI(TAG, "Dang tim PN532 qua I2C [SCL=GPIO %d, SDA=GPIO %d] (Dia chi 0x24)...", scl, sda);
+            if (pn532_try_init_config(scl, sda) == ESP_OK) {
+                ESP_LOGI(TAG, ">>> PN532 DA SAN SANG QUET THE NFC/RFID! <<<");
+                continue;
+            } else {
+                int lvl_a = gpio_get_level((gpio_num_t)PIN_PN532_GPIO_A);
+                int lvl_b = gpio_get_level((gpio_num_t)PIN_PN532_GPIO_B);
+                ESP_LOGW(TAG, "Chua phan hoi... (Dien ap: GPIO5=%d, GPIO6=%d) -> Luu y: Can cong tac gat I0=1(ON), I1=0(OFF)",
+                         lvl_a, lvl_b);
+            }
+            vTaskDelay(pdMS_TO_TICKS(2000));
+            continue;
+        }
+
+        // Đã kết nối -> Quét thẻ NFC
+        uint8_t uid[7] = {0};
+        uint8_t uid_len = sizeof(uid);
+        esp_err_t err = pn532_read_passive_target_id(uid, &uid_len);
+
+        if (err == ESP_OK && uid_len > 0) {
+            char uid_str[32] = {0};
+            for (int i = 0; i < uid_len; i++) {
+                char hex[4];
+                snprintf(hex, sizeof(hex), "%02X ", uid[i]);
+                strcat(uid_str, hex);
+            }
+            ESP_LOGI(TAG, ">>> DA PHAT HIEN THE NFC! UID (%d bytes): %s<<<", uid_len, uid_str);
+
+            if (s_card_callback) {
+                s_card_callback(uid, uid_len);
+            }
+
+            // Tránh quét lặp liên tục khi giữ thẻ gần đầu đọc
+            vTaskDelay(pdMS_TO_TICKS(1000));
+        } else if (err != ESP_ERR_NOT_FOUND && err != ESP_ERR_TIMEOUT) {
+            ESP_LOGW(TAG, "Loi I2C trong khi quet (0x%x), thu khoi dong lai...", err);
+            s_is_connected = false;
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(150));
+    }
+
+    pn532_i2c_cleanup();
+    vTaskDelete(NULL);
 }
 
 esp_err_t pn532_driver_init(pn532_card_cb_t card_cb) {
     s_card_callback = card_cb;
 
-    ESP_LOGI(TAG, "Initializing PN532 UART HSU Driver on GPIO %d and GPIO %d (Baud %d)...",
-             PIN_PN532_GPIO_A, PIN_PN532_GPIO_B, PN532_UART_BAUD);
+    ESP_LOGI(TAG, "Initializing PN532 I2C Driver (Adafruit protocol on GPIO 5 & GPIO 6)...");
 
-    uart_config_t uart_config = {
-        .baud_rate = PN532_UART_BAUD,
-        .data_bits = UART_DATA_8_BITS,
-        .parity    = UART_PARITY_DISABLE,
-        .stop_bits = UART_STOP_BITS_1,
-        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
-        .source_clk = UART_SCLK_DEFAULT,
-    };
-
-    esp_err_t ret = uart_param_config(PN532_UART_PORT, &uart_config);
-    if (ret != ESP_OK) return ret;
-
-    ret = uart_set_pin(PN532_UART_PORT, s_current_tx_pin, s_current_rx_pin, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
-    if (ret != ESP_OK) return ret;
-
-    ret = uart_driver_install(PN532_UART_PORT, 512, 512, 0, NULL, 0);
-    if (ret != ESP_OK) return ret;
-
-    vTaskDelay(pdMS_TO_TICKS(100));
-
-    // Khởi chạy task quét thẻ
     BaseType_t task_ret = xTaskCreate(pn532_scanner_task, "pn532_scan", 4096, NULL, 3, &s_scanner_task_handle);
     if (task_ret != pdPASS) {
         ESP_LOGE(TAG, "Failed to create PN532 scanner task!");

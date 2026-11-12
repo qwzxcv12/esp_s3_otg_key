@@ -9,12 +9,10 @@
 extern "C" {
 #endif
 
-// Kết nối giữa ESP32 (GPIO 5, GPIO 6) và 2 chân SDA, SCL của PN532
-// Chế độ UART HSU tự động nhận diện chiều dây (Auto Pin Swap)
+// Kết nối giữa ESP32-S3 (GPIO 5, GPIO 6) và 2 chân SDA, SCL của PN532
 #define PIN_PN532_GPIO_A    5
 #define PIN_PN532_GPIO_B    6
-#define PN532_UART_PORT     UART_NUM_1
-#define PN532_UART_BAUD     115200
+#define PN532_I2C_ADDRESS   0x24
 
 typedef void (*pn532_card_cb_t)(const uint8_t *uid, uint8_t uid_len);
 
