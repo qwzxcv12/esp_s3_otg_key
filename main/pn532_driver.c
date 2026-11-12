@@ -64,8 +64,6 @@ static esp_err_t pn532_read_ack(void) {
 
     // Byte 0 là I2C Ready status (0x01), từ byte 1 đến 6 là ACK
     if (memcmp(&ack_buf[1], PN532_ACK, 6) != 0) {
-        ESP_LOGD(TAG, "Invalid ACK frame received: %02X %02X %02X %02X %02X %02X",
-                 ack_buf[1], ack_buf[2], ack_buf[3], ack_buf[4], ack_buf[5], ack_buf[6]);
         return ESP_ERR_INVALID_RESPONSE;
     }
     return ESP_OK;
@@ -142,7 +140,7 @@ static esp_err_t pn532_read_response(uint8_t expected_cmd, uint8_t *out_data, ui
         return ESP_ERR_INVALID_RESPONSE;
     }
 
-    uint8_t data_len = len - 2; // trừ TFI và Response Command
+    uint8_t data_len = len - 2;
     if (out_data && out_len) {
         if (data_len > *out_len) data_len = *out_len;
         memcpy(out_data, &rx_buf[start_idx + 6], data_len);
@@ -179,7 +177,6 @@ static esp_err_t pn532_get_firmware_version(uint32_t *version_out) {
  * @brief Cấu hình SAM (Security Access Module) để kích hoạt từ trường RF.
  */
 static esp_err_t pn532_sam_config(void) {
-    // Mode = 0x01 (Normal), Timeout = 0x14 (1000ms), Use IRQ = 0x01
     uint8_t cmd[4] = {PN532_CMD_SAMCONFIGURATION, 0x01, 0x14, 0x01};
     esp_err_t ret = pn532_write_command(cmd, sizeof(cmd));
     if (ret != ESP_OK) return ret;
@@ -193,7 +190,6 @@ static esp_err_t pn532_sam_config(void) {
  * @brief Đặt số lần thử quét RF (MaxRetries) = 1 lần để không bị treo task khi không có thẻ.
  */
 static esp_err_t pn532_set_passive_activation_retries(uint8_t max_retries) {
-    // Config item 0x05 = MaxRetries
     uint8_t cmd[5] = {PN532_CMD_RFCONFIGURATION, 0x05, 0xFF, 0x01, max_retries};
     esp_err_t ret = pn532_write_command(cmd, sizeof(cmd));
     if (ret != ESP_OK) return ret;
@@ -207,7 +203,6 @@ static esp_err_t pn532_set_passive_activation_retries(uint8_t max_retries) {
  * @brief Quét tìm thẻ Type A (Mifare Classic, NTAG213/215/216...) trong phạm vi anten.
  */
 static bool pn532_read_passive_target_id(uint8_t *uid, uint8_t *uid_len) {
-    // 0x4A: MaxTg = 1, BrTy = 0 (106 kbps ISO/IEC 14443 Type A)
     uint8_t cmd[3] = {PN532_CMD_INLISTPASSIVETARGET, 0x01, 0x00};
     if (pn532_write_command(cmd, sizeof(cmd)) != ESP_OK) {
         return false;
@@ -219,15 +214,10 @@ static bool pn532_read_passive_target_id(uint8_t *uid, uint8_t *uid_len) {
         return false;
     }
 
-    // resp[0] là số lượng thẻ phát hiện (NbTg)
     if (resp_len < 6 || resp[0] == 0) {
-        return false; // Không có thẻ nào trong vùng phủ sóng
+        return false;
     }
 
-    // resp[1] = Tg (1)
-    // resp[2..3] = SENS_RES (ATQA)
-    // resp[4] = SEL_RES (SAK)
-    // resp[5] = NFCIDLength (Độ dài UID: thường là 4 hoặc 7 byte)
     uint8_t id_len = resp[5];
     if (id_len > 10 || resp_len < 6 + id_len) {
         return false;
@@ -239,18 +229,93 @@ static bool pn532_read_passive_target_id(uint8_t *uid, uint8_t *uid_len) {
 }
 
 /**
- * @brief Task FreeRTOS chạy ngầm quét thẻ RFID/NFC liên tục.
+ * @brief Quét kiểm tra toàn bộ dải địa chỉ I2C và thử kết nối với PN532.
+ */
+static esp_err_t pn532_try_connect(void) {
+    if (!s_i2c_bus) return ESP_ERR_INVALID_STATE;
+
+    // 1. Quét tìm thiết bị I2C
+    bool found_pn532_addr = false;
+    for (uint16_t addr = 0x08; addr <= 0x77; addr++) {
+        if (i2c_master_probe(s_i2c_bus, addr, 20) == ESP_OK) {
+            ESP_LOGI(TAG, ">>> Tim thay thiet bi I2C tai dia chi: 0x%02X", addr);
+            if (addr == PN532_I2C_ADDR) {
+                found_pn532_addr = true;
+            }
+        }
+    }
+
+    if (!found_pn532_addr) {
+        // Chưa thấy địa chỉ 0x24 phản hồi
+        return ESP_ERR_NOT_FOUND;
+    }
+
+    // 2. Nếu chưa tạo device handle thì tạo mới
+    if (!s_pn532_dev) {
+        i2c_device_config_t dev_cfg = {
+            .dev_addr_length = I2C_ADDR_BIT_LEN_7,
+            .device_address = PN532_I2C_ADDR,
+            .scl_speed_hz = 100000,
+        };
+        esp_err_t ret = i2c_master_bus_add_device(s_i2c_bus, &dev_cfg, &s_pn532_dev);
+        if (ret != ESP_OK) return ret;
+    }
+
+    vTaskDelay(pdMS_TO_TICKS(50));
+
+    // 3. Đọc Firmware Version
+    uint32_t fw_version = 0;
+    esp_err_t ret = pn532_get_firmware_version(&fw_version);
+    if (ret != ESP_OK || ((fw_version >> 24) & 0xFF) != 0x32) {
+        return ESP_ERR_INVALID_RESPONSE;
+    }
+
+    uint8_t ic  = (fw_version >> 24) & 0xFF;
+    uint8_t ver = (fw_version >> 16) & 0xFF;
+    uint8_t rev = (fw_version >> 8)  & 0xFF;
+    uint8_t sup = fw_version & 0xFF;
+
+    ESP_LOGI(TAG, "==========================================================");
+    ESP_LOGI(TAG, ">>> [PN532 RFID/NFC] KET NOI THANH CONG! <<<");
+    ESP_LOGI(TAG, ">>> Chip: PN5%02X | Firmware: v%d.%d | Ho tro: 0x%02X", ic, ver, rev, sup);
+    ESP_LOGI(TAG, "==========================================================");
+
+    // 4. Kích hoạt RF
+    pn532_sam_config();
+    pn532_set_passive_activation_retries(0x01);
+
+    s_is_connected = true;
+    return ESP_OK;
+}
+
+/**
+ * @brief Task FreeRTOS chạy ngầm quét thẻ RFID/NFC liên tục (hỗ trợ Hot-Plug).
  */
 static void pn532_scanner_task(void *arg) {
     uint8_t last_uid[10] = {0};
     uint8_t last_uid_len = 0;
     int64_t last_seen_us = 0;
+    int retry_count = 0;
 
-    ESP_LOGI(TAG, "PN532 RFID/NFC Background Scanner Task running at 10Hz");
+    ESP_LOGI(TAG, "PN532 RFID/NFC Scanner Task running...");
 
     while (1) {
-        if (!s_scanner_active || !s_is_connected) {
+        if (!s_scanner_active) {
             vTaskDelay(pdMS_TO_TICKS(200));
+            continue;
+        }
+
+        // Tự động kết nối lại nếu lúc khởi động chưa cắm hoặc chưa gạt switch
+        if (!s_is_connected) {
+            if (pn532_try_connect() == ESP_OK) {
+                ESP_LOGI(TAG, ">>> PN532 DA SAN SANG QUET THE! <<<");
+            } else {
+                retry_count++;
+                if (retry_count % 5 == 0) {
+                    ESP_LOGW(TAG, "Dang cho PN532... [Luu y DIP Switch I2C: Switch 1 = 1 (ON), Switch 2 = 0 (OFF)]");
+                }
+            }
+            vTaskDelay(pdMS_TO_TICKS(2000));
             continue;
         }
 
@@ -260,7 +325,6 @@ static void pn532_scanner_task(void *arg) {
         int64_t now_us = esp_timer_get_time();
 
         if (found && uid_len > 0) {
-            // Kiểm tra chống quét lặp: Nếu giữ thẻ liên tục trên đầu đọc thì chỉ kích hoạt 1 lần
             bool is_same_card = (uid_len == last_uid_len && memcmp(uid, last_uid, uid_len) == 0);
             int64_t elapsed_ms = (now_us - last_seen_us) / 1000;
 
@@ -273,11 +337,9 @@ static void pn532_scanner_task(void *arg) {
                     s_card_callback(uid, uid_len);
                 }
             } else {
-                // Cập nhật lại thời gian nhìn thấy thẻ để giữ debounce khi thẻ đang được giữ yên
                 last_seen_us = now_us;
             }
         } else {
-            // Không còn thẻ trong vùng quét: Nếu thẻ đã nhấc ra hơn 400ms thì reset trạng thái
             if ((now_us - last_seen_us) > 400000LL) {
                 last_uid_len = 0;
             }
@@ -290,10 +352,10 @@ static void pn532_scanner_task(void *arg) {
 esp_err_t pn532_driver_init(pn532_card_cb_t card_cb) {
     s_card_callback = card_cb;
 
-    ESP_LOGI(TAG, "Initializing PN532 I2C Driver on SDA=GPIO %d, SCL=GPIO %d (Addr 0x%02X)...",
-             PIN_PN532_SDA, PIN_PN532_SCL, PN532_I2C_ADDR);
+    ESP_LOGI(TAG, "Initializing PN532 I2C Driver on SDA=GPIO %d, SCL=GPIO %d...",
+             PIN_PN532_SDA, PIN_PN532_SCL);
 
-    // 1. Cấu hình I2C Master Bus (ESP-IDF v5.3 i2c_master API)
+    // 1. Cấu hình I2C Master Bus
     i2c_master_bus_config_t bus_cfg = {
         .i2c_port = I2C_NUM_0,
         .sda_io_num = (gpio_num_t)PIN_PN532_SDA,
@@ -309,59 +371,13 @@ esp_err_t pn532_driver_init(pn532_card_cb_t card_cb) {
         return ret;
     }
 
-    // 2. Thêm thiết bị PN532 vào Bus
-    i2c_device_config_t dev_cfg = {
-        .dev_addr_length = I2C_ADDR_BIT_LEN_7,
-        .device_address = PN532_I2C_ADDR,
-        .scl_speed_hz = 100000, // 100 kHz chuẩn công nghiệp cho PN532
-    };
-
-    ret = i2c_master_bus_add_device(s_i2c_bus, &dev_cfg, &s_pn532_dev);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to add PN532 I2C device: %s", esp_err_to_name(ret));
-        return ret;
-    }
-
-    // Chờ 100ms để phần cứng PN532 khởi động ổn định
+    // Chờ 100ms
     vTaskDelay(pdMS_TO_TICKS(100));
 
-    // 3. Đọc Firmware Version của PN532
-    uint32_t fw_version = 0;
-    ret = pn532_get_firmware_version(&fw_version);
-    if (ret != ESP_OK || ((fw_version >> 24) & 0xFF) != 0x32) {
-        ESP_LOGW(TAG, "PN532 not responding or invalid chip! (Ret: %s, Ver: 0x%08lX)",
-                 esp_err_to_name(ret), (unsigned long)fw_version);
-        ESP_LOGW(TAG, "-> Hãy kiểm tra: 1) Dây SDA=GPIO 6, SCL=GPIO 5; 2) Công tắc gạt DIP Switch I0=0, I1=1");
-        s_is_connected = false;
-        // Không assert/crash hệ thống, để các tính năng khác của đàn vẫn chạy bình thường
-        return ESP_ERR_NOT_FOUND;
-    }
+    // Thử kết nối lần đầu
+    pn532_try_connect();
 
-    uint8_t ic  = (fw_version >> 24) & 0xFF;
-    uint8_t ver = (fw_version >> 16) & 0xFF;
-    uint8_t rev = (fw_version >> 8)  & 0xFF;
-    uint8_t sup = fw_version & 0xFF;
-
-    ESP_LOGI(TAG, "=================================================");
-    ESP_LOGI(TAG, ">>> PN532 NFC/RFID MODULE PHÁT HIỆN THÀNH CÔNG! <<<");
-    ESP_LOGI(TAG, ">>> Chip: PN5%02X | Firmware: v%d.%d | Hỗ trợ: 0x%02X", ic, ver, rev, sup);
-    ESP_LOGI(TAG, "=================================================");
-
-    // 4. Kích hoạt anten RF (SAM Configuration)
-    ret = pn532_sam_config();
-    if (ret != ESP_OK) {
-        ESP_LOGW(TAG, "Failed to configure SAM: %s", esp_err_to_name(ret));
-    }
-
-    // 5. Cài đặt MaxRetries = 1 lần để hàm InListPassiveTarget trả về ngay khi không có thẻ
-    ret = pn532_set_passive_activation_retries(0x01);
-    if (ret != ESP_OK) {
-        ESP_LOGW(TAG, "Failed to set MaxRetries: %s", esp_err_to_name(ret));
-    }
-
-    s_is_connected = true;
-
-    // 6. Khởi chạy Scanner Task ngầm (Priority 3, Stack 4096)
+    // 2. Khởi chạy Scanner Task ngầm (Task sẽ tự động thử lại nếu lần đầu chưa cắm)
     BaseType_t task_ret = xTaskCreate(pn532_scanner_task, "pn532_scan", 4096, NULL, 3, &s_scanner_task_handle);
     if (task_ret != pdPASS) {
         ESP_LOGE(TAG, "Failed to create PN532 scanner task!");
