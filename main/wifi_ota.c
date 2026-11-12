@@ -376,7 +376,6 @@ esp_err_t wifi_ota_init(void) {
 #endif
 
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-    cfg.wifi_task_stack_size = 8192;
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
 
     ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT,
