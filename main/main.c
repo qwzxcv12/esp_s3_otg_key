@@ -32,10 +32,12 @@
 #include "soundbank.h"
 #include "mode_manager.h"
 #include "power_manager.h"
+#include "pn532_driver.h"
 #include "msc_host.h"
 #include "msc_host_vfs.h"
 #include "esp_vfs_fat.h"
 #include "mp3_player.h"
+#include "wifi_ota.h"
 
 static const char *TAG = "usb_toy";
 
@@ -193,12 +195,16 @@ static void on_pm_enter_sleep(void) {
     }
     // 2. Tắt clock I2S MAX98357A đưa về Hardware Shutdown (< 10uA)
     audio_synth_enter_low_power();
+    // 3. Tạm dừng quét thẻ RFID/NFC PN532 để tiết kiệm điện
+    pn532_set_scanner_active(false);
 }
 
 static void on_pm_wake_up(void) {
     printf("\r\n>>> [HỆ THỐNG ĐÃ ĐƯỢC ĐÁNH THỨC: KHÔI PHỤC HOẠT ĐỘNG] <<<\r\n");
     // 1. Mở lại clock I2S MAX98357A
     audio_synth_exit_low_power();
+    // 2. Kích hoạt lại tiến trình quét thẻ PN532
+    pn532_set_scanner_active(true);
     // 2. Khôi phục đèn NumLock trên bàn phím USB
     s_num_lock = true;
     trigger_led_update();
@@ -725,6 +731,70 @@ static void on_button_event(button_id_t btn, button_press_type_t type) {
     }
 }
 
+// -------------------------------------------------------------
+// BẢNG ÁNH XẠ THẺ PHÉP THUẬT NFC / RFID (MAGIC CARDS)
+// Bạn có thể quẹt thẻ thực tế để lấy UID in ra màn hình Terminal,
+// sau đó thêm mã UID vào bảng này để tự động chuyển Mode hoặc đổi nhạc!
+// -------------------------------------------------------------
+typedef struct {
+    const char *uid_hex;       // Chuỗi UID viết hoa liền nhau (ví dụ "04A1B2C3" hoặc "4A67B2C1")
+    uint8_t target_mode;       // Chế độ đích (1..10), 0 là không đổi chế độ
+    const char *card_name;     // Tên thẻ thân thiện
+} magic_card_entry_t;
+
+static const magic_card_entry_t s_magic_cards[] = {
+    { "04A1B2C3", 1, "Thẻ Đàn Piano Diệu Kỳ (Mode 1)" },
+    { "04A2B2C3", 2, "Thẻ Nghệ Sĩ Nhí Mozart (Mode 2)" },
+    { "04A3B2C3", 4, "Thẻ Dàn Trống Beat-Maker & DJ (Mode 4)" },
+    { "04A4B2C3", 8, "Thẻ Buồng Lái Xe Cứu Hỏa & 26 Con Thú (Mode 8)" },
+    { "04A5B2C3", 9, "Thẻ Bé Học Đánh Vần & Tập Đếm (Mode 9)" },
+    { "04A6B2C3", 10, "Thẻ Máy Hát Thiếu Nhi MP3 (Mode 10)" },
+};
+
+static void on_rfid_card_event(const uint8_t *uid, uint8_t uid_len) {
+    power_manager_feed_activity();
+
+    char uid_compact[32] = {0};
+    char uid_spaced[48] = {0};
+    for (int i = 0; i < uid_len && i < 10; i++) {
+        sprintf(uid_compact + strlen(uid_compact), "%02X", uid[i]);
+        sprintf(uid_spaced + strlen(uid_spaced), "%02X ", uid[i]);
+    }
+
+    printf("\r\n======================================================\r\n");
+    printf(">>> [NFC / RFID THẺ THẦN KỲ]: ĐÃ PHÁT HIỆN THẺ MỚI! <<<\r\n");
+    printf(">>> UID (%d bytes): [ %s]\r\n", uid_len, uid_spaced);
+
+    // Kiểm tra xem thẻ đã được gán hành động trong bảng s_magic_cards chưa
+    bool matched = false;
+    for (int i = 0; i < sizeof(s_magic_cards) / sizeof(s_magic_cards[0]); i++) {
+        if (strcasecmp(uid_compact, s_magic_cards[i].uid_hex) == 0) {
+            matched = true;
+            printf(">>> [TÊN THẺ]: %s <<<\r\n", s_magic_cards[i].card_name);
+            printf(">>> [HÀNH ĐỘNG]: Chuyển sang Mode %d ngay tức thì!\r\n", s_magic_cards[i].target_mode);
+            printf("======================================================\r\n\n");
+
+            if (s_magic_cards[i].target_mode >= 1 && s_magic_cards[i].target_mode <= 10) {
+                uint8_t mode_idx = s_magic_cards[i].target_mode - 1;
+                mode_manager_switch_to(mode_idx);
+                audio_play_chime_mode(mode_idx);
+                led_effects_mode_switch(mode_idx);
+            }
+            break;
+        }
+    }
+
+    if (!matched) {
+        printf(">>> [TRẠNG THÁI]: Thẻ mới chưa được gán tính năng!\r\n");
+        printf(">>> [HƯỚNG DẪN]: Copy mã UID \"%s\" vào mảng s_magic_cards trong main.c để đặt tên & gán chế độ!\r\n", uid_compact);
+        printf("======================================================\r\n\n");
+
+        // Âm thanh và hiệu ứng mừng khi quét được thẻ mới
+        audio_play_action_feedback();
+        led_effects_color_burst(0, 255, 180); // Chớp ngọc lam rực rỡ
+    }
+}
+
 void app_main(void)
 {
     setvbuf(stdout, NULL, _IONBF, 0);
@@ -751,6 +821,9 @@ void app_main(void)
     // 2.1 Initialize Soundbank (LittleFS + PSRAM Dynamic Sampler)
     soundbank_init();
 
+    // 2.2 Initialize Wireless OTA Background Subsystem (Wi-Fi & HTTP OTA Server)
+    wifi_ota_init();
+
     // 3. Initialize WS2812B RGB LED Strip (GPIO 4 via RMT)
     ESP_ERROR_CHECK(led_effects_init());
 
@@ -768,6 +841,9 @@ void app_main(void)
 
     // 5. Khởi tạo Mode Manager & Đăng ký toàn bộ 10 chế độ
     ESP_ERROR_CHECK(mode_manager_init());
+
+    // 5.1 Khởi tạo module NFC / RFID PN532 (I2C: SDA=GPIO 6, SCL=GPIO 5)
+    pn532_driver_init(on_rfid_card_event);
 
     // 6. Start toy background monitor task (gọi led_effects_tick & mode_manager_tick)
     xTaskCreate(toy_background_task, "toy_bg", 3072, NULL, 4, NULL);
