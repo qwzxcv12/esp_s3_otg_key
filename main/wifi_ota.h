@@ -9,9 +9,13 @@
 extern "C" {
 #endif
 
-// Wi-Fi Configuration
+// Wi-Fi Configuration (Target 2.4GHz network for ESP32-S3)
 #ifndef CONFIG_WIFI_OTA_SSID
-#define CONFIG_WIFI_OTA_SSID "HG156"
+#define CONFIG_WIFI_OTA_SSID "HG156 2g4"
+#endif
+
+#ifndef CONFIG_WIFI_OTA_ALT_SSID
+#define CONFIG_WIFI_OTA_ALT_SSID "HG156"
 #endif
 
 #ifndef CONFIG_WIFI_OTA_PASS
