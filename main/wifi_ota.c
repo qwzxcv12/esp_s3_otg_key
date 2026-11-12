@@ -100,8 +100,9 @@ static esp_err_t status_get_handler(httpd_req_t *req) {
     return httpd_resp_send(req, resp, HTTPD_RESP_USE_STRLEN);
 }
 
+static char s_ota_buff[4096];
+
 static esp_err_t update_post_handler(httpd_req_t *req) {
-    char ota_buff[2048];
     esp_ota_handle_t ota_handle = 0;
     const esp_partition_t *update_partition = NULL;
     
@@ -126,8 +127,8 @@ static esp_err_t update_post_handler(httpd_req_t *req) {
     
     int remaining = req->content_len;
     while (remaining > 0) {
-        int to_read = MIN(remaining, sizeof(ota_buff));
-        int received = httpd_req_recv(req, ota_buff, to_read);
+        int to_read = MIN(remaining, sizeof(s_ota_buff));
+        int received = httpd_req_recv(req, s_ota_buff, to_read);
         if (received <= 0) {
             if (received == HTTPD_SOCK_ERR_TIMEOUT) {
                 continue;
@@ -138,7 +139,7 @@ static esp_err_t update_post_handler(httpd_req_t *req) {
             return ESP_FAIL;
         }
         
-        err = esp_ota_write(ota_handle, ota_buff, received);
+        err = esp_ota_write(ota_handle, s_ota_buff, received);
         if (err != ESP_OK) {
             ESP_LOGE(TAG, "esp_ota_write failed: %s", esp_err_to_name(err));
             esp_ota_abort(ota_handle);
@@ -162,12 +163,12 @@ static esp_err_t update_post_handler(httpd_req_t *req) {
         return ESP_FAIL;
     }
     
-    ESP_LOGI(TAG, ">>> SUCCESS! OTA Update Complete. Rebooting in 500ms...");
+    ESP_LOGI(TAG, ">>> SUCCESS! OTA Update Complete. Rebooting in 1200ms...");
     httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
     httpd_resp_set_type(req, "text/plain");
     httpd_resp_send(req, "OK: OTA Update Succeeded. Rebooting...\n", HTTPD_RESP_USE_STRLEN);
     
-    vTaskDelay(pdMS_TO_TICKS(500));
+    vTaskDelay(pdMS_TO_TICKS(1200));
     esp_restart();
     return ESP_OK;
 }

@@ -70,17 +70,19 @@ def discover_esp32_udp(timeout=1.5):
         s.close()
     return None
 
-def check_esp32_status(host, timeout=2.0):
-    """Check /status endpoint on ESP32"""
+def check_esp32_status(host, timeout=3.0, retries=2):
+    """Check /status endpoint on ESP32 with retries"""
     url = f"http://{host}:{HTTP_PORT}/status"
-    try:
-        req = urllib.request.Request(url, headers={"User-Agent": "OTA-Uploader"})
-        with urllib.request.urlopen(req, timeout=timeout) as response:
-            if response.status == 200:
-                data = json.loads(response.read().decode("utf-8"))
-                return data
-    except Exception:
-        return None
+    for attempt in range(retries):
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "OTA-Uploader"})
+            with urllib.request.urlopen(req, timeout=timeout) as response:
+                if response.status == 200:
+                    data = json.loads(response.read().decode("utf-8"))
+                    return data
+        except Exception:
+            if attempt < retries - 1:
+                time.sleep(0.3)
     return None
 
 def resolve_target(specified_target=None):
@@ -91,24 +93,24 @@ def resolve_target(specified_target=None):
         return specified_target
 
     # 1. Try instant UDP discovery
-    discovered_ip = discover_esp32_udp(timeout=1.2)
+    discovered_ip = discover_esp32_udp(timeout=1.5)
     if discovered_ip:
         config["last_esp32_ip"] = discovered_ip
         save_config(config)
         return discovered_ip
 
     # 2. Try cached IP in builder_config.json
-    cached_ip = config.get("last_esp32_ip")
+    cached_ip = config.get("last_esp32_ip", "192.168.1.156")
     if cached_ip:
         print(f"[DISCOVERY] Kiem tra IP da luu truoc do: {cached_ip}...")
-        status = check_esp32_status(cached_ip, timeout=1.5)
+        status = check_esp32_status(cached_ip, timeout=3.0, retries=2)
         if status:
-            print(f"            -> Ket noi thanh cong toi {cached_ip}!")
+            print(f"            -> Ket noi thanh cong toi {cached_ip}! (Phien ban: {status.get('version', '?')})")
             return cached_ip
 
     # 3. Try mDNS hostname
     print(f"[DISCOVERY] Thu ket noi qua mDNS ({DEFAULT_MDNS_HOST})...")
-    status = check_esp32_status(DEFAULT_MDNS_HOST, timeout=2.0)
+    status = check_esp32_status(DEFAULT_MDNS_HOST, timeout=3.0, retries=2)
     if status:
         print(f"            -> Ket noi thanh cong qua {DEFAULT_MDNS_HOST}!")
         return DEFAULT_MDNS_HOST
@@ -151,7 +153,7 @@ def flash_ota(target_host, bin_path):
         print(f"[DEVICE] Phien ban hien tai: {status.get('version', 'N/A')} | Partition: {status.get('running_partition', 'N/A')} | Free RAM: {status.get('free_heap', 0)//1024} KB")
 
     print(f"\n[OTA FLASH] Dang truyen du lieu khong day...")
-    conn = http.client.HTTPConnection(target_host, HTTP_PORT, timeout=120)
+    conn = http.client.HTTPConnection(target_host, HTTP_PORT, timeout=240)
     
     try:
         conn.putrequest("POST", "/update")
@@ -160,7 +162,7 @@ def flash_ota(target_host, bin_path):
         conn.putheader("Host", target_host)
         conn.endheaders()
 
-        chunk_size = 16384  # 16KB per chunk for high throughput
+        chunk_size = 4096  # 4KB chunk matching optimal ESP32 buffer
         sent_bytes = 0
         start_time = time.time()
         bar_len = 30
@@ -186,21 +188,42 @@ def flash_ota(target_host, bin_path):
                 sys.stdout.flush()
 
         print("\n\n[FLASH] Hoan tat truyen file! Dang doi ESP32 ghi Flash & khoi dong lai...")
-        response = conn.getresponse()
-        resp_data = response.read().decode("utf-8", errors="ignore").strip()
+        success = False
+        try:
+            response = conn.getresponse()
+            if response.status == 200:
+                success = True
+        except Exception:
+            # ESP32 can reboot immediately before Windows TCP finishes reading HTTP response
+            pass
 
         total_time = time.time() - start_time
         avg_speed_kb = file_size_kb / total_time if total_time > 0 else 0
 
-        if response.status == 200:
+        # Verify device reboot and partition switch
+        print("[VERIFY] Dang xac thuc trang thai boot cua ESP32...")
+        time.sleep(3.0)
+        new_status = None
+        for _ in range(8):
+            new_status = check_esp32_status(target_host, timeout=3.0, retries=1)
+            if new_status:
+                break
+            time.sleep(1.0)
+
+        old_part = status.get("running_partition", "") if status else ""
+        new_part = new_status.get("running_partition", "") if new_status else ""
+
+        if success or (new_status and (new_part != old_part or not old_part)):
             print("==========================================================")
             print("  >>> SUCCESS! NAP FIRMWARE KHONG DAY THANH CONG!")
-            print(f"  >>> Thoi gian nạp: {total_time:.2f} giay (Toc do TB: {avg_speed_kb:.1f} KB/s)")
-            print("  >>> ESP32-S3 dang tu dong khoi dong lai vao firmware moi...")
+            print(f"  >>> Thoi gian nap: {total_time:.2f} giay (Toc do TB: {avg_speed_kb:.1f} KB/s)")
+            if new_status:
+                print(f"  >>> ESP32-S3 da chuyen boot partition: [{old_part}] -> [{new_part}]")
+                print(f"  >>> IP Address: {new_status.get('ip')} | RAM Free: {new_status.get('free_heap', 0)//1024} KB")
             print("==========================================================")
             return True
         else:
-            print(f"\n[ERROR] ESP32 bao loi (HTTP {response.status}): {resp_data}")
+            print("\n[ERROR] Khong the xac thuc ESP32 khoi dong lai vao partition moi.")
             return False
 
     except Exception as e:
