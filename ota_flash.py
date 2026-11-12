@@ -151,7 +151,7 @@ def flash_ota(target_host, bin_path):
         print(f"[DEVICE] Phien ban hien tai: {status.get('version', 'N/A')} | Partition: {status.get('running_partition', 'N/A')} | Free RAM: {status.get('free_heap', 0)//1024} KB")
 
     print(f"\n[OTA FLASH] Dang truyen du lieu khong day...")
-    conn = http.client.HTTPConnection(target_host, HTTP_PORT, timeout=30)
+    conn = http.client.HTTPConnection(target_host, HTTP_PORT, timeout=120)
     
     try:
         conn.putrequest("POST", "/update")

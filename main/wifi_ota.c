@@ -281,14 +281,12 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t e
         s_retry_count++;
         ESP_LOGW(TAG, "Wi-Fi disconnected (reason %d). Retry #%d...", disconn->reason, s_retry_count);
         
-        // Switch between "HG156 2g4" and "HG156" after 4 attempts
         if (s_retry_count % 4 == 0) {
             s_current_ssid_idx = (s_current_ssid_idx + 1) % 2;
             ESP_LOGW(TAG, "Switching Wi-Fi candidate to: %s", s_target_ssids[s_current_ssid_idx]);
             apply_sta_config(s_target_ssids[s_current_ssid_idx]);
         }
         
-        // Immediate reconnect without blocking FreeRTOS event task
         esp_wifi_connect();
     } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
         ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
@@ -310,6 +308,8 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t e
             mdns_instance_name_set("ESP32-S3 Toy Synthesizer");
             mdns_service_add(NULL, "_http", "_tcp", WIFI_OTA_HTTP_PORT, NULL, 0);
             ESP_LOGI(TAG, "mDNS responder started: %s.local", WIFI_OTA_HOSTNAME);
+        } else {
+            ESP_LOGW(TAG, "mDNS init failed: %s", esp_err_to_name(mdns_err));
         }
         
         // Start Web Server
@@ -337,9 +337,7 @@ esp_err_t wifi_ota_init(void) {
         ESP_ERROR_CHECK(ret);
     }
 
-    // Create default STA and SoftAP network interfaces
     esp_netif_create_default_wifi_sta();
-    esp_netif_create_default_wifi_ap();
 
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
@@ -355,34 +353,15 @@ esp_err_t wifi_ota_init(void) {
                                                         NULL,
                                                         NULL));
 
-    // Configure Dual AP+STA Mode so device always broadcasts a fallback hotspot
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));
-    
-    // 1. Configure Station
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
     apply_sta_config(s_target_ssids[0]);
 
-    // 2. Configure SoftAP (SSID: ESP32-Toy-OTA, Open, 192.168.4.1)
-    wifi_config_t ap_config = {
-        .ap = {
-            .ssid = "ESP32-Toy-OTA",
-            .ssid_len = strlen("ESP32-Toy-OTA"),
-            .channel = 1,
-            .password = "",
-            .max_connection = 4,
-            .authmode = WIFI_AUTH_OPEN,
-            .pmf_cfg = {
-                .required = false,
-            },
-        },
-    };
-    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &ap_config));
-    
-    // Always start webserver immediately so SoftAP (192.168.4.1) is always ready
-    start_ota_webserver();
+    // Disable Wi-Fi power save for ultra-low latency & maximum throughput
+    ESP_ERROR_CHECK(esp_wifi_set_ps(WIFI_PS_NONE));
 
     ESP_ERROR_CHECK(esp_wifi_start());
 
-    ESP_LOGI(TAG, "Wi-Fi OTA subsystem running in AP+STA mode (Hotspot: ESP32-Toy-OTA)");
+    ESP_LOGI(TAG, "Wi-Fi OTA subsystem running in STA mode (High Speed / No Power Save)");
     return ESP_OK;
 }
 
