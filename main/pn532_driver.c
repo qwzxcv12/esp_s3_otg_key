@@ -254,21 +254,29 @@ static esp_err_t pn532_try_init_config(int scl_pin, int sda_pin) {
     esp_err_t ret = pn532_i2c_setup_bus(scl_pin, sda_pin);
     if (ret != ESP_OK) return ret;
 
-    vTaskDelay(pdMS_TO_TICKS(30));
+    // Chuẩn NXP UM0701-04 I2C Wakeup:
+    // PN532 ở chế độ Low Power / Power Down cần một xung I2C đầu tiên để kích hoạt bộ dao động thạch anh.
+    // Lần truyền đầu tiên này PN532 sẽ NACK vì thạch anh đang khởi động (~1-2ms).
+    uint8_t dummy = 0;
+    i2c_master_transmit(s_pn532_dev, &dummy, 1, 50);
+    vTaskDelay(pdMS_TO_TICKS(15)); // Đợi thạch anh và PLL ổn định
 
     uint32_t ver = 0;
-    ret = pn532_get_firmware_version(&ver);
-    if (ret == ESP_OK && ((ver >> 24) & 0xFF) == 0x32) {
-        ESP_LOGI(TAG, ">>> KET NOI THANH CONG! Chip: PN5%02X, Firmware Ver: %d.%d, SCL=GPIO %d, SDA=GPIO %d <<<",
-                 (unsigned int)((ver >> 24) & 0xFF),
-                 (int)((ver >> 16) & 0xFF),
-                 (int)((ver >> 8) & 0xFF),
-                 scl_pin, sda_pin);
+    for (int retry = 0; retry < 3; retry++) {
+        ret = pn532_get_firmware_version(&ver);
+        if (ret == ESP_OK && ((ver >> 24) & 0xFF) == 0x32) {
+            ESP_LOGI(TAG, ">>> KET NOI THANH CONG! Chip: PN5%02X, Firmware Ver: %d.%d, SCL=GPIO %d, SDA=GPIO %d <<<",
+                     (unsigned int)((ver >> 24) & 0xFF),
+                     (int)((ver >> 16) & 0xFF),
+                     (int)((ver >> 8) & 0xFF),
+                     scl_pin, sda_pin);
 
-        pn532_sam_config();
-        pn532_set_passive_retries(0x02); // 2 lần quét nhanh, không nghẽn loop
-        s_is_connected = true;
-        return ESP_OK;
+            pn532_sam_config();
+            pn532_set_passive_retries(0x02); // 2 lần quét nhanh, không nghẽn loop
+            s_is_connected = true;
+            return ESP_OK;
+        }
+        vTaskDelay(pdMS_TO_TICKS(25));
     }
     return ESP_FAIL;
 }
@@ -279,26 +287,16 @@ static void pn532_scanner_task(void *arg) {
     int probe_step = 0;
     while (s_scanner_active) {
         if (!s_is_connected) {
-            int scl = (probe_step % 2 == 0) ? PIN_PN532_GPIO_A : PIN_PN532_GPIO_B;
-            int sda = (probe_step % 2 == 0) ? PIN_PN532_GPIO_B : PIN_PN532_GPIO_A;
+            // Ưu tiên SCL=GPIO 6, SDA=GPIO 5 trước (đã xác nhận bus sạch)
+            int scl = (probe_step % 2 == 0) ? PIN_PN532_GPIO_B : PIN_PN532_GPIO_A;
+            int sda = (probe_step % 2 == 0) ? PIN_PN532_GPIO_A : PIN_PN532_GPIO_B;
             probe_step++;
 
-            ESP_LOGI(TAG, "Dang tim PN532 qua I2C [SCL=GPIO %d, SDA=GPIO %d] (Dia chi 0x24)...", scl, sda);
+            ESP_LOGI(TAG, "Dang thu ket noi PN532 [SCL=GPIO %d, SDA=GPIO %d] (Dia chi 0x24)...", scl, sda);
             if (pn532_try_init_config(scl, sda) == ESP_OK) {
                 ESP_LOGI(TAG, ">>> PN532 DA SAN SANG QUET THE NFC/RFID! <<<");
                 continue;
             } else {
-                // Quét xem có bất kỳ thiết bị I2C nào phản hồi trên bus không
-                int found_count = 0;
-                uint8_t found_addr = 0;
-                for (uint16_t addr = 0x08; addr <= 0x77; addr++) {
-                    if (s_i2c_bus && i2c_master_probe(s_i2c_bus, addr, 15) == ESP_OK) {
-                        found_count++;
-                        found_addr = (uint8_t)addr;
-                        ESP_LOGI(TAG, ">>> TIM THAY THIET BI I2C TAI DIA CHI: 0x%02X! <<<", addr);
-                    }
-                }
-
                 pn532_i2c_cleanup();
 
                 // Kiểm tra trở kéo ngoài (external pull-up) trên GPIO 5 và 6
@@ -310,15 +308,8 @@ static void pn532_scanner_task(void *arg) {
                 int pd_5 = gpio_get_level((gpio_num_t)PIN_PN532_GPIO_A);
                 int pd_6 = gpio_get_level((gpio_num_t)PIN_PN532_GPIO_B);
 
-                ESP_LOGI(TAG, "Pull-down test: GPIO5=%d, GPIO6=%d | I2C found %d thiet bi (vi du 0x%02X)",
-                         pd_5, pd_6, found_count, found_addr);
-
-                if (pd_5 == 0 && pd_6 == 0) {
-                    ESP_LOGE(TAG, ">>> CANH BAO: KHONG CO TRO KEO NGOAI (GPIO5=0, GPIO6=0 khi Pull-down)! <<<");
-                    ESP_LOGE(TAG, "-> Wires chua tiep xuc voi PN532 hoac PN532 chua co nguon VCC/GND!");
-                } else if (found_count > 0 && found_addr != 0x24) {
-                    ESP_LOGW(TAG, "Tin hieu I2C bi nhieu (Floating/GND long)! Kiem tra day GND va VCC.");
-                }
+                ESP_LOGW(TAG, "Chua phan hoi... Pull-down test: GPIO5=%d, GPIO6=%d (Tro keo ngoai %s)",
+                         pd_5, pd_6, (pd_5 && pd_6) ? "OK (Co ket noi)" : "KHONG CO");
             }
             vTaskDelay(pdMS_TO_TICKS(2000));
             continue;
