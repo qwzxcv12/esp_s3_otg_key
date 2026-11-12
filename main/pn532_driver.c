@@ -46,7 +46,6 @@ static void pn532_wakeup(void) {
 // Đọc ACK chính xác byte-by-byte: dừng ngay khi khớp xong 6 byte ACK
 // Tuyệt đối không đọc dư thừa làm mất gói tin Response tiếp theo trong FIFO!
 static esp_err_t pn532_read_ack(uint32_t timeout_ms) {
-    uint8_t ack_seq[] = {0x00, 0x00, 0xFF, 0x00, 0xFF, 0x00};
     uint8_t match_idx = 0;
     int64_t start_time = esp_timer_get_time();
     int64_t timeout_us = (int64_t)timeout_ms * 1000;
@@ -59,13 +58,13 @@ static esp_err_t pn532_read_ack(uint32_t timeout_ms) {
         if (r > 0) {
             total_bytes++;
             last_byte = ch;
-            if (ch == ack_seq[match_idx]) {
+            if (ch == PN532_ACK[match_idx]) {
                 match_idx++;
-                if (match_idx == sizeof(ack_seq)) {
+                if (match_idx == sizeof(PN532_ACK)) {
                     return ESP_OK; // Đã khớp đủ 6 byte ACK, dữ liệu phản hồi vẫn an toàn trong UART FIFO!
                 }
             } else {
-                if (ch == ack_seq[0]) {
+                if (ch == PN532_ACK[0]) {
                     match_idx = 1;
                 } else {
                     match_idx = 0;
