@@ -32,12 +32,6 @@ static httpd_handle_t s_http_server = NULL;
 static TaskHandle_t s_udp_task_handle = NULL;
 static int s_retry_count = 0;
 
-static const char *s_target_ssids[] = {
-    CONFIG_WIFI_OTA_SSID,       // "HG156 2g4"
-    CONFIG_WIFI_OTA_ALT_SSID    // "HG156"
-};
-static int s_current_ssid_idx = 0;
-
 /* HTML Web page for browser-based manual OTA upload */
 static const char index_html[] = 
 "<!DOCTYPE html><html><head><meta charset=\"utf-8\">"
@@ -259,34 +253,15 @@ static void udp_discovery_task(void *pvParameters) {
     vTaskDelete(NULL);
 }
 
-static void apply_sta_config(const char *ssid) {
-    wifi_config_t wifi_config = {0};
-    strncpy((char *)wifi_config.sta.ssid, ssid, sizeof(wifi_config.sta.ssid) - 1);
-    strncpy((char *)wifi_config.sta.password, CONFIG_WIFI_OTA_PASS, sizeof(wifi_config.sta.password) - 1);
-    wifi_config.sta.threshold.authmode = WIFI_AUTH_WPA2_PSK;
-    wifi_config.sta.sae_pwe_h2e = WPA3_SAE_PWE_BOTH;
-    wifi_config.sta.pmf_cfg.capable = true;
-    wifi_config.sta.pmf_cfg.required = false;
-    
-    esp_wifi_set_config(WIFI_IF_STA, &wifi_config);
-    ESP_LOGI(TAG, "Connecting STA to SSID '%s'...", ssid);
-}
-
 static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data) {
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
+        ESP_LOGI(TAG, "Wi-Fi Station started, connecting to %s...", CONFIG_WIFI_OTA_SSID);
         esp_wifi_connect();
     } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
         wifi_event_sta_disconnected_t *disconn = (wifi_event_sta_disconnected_t *)event_data;
         s_connected = false;
         s_retry_count++;
-        ESP_LOGW(TAG, "Wi-Fi disconnected (reason %d). Retry #%d...", disconn->reason, s_retry_count);
-        
-        if (s_retry_count % 4 == 0) {
-            s_current_ssid_idx = (s_current_ssid_idx + 1) % 2;
-            ESP_LOGW(TAG, "Switching Wi-Fi candidate to: %s", s_target_ssids[s_current_ssid_idx]);
-            apply_sta_config(s_target_ssids[s_current_ssid_idx]);
-        }
-        
+        ESP_LOGW(TAG, "Wi-Fi disconnected (reason %d). Reconnecting (attempt #%d)...", disconn->reason, s_retry_count);
         esp_wifi_connect();
     } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
         ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
@@ -296,7 +271,7 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t e
         
         ESP_LOGI(TAG, "==========================================================");
         ESP_LOGI(TAG, ">>> [WIFI OTA READY]");
-        ESP_LOGI(TAG, ">>> Connected to: %s", s_target_ssids[s_current_ssid_idx]);
+        ESP_LOGI(TAG, ">>> Connected to: %s", CONFIG_WIFI_OTA_SSID);
         ESP_LOGI(TAG, ">>> IP Address  : %s", s_ip_str);
         ESP_LOGI(TAG, ">>> Web OTA URL : http://%s/ (or http://%s.local/)", s_ip_str, WIFI_OTA_HOSTNAME);
         ESP_LOGI(TAG, "==========================================================");
@@ -353,15 +328,20 @@ esp_err_t wifi_ota_init(void) {
                                                         NULL,
                                                         NULL));
 
+    wifi_config_t wifi_config = {0};
+    strncpy((char *)wifi_config.sta.ssid, CONFIG_WIFI_OTA_SSID, sizeof(wifi_config.sta.ssid) - 1);
+    strncpy((char *)wifi_config.sta.password, CONFIG_WIFI_OTA_PASS, sizeof(wifi_config.sta.password) - 1);
+    wifi_config.sta.threshold.authmode = WIFI_AUTH_WPA2_PSK;
+    wifi_config.sta.sae_pwe_h2e = WPA3_SAE_PWE_BOTH;
+    wifi_config.sta.pmf_cfg.capable = true;
+    wifi_config.sta.pmf_cfg.required = false;
+
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
-    apply_sta_config(s_target_ssids[0]);
-
-    // Disable Wi-Fi power save for ultra-low latency & maximum throughput
+    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
     ESP_ERROR_CHECK(esp_wifi_set_ps(WIFI_PS_NONE));
-
     ESP_ERROR_CHECK(esp_wifi_start());
 
-    ESP_LOGI(TAG, "Wi-Fi OTA subsystem running in STA mode (High Speed / No Power Save)");
+    ESP_LOGI(TAG, "Wi-Fi OTA subsystem initialized for SSID '%s'", CONFIG_WIFI_OTA_SSID);
     return ESP_OK;
 }
 
