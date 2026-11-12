@@ -310,14 +310,14 @@ static void pn532_scanner_task(void *arg) {
                 int pd_5 = gpio_get_level((gpio_num_t)PIN_PN532_GPIO_A);
                 int pd_6 = gpio_get_level((gpio_num_t)PIN_PN532_GPIO_B);
 
-                if (found_count > 0) {
-                    ESP_LOGI(TAG, "Phan hoi I2C tai dia chi 0x%02X nhung khong phai PN532 tieu chuan!", found_addr);
-                } else if (pd_5 == 0 && pd_6 == 0) {
-                    ESP_LOGE(TAG, ">>> CANH BAO: KHONG CO TRO KEO NGOAI! GPIO5=0, GPIO6=0 khi Pull-down! <<<");
-                    ESP_LOGE(TAG, "-> Wires chua tiep xuc voi PN532 hoac PN532 chua duoc cap dien VCC/GND!");
-                } else {
-                    ESP_LOGW(TAG, "Tro keo ngoai OK (GPIO5=%d, GPIO6=%d), nhung chip chua ACK 0x24 (Kiem tra switch I0=ON, I1=OFF)",
-                             pd_5, pd_6);
+                ESP_LOGI(TAG, "Pull-down test: GPIO5=%d, GPIO6=%d | I2C found %d thiet bi (vi du 0x%02X)",
+                         pd_5, pd_6, found_count, found_addr);
+
+                if (pd_5 == 0 && pd_6 == 0) {
+                    ESP_LOGE(TAG, ">>> CANH BAO: KHONG CO TRO KEO NGOAI (GPIO5=0, GPIO6=0 khi Pull-down)! <<<");
+                    ESP_LOGE(TAG, "-> Wires chua tiep xuc voi PN532 hoac PN532 chua co nguon VCC/GND!");
+                } else if (found_count > 0 && found_addr != 0x24) {
+                    ESP_LOGW(TAG, "Tin hieu I2C bi nhieu (Floating/GND long)! Kiem tra day GND va VCC.");
                 }
             }
             vTaskDelay(pdMS_TO_TICKS(2000));
