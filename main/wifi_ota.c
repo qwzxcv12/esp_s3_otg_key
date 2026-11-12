@@ -33,8 +33,8 @@ static TaskHandle_t s_udp_task_handle = NULL;
 static int s_retry_count = 0;
 
 static const char *s_target_ssids[] = {
-    CONFIG_WIFI_OTA_SSID,       // "HG156 2g4" (2.4GHz)
-    CONFIG_WIFI_OTA_ALT_SSID    // "HG156" (Dual Band)
+    CONFIG_WIFI_OTA_SSID,       // "HG156 2g4"
+    CONFIG_WIFI_OTA_ALT_SSID    // "HG156"
 };
 static int s_current_ssid_idx = 0;
 
@@ -81,13 +81,11 @@ static const char index_html[] =
 "xhr.send(selectedFile);}"
 "</script></body></html>";
 
-/* GET /: Serve the HTML page */
 static esp_err_t index_get_handler(httpd_req_t *req) {
     httpd_resp_set_type(req, "text/html");
     return httpd_resp_send(req, index_html, HTTPD_RESP_USE_STRLEN);
 }
 
-/* GET /status: Report device status and current running partition */
 static esp_err_t status_get_handler(httpd_req_t *req) {
     const esp_partition_t *running = esp_ota_get_running_partition();
     const esp_app_desc_t *app_desc = esp_app_get_description();
@@ -107,7 +105,6 @@ static esp_err_t status_get_handler(httpd_req_t *req) {
     return httpd_resp_send(req, resp, HTTPD_RESP_USE_STRLEN);
 }
 
-/* POST /update: Stream firmware data into next OTA partition */
 static esp_err_t update_post_handler(httpd_req_t *req) {
     char ota_buff[2048];
     esp_ota_handle_t ota_handle = 0;
@@ -180,7 +177,6 @@ static esp_err_t update_post_handler(httpd_req_t *req) {
     return ESP_OK;
 }
 
-/* Start the OTA Web Server */
 static void start_ota_webserver(void) {
     if (s_http_server) return;
     
@@ -221,11 +217,9 @@ static void start_ota_webserver(void) {
     }
 }
 
-/* UDP Broadcast Responder for instant discovery without mDNS */
 static void udp_discovery_task(void *pvParameters) {
     int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
     if (sock < 0) {
-        ESP_LOGE(TAG, "Failed to create UDP socket: %d", errno);
         vTaskDelete(NULL);
         return;
     }
@@ -237,7 +231,6 @@ static void udp_discovery_task(void *pvParameters) {
     server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
     
     if (bind(sock, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
-        ESP_LOGE(TAG, "UDP bind failed: %d", errno);
         close(sock);
         vTaskDelete(NULL);
         return;
@@ -270,35 +263,32 @@ static void apply_sta_config(const char *ssid) {
     wifi_config_t wifi_config = {0};
     strncpy((char *)wifi_config.sta.ssid, ssid, sizeof(wifi_config.sta.ssid) - 1);
     strncpy((char *)wifi_config.sta.password, CONFIG_WIFI_OTA_PASS, sizeof(wifi_config.sta.password) - 1);
-    wifi_config.sta.threshold.authmode = WIFI_AUTH_OPEN;
-    wifi_config.sta.scan_method = WIFI_ALL_CHANNEL_SCAN;
-    wifi_config.sta.sort_method = WIFI_CONNECT_AP_BY_SIGNAL;
+    wifi_config.sta.threshold.authmode = WIFI_AUTH_WPA2_PSK;
+    wifi_config.sta.sae_pwe_h2e = WPA3_SAE_PWE_BOTH;
     wifi_config.sta.pmf_cfg.capable = true;
     wifi_config.sta.pmf_cfg.required = false;
     
     esp_wifi_set_config(WIFI_IF_STA, &wifi_config);
-    ESP_LOGI(TAG, "Connecting to SSID '%s'...", ssid);
+    ESP_LOGI(TAG, "Connecting STA to SSID '%s'...", ssid);
 }
 
-/* Wi-Fi & IP Event Handler */
 static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data) {
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
-        apply_sta_config(s_target_ssids[s_current_ssid_idx]);
         esp_wifi_connect();
     } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
         wifi_event_sta_disconnected_t *disconn = (wifi_event_sta_disconnected_t *)event_data;
         s_connected = false;
         s_retry_count++;
-        ESP_LOGW(TAG, "Wi-Fi disconnected (reason %d). Retry #%d in 2s...", disconn->reason, s_retry_count);
+        ESP_LOGW(TAG, "Wi-Fi disconnected (reason %d). Retry #%d...", disconn->reason, s_retry_count);
         
-        // Auto-switch between "HG156 2g4" and "HG156" if one fails
-        if (s_retry_count % 3 == 0) {
+        // Switch between "HG156 2g4" and "HG156" after 4 attempts
+        if (s_retry_count % 4 == 0) {
             s_current_ssid_idx = (s_current_ssid_idx + 1) % 2;
             ESP_LOGW(TAG, "Switching Wi-Fi candidate to: %s", s_target_ssids[s_current_ssid_idx]);
             apply_sta_config(s_target_ssids[s_current_ssid_idx]);
         }
         
-        vTaskDelay(pdMS_TO_TICKS(2000));
+        // Immediate reconnect without blocking FreeRTOS event task
         esp_wifi_connect();
     } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
         ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
@@ -320,8 +310,6 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t e
             mdns_instance_name_set("ESP32-S3 Toy Synthesizer");
             mdns_service_add(NULL, "_http", "_tcp", WIFI_OTA_HTTP_PORT, NULL, 0);
             ESP_LOGI(TAG, "mDNS responder started: %s.local", WIFI_OTA_HOSTNAME);
-        } else {
-            ESP_LOGW(TAG, "mDNS init failed: %s", esp_err_to_name(mdns_err));
         }
         
         // Start Web Server
@@ -335,7 +323,6 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t e
 }
 
 esp_err_t wifi_ota_init(void) {
-    // 1. Initialize NVS (required for Wi-Fi)
     esp_err_t ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
         ESP_ERROR_CHECK(nvs_flash_erase());
@@ -343,18 +330,17 @@ esp_err_t wifi_ota_init(void) {
     }
     ESP_ERROR_CHECK(ret);
 
-    // 2. Initialize TCP/IP and Event Loop
     ESP_ERROR_CHECK(esp_netif_init());
     
-    // Check if default event loop already exists
     ret = esp_event_loop_create_default();
     if (ret != ESP_OK && ret != ESP_ERR_INVALID_STATE) {
         ESP_ERROR_CHECK(ret);
     }
 
+    // Create default STA and SoftAP network interfaces
     esp_netif_create_default_wifi_sta();
+    esp_netif_create_default_wifi_ap();
 
-    // 3. Initialize Wi-Fi Driver
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
 
@@ -369,15 +355,34 @@ esp_err_t wifi_ota_init(void) {
                                                         NULL,
                                                         NULL));
 
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
-    apply_sta_config(s_target_ssids[s_current_ssid_idx]);
+    // Configure Dual AP+STA Mode so device always broadcasts a fallback hotspot
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));
     
-    // Enable Wi-Fi Modem Sleep to save power while keeping connection active
-    ESP_ERROR_CHECK(esp_wifi_set_ps(WIFI_PS_MIN_MODEM));
+    // 1. Configure Station
+    apply_sta_config(s_target_ssids[0]);
+
+    // 2. Configure SoftAP (SSID: ESP32-Toy-OTA, Open, 192.168.4.1)
+    wifi_config_t ap_config = {
+        .ap = {
+            .ssid = "ESP32-Toy-OTA",
+            .ssid_len = strlen("ESP32-Toy-OTA"),
+            .channel = 1,
+            .password = "",
+            .max_connection = 4,
+            .authmode = WIFI_AUTH_OPEN,
+            .pmf_cfg = {
+                .required = false,
+            },
+        },
+    };
+    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &ap_config));
     
+    // Always start webserver immediately so SoftAP (192.168.4.1) is always ready
+    start_ota_webserver();
+
     ESP_ERROR_CHECK(esp_wifi_start());
 
-    ESP_LOGI(TAG, "Wi-Fi OTA subsystem initialized in background");
+    ESP_LOGI(TAG, "Wi-Fi OTA subsystem running in AP+STA mode (Hotspot: ESP32-Toy-OTA)");
     return ESP_OK;
 }
 
