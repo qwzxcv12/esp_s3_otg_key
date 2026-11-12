@@ -370,6 +370,7 @@ esp_err_t wifi_ota_init(void) {
                                                         NULL));
 
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+    apply_sta_config(s_target_ssids[s_current_ssid_idx]);
     
     // Enable Wi-Fi Modem Sleep to save power while keeping connection active
     ESP_ERROR_CHECK(esp_wifi_set_ps(WIFI_PS_MIN_MODEM));
