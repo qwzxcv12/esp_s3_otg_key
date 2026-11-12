@@ -35,25 +35,48 @@ static int s_current_tx_pin = PIN_PN532_GPIO_A; // GPIO 5
 static int s_current_rx_pin = PIN_PN532_GPIO_B; // GPIO 6
 
 static void pn532_wakeup(void) {
-    uint8_t w[3] = {0x55, 0x00, 0x00};
-    uart_write_bytes(PN532_UART_PORT, (const char *)w, 3);
-    vTaskDelay(pdMS_TO_TICKS(10));
+    // Chuẩn NXP UM0701-04 HSU Wakeup: Tạo đủ 5 xung sườn lên (0x55 0x55 + dummy zeros)
+    // để kích hoạt bộ đếm phần cứng nội bộ đánh thức thạch anh và PLL của PN532
+    uint8_t w[16] = {0x55, 0x55, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+    uart_write_bytes(PN532_UART_PORT, (const char *)w, sizeof(w));
+    vTaskDelay(pdMS_TO_TICKS(25)); // Đợi bộ dao động PN532 ổn định
     uart_flush_input(PN532_UART_PORT);
 }
 
-static esp_err_t pn532_read_ack(void) {
-    uint8_t buf[32] = {0};
-    int read_len = uart_read_bytes(PN532_UART_PORT, buf, sizeof(buf), pdMS_TO_TICKS(500));
-    if (read_len < 6) {
-        return ESP_ERR_TIMEOUT;
-    }
+// Đọc ACK chính xác byte-by-byte: dừng ngay khi khớp xong 6 byte ACK
+// Tuyệt đối không đọc dư thừa làm mất gói tin Response tiếp theo trong FIFO!
+static esp_err_t pn532_read_ack(uint32_t timeout_ms) {
+    uint8_t ack_seq[] = {0x00, 0x00, 0xFF, 0x00, 0xFF, 0x00};
+    uint8_t match_idx = 0;
+    int64_t start_time = esp_timer_get_time();
+    int64_t timeout_us = (int64_t)timeout_ms * 1000;
+    int total_bytes = 0;
+    uint8_t last_byte = 0;
 
-    for (int i = 0; i <= read_len - 6; i++) {
-        if (memcmp(&buf[i], PN532_ACK, 6) == 0) {
-            return ESP_OK;
+    while ((esp_timer_get_time() - start_time) < timeout_us) {
+        uint8_t ch = 0;
+        int r = uart_read_bytes(PN532_UART_PORT, &ch, 1, pdMS_TO_TICKS(10));
+        if (r > 0) {
+            total_bytes++;
+            last_byte = ch;
+            if (ch == ack_seq[match_idx]) {
+                match_idx++;
+                if (match_idx == sizeof(ack_seq)) {
+                    return ESP_OK; // Đã khớp đủ 6 byte ACK, dữ liệu phản hồi vẫn an toàn trong UART FIFO!
+                }
+            } else {
+                if (ch == ack_seq[0]) {
+                    match_idx = 1;
+                } else {
+                    match_idx = 0;
+                }
+            }
         }
     }
-    return ESP_ERR_INVALID_RESPONSE;
+    if (total_bytes > 0) {
+        ESP_LOGW(TAG, "Nhan duoc %d bytes tren UART nhung khong khop ACK (byte cuoi=0x%02X)", total_bytes, last_byte);
+    }
+    return ESP_ERR_TIMEOUT;
 }
 
 static esp_err_t pn532_write_command(const uint8_t *cmd, uint8_t cmd_len) {
@@ -80,37 +103,67 @@ static esp_err_t pn532_write_command(const uint8_t *cmd, uint8_t cmd_len) {
 
     uart_write_bytes(PN532_UART_PORT, (const char *)packet, cmd_len + 8);
 
-    return pn532_read_ack();
+    return pn532_read_ack(250);
 }
 
 static esp_err_t pn532_read_response(uint8_t expected_cmd, uint8_t *out_data, uint8_t *out_len, uint32_t timeout_ms) {
-    uint8_t rx_buf[64] = {0};
-    int read_len = uart_read_bytes(PN532_UART_PORT, rx_buf, sizeof(rx_buf), pdMS_TO_TICKS(timeout_ms));
-    if (read_len < 6) {
-        return ESP_ERR_TIMEOUT;
-    }
+    int64_t start_time = esp_timer_get_time();
+    int64_t timeout_us = (int64_t)timeout_ms * 1000;
 
-    int start_idx = -1;
-    for (int i = 0; i <= read_len - 6; i++) {
-        if (rx_buf[i] == 0x00 && rx_buf[i + 1] == 0xFF) {
-            start_idx = i;
-            break;
+    // 1. Tìm start code 0x00 0xFF
+    uint8_t prev = 0xFF;
+    bool found_start = false;
+    while ((esp_timer_get_time() - start_time) < timeout_us) {
+        uint8_t ch = 0;
+        int r = uart_read_bytes(PN532_UART_PORT, &ch, 1, pdMS_TO_TICKS(10));
+        if (r > 0) {
+            if (prev == 0x00 && ch == 0xFF) {
+                found_start = true;
+                break;
+            }
+            prev = ch;
         }
     }
+    if (!found_start) return ESP_ERR_TIMEOUT;
 
-    if (start_idx < 0 || start_idx + 6 > read_len) {
-        return ESP_ERR_NOT_FOUND;
+    // 2. Đọc LEN và LCS
+    uint8_t len_lcs[2] = {0};
+    if (uart_read_bytes(PN532_UART_PORT, len_lcs, 2, pdMS_TO_TICKS(50)) < 2) {
+        return ESP_ERR_TIMEOUT;
     }
-
-    uint8_t len = rx_buf[start_idx + 2];
-    uint8_t lcs = rx_buf[start_idx + 3];
+    uint8_t len = len_lcs[0];
+    uint8_t lcs = len_lcs[1];
     if ((uint8_t)(len + lcs) != 0) {
         return ESP_ERR_INVALID_CRC;
     }
 
-    uint8_t tfi = rx_buf[start_idx + 4];
-    uint8_t resp_cmd = rx_buf[start_idx + 5];
+    if (len < 2) return ESP_ERR_INVALID_SIZE;
 
+    // 3. Đọc dữ liệu (TFI, CMD, Payload)
+    uint8_t payload[64];
+    if (len > sizeof(payload)) return ESP_ERR_NO_MEM;
+    if (uart_read_bytes(PN532_UART_PORT, payload, len, pdMS_TO_TICKS(100)) < len) {
+        return ESP_ERR_TIMEOUT;
+    }
+
+    // 4. Đọc DCS và Postamble
+    uint8_t dcs_post[2] = {0};
+    if (uart_read_bytes(PN532_UART_PORT, dcs_post, 2, pdMS_TO_TICKS(50)) < 1) {
+        return ESP_ERR_TIMEOUT;
+    }
+    uint8_t dcs = dcs_post[0];
+
+    // Checksum check: sum(payload) + dcs == 0
+    uint8_t sum = 0;
+    for (int i = 0; i < len; i++) {
+        sum += payload[i];
+    }
+    if ((uint8_t)(sum + dcs) != 0) {
+        return ESP_ERR_INVALID_CRC;
+    }
+
+    uint8_t tfi = payload[0];
+    uint8_t resp_cmd = payload[1];
     if (tfi != PN532_PN532TOHOST || resp_cmd != (expected_cmd + 1)) {
         return ESP_ERR_INVALID_RESPONSE;
     }
@@ -118,7 +171,7 @@ static esp_err_t pn532_read_response(uint8_t expected_cmd, uint8_t *out_data, ui
     uint8_t data_len = len - 2;
     if (out_data && out_len) {
         if (data_len > *out_len) data_len = *out_len;
-        memcpy(out_data, &rx_buf[start_idx + 6], data_len);
+        memcpy(out_data, &payload[2], data_len);
         *out_len = data_len;
     }
 
@@ -247,6 +300,8 @@ static void pn532_scanner_task(void *arg) {
                 s_current_rx_pin = s_current_tx_pin;
                 s_current_tx_pin = temp;
                 uart_set_pin(PN532_UART_PORT, s_current_tx_pin, s_current_rx_pin, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
+                vTaskDelay(pdMS_TO_TICKS(10));
+                uart_flush_input(PN532_UART_PORT);
 
                 ESP_LOGW(TAG, "Dang tim PN532... [TX=GPIO %d, RX=GPIO %d] | Dien ap: GPIO5=%d, GPIO6=%d",
                          s_current_tx_pin, s_current_rx_pin, lvl_5, lvl_6);
