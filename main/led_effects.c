@@ -66,6 +66,7 @@ static volatile uint16_t s_anim_step = 0;
 static volatile uint16_t s_anim_hue = 0;
 static volatile uint8_t  s_anim_sub = 0;
 static volatile uint8_t  s_anim_r = 255, s_anim_g = 200, s_anim_b = 0;
+static bool              s_standby_mode = true;
 
 // Biến đếm số (Mode 9)
 static volatile uint8_t  s_count_target = 0;
@@ -1115,8 +1116,6 @@ void led_effects_tick(uint32_t delta_ms) {
 // ============================================================================
 // CÁC HÀM HIỆU ỨNG DÙNG CHUNG & TƯƠNG THÍCH HỆ THỐNG
 // ============================================================================
-
-static bool s_standby_mode = true;
 
 void led_effects_standby(bool active) {
     s_standby_mode = active;
