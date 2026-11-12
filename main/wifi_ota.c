@@ -405,11 +405,10 @@ esp_err_t wifi_ota_init(void) {
     strncpy((char *)wifi_config.sta.ssid, CONFIG_WIFI_OTA_SSID, sizeof(wifi_config.sta.ssid) - 1);
     strncpy((char *)wifi_config.sta.password, CONFIG_WIFI_OTA_PASS, sizeof(wifi_config.sta.password) - 1);
     wifi_config.sta.threshold.authmode = WIFI_AUTH_WPA_PSK;
-    wifi_config.sta.threshold.rssi = -75; // Loc bo AP phu song yeu (-82dBm tren Kenh 2), uu tien AP chinh song manh (-38dBm)
+    wifi_config.sta.threshold.rssi = -75; // Loc bo AP phu song yeu (-82dBm tren Kenh 2), uu tien AP chinh song manh (-35dBm)
     wifi_config.sta.sort_method = WIFI_CONNECT_AP_BY_SIGNAL;
     wifi_config.sta.scan_method = WIFI_FAST_SCAN;
-    wifi_config.sta.sae_pwe_h2e = WPA3_SAE_PWE_BOTH;
-    wifi_config.sta.pmf_cfg.capable = true;
+    wifi_config.sta.pmf_cfg.capable = false; // Tat PMF de tuong thich tuyet doi voi Router ZTE
     wifi_config.sta.pmf_cfg.required = false;
 
     if (!s_reconnect_task_handle) {
@@ -418,9 +417,10 @@ esp_err_t wifi_ota_init(void) {
 
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
+    ESP_ERROR_CHECK(esp_wifi_set_protocol(WIFI_IF_STA, WIFI_PROTOCOL_11B | WIFI_PROTOCOL_11G | WIFI_PROTOCOL_11N));
     ESP_ERROR_CHECK(esp_wifi_set_ps(WIFI_PS_NONE));
     ESP_ERROR_CHECK(esp_wifi_start());
-    esp_wifi_set_max_tx_power(72); // 18 dBm: Ổn định nguồn RF, tránh sụt áp gay ngat ket noi
+    esp_wifi_set_max_tx_power(56); // 14 dBm: Chống bão hòa sóng (LNA Saturation) khi ở quá gần Router ZTE (-35dBm)
 
     ESP_LOGI(TAG, "Wi-Fi OTA subsystem initialized for SSID '%s'", CONFIG_WIFI_OTA_SSID);
     return ESP_OK;
