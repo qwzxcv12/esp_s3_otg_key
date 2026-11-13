@@ -12,6 +12,14 @@ static bool s_quiz_active = false;
 static char s_quiz_target = 'A';
 static char s_prev_letter = 0;
 
+// 2 Phân hệ riêng biệt trong Chế độ 9 (Chuyển đổi qua Caps Lock & Num Lock)
+typedef enum {
+    SUBMODE_PHONICS = 0, // Chế độ 1: Gõ phím đọc tên phím & học chữ cái, số, ký tự
+    SUBMODE_MATH    = 1  // Chế độ 2: Trò chơi bé tập làm toán thần tốc
+} phonics_submode_t;
+
+static phonics_submode_t s_submode = SUBMODE_PHONICS;
+
 // Trạng thái Trò chơi "Bé Tập Làm Toán Thần Tốc" (Math Genius Quiz)
 typedef enum {
     MATH_STATE_IDLE = 0,
@@ -119,6 +127,10 @@ static const char *s_spell_dict[26] = {
 };
 
 static void mode_phonics_on_enter(void) {
+    s_submode = SUBMODE_PHONICS; // Mặc định vào Chế độ Gõ phím đọc tên phím
+    s_math_active = false;
+    s_math_state = MATH_STATE_IDLE;
+    s_math_timer_ms = 0;
     s_math_score = 0;
     s_math_streak = 0;
     s_quiz_active = false;
@@ -127,20 +139,22 @@ static void mode_phonics_on_enter(void) {
     mode_demo_stop(); // Chắc chắn dừng mọi bản demo khác để tránh chồng âm thanh
 
     printf("\r\n============================================================\r\n");
-    printf(">>> [BÉ HỌC ĐÁNH VẦN CHỮ CÁI, TẬP ĐẾM SỐ & LÀM TOÁN TRÊN KHUNG VUÔNG 32 LED] <<<\r\n");
-    printf(">>> [TỰ ĐỘNG KHỞI ĐỘNG TRÒ CHƠI BÉ TẬP LÀM TOÁN THẦN TỐC (MATH GENIUS QUIZ)!] <<<\r\n");
-    printf(">>> [Giọng đọc tự nhiên: \"2 trừ 1 bằng mấy?\" | Cạnh Trái (A) - Phải (B) - Trên (+/-) - Dưới (Đáp án)] <<<\r\n");
-    printf(">>> [Phím số 0..9: Bấm đáp án | Phím Space / '?': Nghe lại câu hỏi | Phím ESC: Thoát trò chơi] <<<\r\n");
+    printf(">>> [CHẾ ĐỘ 9: BÉ HỌC CHỮ CÁI, TẬP ĐẾM & LÀM TOÁN (PHONICS & MATH)] <<<\r\n");
+    printf(">>> [CHẾ ĐỘ HIỆN TẠI]: GÕ PHÍM ĐỌC TÊN PHÍM & HỌC CHỮ CÁI <<<\r\n");
+    printf("------------------------------------------------------------\r\n");
+    printf(" - Bé gõ phím bất kỳ (A..Z, 0..10, Enter, Mũi tên...): ĐỌC TO TÊN PHÍM!\r\n");
+    printf(" - Bấm phím [NUM LOCK] (hoặc 'M' / Action): Chuyển sang TRÒ CHƠI BÉ TẬP LÀM TOÁN!\r\n");
+    printf(" - Bấm phím [CAPS LOCK]: Chuyển lại CHẾ ĐỘ GÕ PHÍM ĐỌC TÊN PHÍM!\r\n");
+    printf(" (Hai chế độ hoạt động riêng biệt 100%%, một chế độ chỉ hoạt động một lúc)\r\n");
     printf("============================================================\r\n\r\n");
     fflush(stdout);
-
-    // Chờ thông báo tên chế độ ("Chế độ 9...") phát xong (1700ms) rồi mới đọc câu hỏi toán
-    math_quiz_start_question_delayed(1700);
 }
 
 static void mode_phonics_on_exit(void) {
+    s_submode = SUBMODE_PHONICS;
     s_math_active = false;
     s_math_state = MATH_STATE_IDLE;
+    s_math_timer_ms = 0;
     s_quiz_active = false;
     s_prev_letter = 0;
 }
@@ -151,17 +165,76 @@ static bool mode_phonics_handle_key(uint8_t kc, uint8_t mod, char c) {
     if (c >= 'a' && c <= 'z') upper = c - 32;
     else if (c >= 'A' && c <= 'Z') upper = c;
 
-    // --- XỬ LÝ TRONG TRÒ CHƠI "BÉ TẬP LÀM TOÁN THẦN TỐC" (MATH GENIUS QUIZ) ---
-    if (s_math_active) {
-        // Phím ESC: Thoát khỏi trò chơi làm toán, quay về chế độ tự do
-        if (kc == 0x29) {
+    // =========================================================================
+    // 1. PHÍM CHUYỂN ĐỔI CHẾ ĐỘ: CAPS LOCK <-> NUM LOCK
+    // =========================================================================
+
+    // Phím CAPS LOCK (0x39): Chuyển sang CHẾ ĐỘ GÕ PHÍM ĐỌC TÊN PHÍM
+    if (kc == 0x39) {
+        if (s_submode != SUBMODE_PHONICS) {
+            s_submode = SUBMODE_PHONICS;
             s_math_active = false;
             s_math_state = MATH_STATE_IDLE;
-            printf("\r\n>>> [BÉ QUAY LẠI CHẾ ĐỘ TỰ DO: HỌC CHỮ CÁI & ĐẾM SỐ] <<<\r\n\r\n");
+            s_math_timer_ms = 0;
+            printf("\r\n============================================================\r\n");
+            printf(">>> [CHUYỂN SANG: CHẾ ĐỘ GÕ PHÍM ĐỌC TÊN PHÍM & HỌC CHỮ CÁI] <<<\r\n");
+            printf(">>> - Gõ A..Z : Đọc tên chữ cái & ghép vần thần kỳ!\r\n");
+            printf(">>> - Gõ 0..10: Đọc đếm số & thắp sáng đoàn tàu cầu vồng!\r\n");
+            printf(">>> - Gõ Phím chức năng / Mũi tên: Đọc to tên phím!\r\n");
+            printf(">>> (Nhấn NUM LOCK để chuyển sang Trò Chơi Bé Tập Làm Toán)\r\n");
+            printf("============================================================\r\n\r\n");
+            fflush(stdout);
             led_effects_color_burst(0, 200, 255);
+            sb_play_special_key(0x39); // Đọc to: "Phím Caps Lock"
+        } else {
+            sb_play_special_key(0x39);
+        }
+        return true;
+    }
+
+    // Phím NUM LOCK (0x53) hoặc 'M': Chuyển sang TRÒ CHƠI BÉ TẬP LÀM TOÁN
+    if (kc == 0x53 || upper == 'M') {
+        if (s_submode != SUBMODE_MATH) {
+            s_submode = SUBMODE_MATH;
+            printf("\r\n============================================================\r\n");
+            printf(">>> [CHUYỂN SANG: TRÒ CHƠI BÉ TẬP LÀM TOÁN THẦN TỐC (MATH QUIZ)] <<<\r\n");
+            printf(">>> - Loa đọc câu đố: \"A cộng/trừ B bằng mấy?\"\r\n");
+            printf(">>> - Đèn LED 4 cạnh: Trái (A) - Phải (B) - Trên (+/-) - Dưới (Đáp án)\r\n");
+            printf(">>> - Phím số 0..9: Bấm đáp án (Đọc to: \"Bằng X! Chính xác, bé giỏi quá!\")\r\n");
+            printf(">>> (Nhấn CAPS LOCK để chuyển sang Chế Độ Gõ Phím Đọc Tên Phím)\r\n");
+            printf("============================================================\r\n\r\n");
+            fflush(stdout);
+            led_effects_color_burst(255, 215, 0);
+            sb_play_special_key(0x53); // Đọc to: "Phím Num Lock"
+            math_quiz_start_question_delayed(700); // Chờ đọc xong "Phím Num Lock" rồi đọc câu đố!
+        } else {
+            // Đang ở trong chế độ làm toán: bấm Num Lock chuyển sang câu đố mới!
+            math_quiz_start_question();
+        }
+        return true;
+    }
+
+    // Phím ESC (0x29):
+    if (kc == 0x29) {
+        if (s_submode == SUBMODE_MATH) {
+            s_submode = SUBMODE_PHONICS;
+            s_math_active = false;
+            s_math_state = MATH_STATE_IDLE;
+            s_math_timer_ms = 0;
+            printf("\r\n>>> [BÉ QUAY LẠI CHẾ ĐỘ TỰ DO: GÕ PHÍM ĐỌC TÊN PHÍM] <<<\r\n\r\n");
+            fflush(stdout);
+            led_effects_color_burst(0, 200, 255);
+            sb_play_special_key(0x29); // Đọc to: "Phím Escape"
             return true;
         }
+        sb_play_special_key(0x29);
+        return true;
+    }
 
+    // =========================================================================
+    // 2. KHI ĐANG Ở TRÒ CHƠI BÉ TẬP LÀM TOÁN (SUBMODE_MATH)
+    // =========================================================================
+    if (s_submode == SUBMODE_MATH) {
         // Phím Space hoặc '?' : Phát lại câu hỏi toán cho bé nghe
         if (c == ' ' || kc == 0x2C || c == '?') {
             s_math_state = MATH_STATE_SPEAK_A;
@@ -171,18 +244,17 @@ static bool mode_phonics_handle_key(uint8_t kc, uint8_t mod, char c) {
             return true;
         }
 
-        // Phím '+' hoặc '-' hoặc '=': Bỏ qua / chuyển sang câu đố mới
+        // Phím '+' hoặc '-' hoặc '=' hoặc 'N': Chuyển sang câu đố mới
         if (c == '+' || c == '-' || c == '=' || upper == 'N') {
             math_quiz_start_question();
             return true;
         }
 
-        // Nhận diện phím số bé bấm (0..10)
+        // Nhận diện phím số bé bấm (0..9) làm đáp án
         int8_t ans = -1;
         if (c >= '0' && c <= '9') ans = (int8_t)(c - '0');
         else if (kc >= 0x59 && kc <= 0x61) ans = (int8_t)(kc - 0x59 + 1); // Numpad 1..9
         else if (kc == 0x62) ans = 0; // Numpad 0
-        else if (kc == 0x43 || (kc == 0x27 && c == ')')) ans = 10; // F10 hoặc Shift+0 = 10
 
         if (ans >= 0) {
             // Cho phép bé trả lời ngay cả khi câu hỏi đang đọc hoặc khi đang chờ bấm!
@@ -226,14 +298,13 @@ static bool mode_phonics_handle_key(uint8_t kc, uint8_t mod, char c) {
             return true;
         }
 
+        // Khi đang ở Trò chơi làm toán, các phím khác không được chạy đè âm thanh
         return true;
     }
 
-    // --- KHI CHƯA VÀO MATH QUIZ: Phím '+', '-', '=', 'M' kích hoạt TRÒ CHƠI LÀM TOÁN ---
-    if (c == '+' || c == '-' || c == '=' || upper == 'M') {
-        math_quiz_start_question();
-        return true;
-    }
+    // =========================================================================
+    // 3. KHI ĐANG Ở CHẾ ĐỘ GÕ PHÍM ĐỌC TÊN PHÍM (SUBMODE_PHONICS)
+    // =========================================================================
 
     // 1. Phím chữ cái A - Z: Phát âm ngữ âm tiếng Việt & thắp sáng vị trí chữ cái trên khung vuông
     if (upper >= 'A' && upper <= 'Z') {
@@ -333,7 +404,7 @@ static bool mode_phonics_handle_key(uint8_t kc, uint8_t mod, char c) {
 }
 
 static void mode_phonics_background_tick(uint32_t delta_ms) {
-    if (!s_math_active) return;
+    if (s_submode != SUBMODE_MATH || !s_math_active) return;
 
     // Timer nhấp nháy đèn dẫn đường
     s_math_pulse_timer += delta_ms;
@@ -422,8 +493,15 @@ static void mode_phonics_background_tick(uint32_t delta_ms) {
 }
 
 static void mode_phonics_handle_action(void) {
-    // BTN 6 (Action): Khởi động hoặc chuyển sang câu hỏi toán tiếp theo
-    math_quiz_start_question();
+    if (s_submode == SUBMODE_MATH) {
+        // Đang ở làm toán: bấm Action đổi câu đố mới
+        math_quiz_start_question();
+    } else {
+        // Đang ở gõ phím đọc tên phím: bấm Action chuyển sang Trò chơi làm toán (tương tự Num Lock)
+        s_submode = SUBMODE_MATH;
+        led_effects_color_burst(255, 215, 0);
+        math_quiz_start_question_delayed(80);
+    }
 }
 
 const toy_mode_driver_t g_mode_phonics_driver = {
