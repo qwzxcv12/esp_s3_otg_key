@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdbool.h>
+#include "esp_timer.h"
 #include "mode_interface.h"
 #include "audio_synth.h"
 #include "led_effects.h"
@@ -7,6 +8,8 @@
 static bool s_backing_beat_on = false;
 static uint32_t s_beat_acc_ms = 0;
 static uint8_t s_beat_step = 0;
+static uint16_t s_dj_bpm = 120;           // Tốc độ nhịp điệu BPM linh hoạt
+static int64_t s_last_tap_time_us = 0;   // Tap Tempo bắt nhịp tự động
 
 static void mode_drum_on_enter(void) {
     s_backing_beat_on = false;
@@ -30,16 +33,43 @@ static bool mode_drum_handle_key(uint8_t kc, uint8_t mod, char c) {
     if (c >= 'a' && c <= 'z') upper = c - 32;
     else if (c >= 'A' && c <= 'Z') upper = c;
 
-    // 0. Phím TAB hoặc F10: Bật / Tắt Nhịp Nền DJ (Backing Beat Loop 120 BPM xoay 4 cạnh)
+    // 0. Phím TAB hoặc F10: Bật / Tắt Nhịp Nền DJ (Backing Beat Loop xoay 4 cạnh)
     if (kc == 0x2B || kc == 0x43) {
         s_backing_beat_on = !s_backing_beat_on;
         s_beat_acc_ms = 0;
         s_beat_step = 0;
-        printf("\r\n>>> [DÀN TRỐNG DJ: %s NHỊP TRỐNG NỀN TỰ ĐỘNG (120 BPM - XOAY 4 CẠNH)] <<<\r\n",
-               s_backing_beat_on ? "BẬT" : "TẮT");
+        printf("\r\n>>> [DÀN TRỐNG DJ: %s NHỊP TRỐNG NỀN TỰ ĐỘNG (%u BPM - XOAY 4 CẠNH)] <<<\r\n",
+               s_backing_beat_on ? "BẬT" : "TẮT", (unsigned int)s_dj_bpm);
         audio_play_drum_pitched(DRUM_CYMBAL, 2);
         led_effects_drum_dj_beat(0, s_backing_beat_on);
         led_effects_square_spin(s_backing_beat_on, 0, 255, 180);
+        return true;
+    }
+
+    // 0.1 Phím Mũi tên Lên / Xuống: Tăng / Giảm tốc độ nhịp DJ (BPM)
+    if (kc == 0x52) { // Mũi tên Lên: Tăng tốc
+        s_dj_bpm = (s_dj_bpm < 180) ? (s_dj_bpm + 5) : 180;
+        printf("\r\n>>> [DÀN TRỐNG DJ: TĂNG TỐC ĐỘ NHỊP -> %u BPM] <<<\r\n", (unsigned int)s_dj_bpm);
+        audio_play_drum_pitched(DRUM_HIHAT, 4);
+        led_effects_square_spin(true, 0, 255, 200);
+        return true;
+    }
+    if (kc == 0x51) { // Mũi tên Xuống: Giảm tốc
+        s_dj_bpm = (s_dj_bpm > 75) ? (s_dj_bpm - 5) : 75;
+        printf("\r\n>>> [DÀN TRỐNG DJ: GIẢM TỐC ĐỘ NHỊP -> %u BPM] <<<\r\n", (unsigned int)s_dj_bpm);
+        audio_play_drum_pitched(DRUM_HIHAT, -4);
+        led_effects_square_spin(false, 255, 180, 0);
+        return true;
+    }
+
+    // 0.2 Phím Enter / Numpad Enter: Drum Roll dồn trống liên thanh bùng nổ!
+    if (c == '\r' || c == '\n' || kc == 0x28 || kc == 0x58) {
+        for (int r = 0; r < 4; r++) {
+            audio_play_drum_pitched(DRUM_SNARE, r - 2);
+        }
+        audio_play_drum_pitched(DRUM_CYMBAL, 3);
+        led_effects_drum_cymbal(3);
+        printf(" -> [DÀN TRỐNG: DRUM ROLL LIÊN THANH DỒN DẬP & NỔ TUNG CYMBAL!]\r\n");
         return true;
     }
 
@@ -143,9 +173,10 @@ static void mode_drum_background_tick(uint32_t delta_ms) {
     if (!s_backing_beat_on) return;
 
     s_beat_acc_ms += delta_ms;
-    // 120 BPM -> mỗi nốt móc đơn (1/8 note) là 250ms, chạy xoay vòng qua 4 cạnh hình vuông
-    if (s_beat_acc_ms >= 250) {
-        s_beat_acc_ms -= 250;
+    // Mỗi nốt móc đơn (1/8 note) tính theo s_dj_bpm: (60000 / s_dj_bpm) / 2 ms
+    uint32_t step_ms = (60000 / (s_dj_bpm > 0 ? s_dj_bpm : 120)) / 2;
+    if (s_beat_acc_ms >= step_ms) {
+        s_beat_acc_ms -= step_ms;
         led_effects_drum_dj_beat(s_beat_step, true);
         switch (s_beat_step & 0x07) {
             case 0: // Phách 1 (Cạnh Trên): Kick

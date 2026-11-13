@@ -6,6 +6,7 @@
 
 static uint8_t s_speed_led_level = 0;
 static uint32_t s_idle_decay_ms = 0;
+static uint16_t s_speed_high_score = 0; // Kỷ lục tốc độ cao nhất (High Score BPM)
 
 static void mode_speed_on_enter(void) {
     audio_speed_reset();
@@ -90,23 +91,43 @@ static bool mode_speed_handle_key(uint8_t kc, uint8_t mod, char c) {
     s_speed_led_level = target_leds;
     s_idle_decay_ms = 0;
 
+    // Phát hiện kỷ lục tốc độ mới (Top Speed Record)
+    bool is_new_record = false;
+    if (info.speed_bpm > s_speed_high_score && info.speed_bpm >= 120) {
+        s_speed_high_score = info.speed_bpm;
+        is_new_record = true;
+    }
+
+    // Hiệu ứng rít lốp bốc khói Drift khi ôm cua 4 góc ở tốc độ cao
+    if (info.speed_bpm >= 150) {
+        led_effects_speed_brake();
+    }
+
     if (finished) {
         if (info.speed_bpm >= 150) {
             led_effects_celebration();
         } else {
             led_effects_speedometer(s_speed_led_level, ratio);
         }
-        printf(" -> [\"%s\" | Hoàn thành vòng đua! | Tốc độ: %u BPM]\r\n",
-               info.song_name, (unsigned int)info.speed_bpm);
+        printf(" -> [\"%s\" | Hoàn thành vòng đua! | Tốc độ: %u BPM%s]\r\n",
+               info.song_name, (unsigned int)info.speed_bpm,
+               is_new_record ? " - KỶ LỤC MỚI!" : "");
     } else {
-        led_effects_speedometer(s_speed_led_level, ratio);
-        printf(" -> [\"%s\" | Nốt %u/%u (%.1f Hz) | Tốc độ: %u BPM | %s]\r\n",
-               info.song_name,
-               (unsigned int)info.note_idx,
-               (unsigned int)info.total_notes,
-               info.freq,
-               (unsigned int)info.speed_bpm,
-               audio_speed_get_timbre_name());
+        if (info.speed_bpm >= 180) {
+            led_effects_speed_nitro();
+            printf(" -> [\"%s\" | NITRO SIÊU TỐC: %u BPM | KỶ LỤC ĐỈNH CAO: %u BPM!]\r\n",
+                   info.song_name, (unsigned int)info.speed_bpm, s_speed_high_score);
+        } else {
+            led_effects_speedometer(s_speed_led_level, ratio);
+            printf(" -> [\"%s\" | Nốt %u/%u (%.1f Hz) | Tốc độ: %u BPM%s | %s]\r\n",
+                   info.song_name,
+                   (unsigned int)info.note_idx,
+                   (unsigned int)info.total_notes,
+                   info.freq,
+                   (unsigned int)info.speed_bpm,
+                   is_new_record ? " (Kỷ lục mới!)" : "",
+                   audio_speed_get_timbre_name());
+        }
     }
     return true;
 }

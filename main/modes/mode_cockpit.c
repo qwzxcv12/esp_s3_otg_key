@@ -51,6 +51,7 @@ static int64_t s_rescue_next_prompt_time = 0;
 static bool s_police_toggle = false;
 static uint8_t s_police_tick_div = 0;
 static uint32_t s_siren_active_ms = 0;
+static uint8_t s_cockpit_gear = 1; // Hộp số buồng lái (Cấp 1..4)
 
 static void mode_cockpit_on_enter(void) {
     s_rescue_mission_active = false;
@@ -153,17 +154,26 @@ static bool mode_cockpit_handle_key(uint8_t kc, uint8_t mod, char c) {
         printf(" -> [BUỒNG LÁI: PHANH XE CHÁY ĐƯỜNG ĐỎ RỰC 4 CẠNH!]\r\n");
         return true;
     }
-    // 6. 4 Phím Mũi tên: Điều hướng 4 cạnh xe cứu hỏa
-    else if (kc == 0x52) { // Arrow Up: Tăng tốc
+    // 6. 4 Phím Mũi tên: Điều hướng & Cần số buồng lái 114
+    else if (kc == 0x52) { // Arrow Up: Tăng số & Đạp ga
+        if (s_cockpit_gear < 4) s_cockpit_gear++;
         audio_cockpit_engine_start();
         led_effects_cockpit_accel();
-        printf(" -> [BÁNH LÁI: ĐẠP GA TĂNG TỐC VƯỢT GIAO LỘ!]\r\n");
+        printf(" -> [CẦN SỐ BUỒNG LÁI: VÀO SỐ %u %s - ĐẠP GA TĂNG TỐC VƯỢT GIAO LỘ!]\r\n",
+               (unsigned int)s_cockpit_gear, (s_cockpit_gear == 4) ? "(TURBO TỐC ĐỘ CAO)" : "");
         return true;
     }
-    else if (kc == 0x51) { // Arrow Down: Số lùi bíp bíp ở Cạnh Dưới & 4 góc
-        audio_cockpit_reverse();
-        led_effects_cockpit_reverse();
-        printf(" -> [BÁNH LÁI: GÀI SỐ LÙI AN TOÀN CẠNH DƯỚI (BÍP... BÍP...)]\r\n");
+    else if (kc == 0x51) { // Arrow Down: Về số / Số lùi
+        if (s_cockpit_gear > 1) {
+            s_cockpit_gear--;
+            audio_cockpit_skid();
+            led_effects_speed_brake();
+            printf(" -> [CẦN SỐ BUỒNG LÁI: VỀ SỐ THẤP HƠN -> SỐ %u]\r\n", (unsigned int)s_cockpit_gear);
+        } else {
+            audio_cockpit_reverse();
+            led_effects_cockpit_reverse();
+            printf(" -> [BÁNH LÁI: GÀI SỐ LÙI AN TOÀN CẠNH DƯỚI (BÍP... BÍP...)]\r\n");
+        }
         return true;
     }
     else if (kc == 0x50) { // Arrow Left: Xi-nhan chạy đuổi tuần tự Cạnh Trái

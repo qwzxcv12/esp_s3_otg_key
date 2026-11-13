@@ -110,10 +110,19 @@ static bool mode_mozart_handle_key(uint8_t kc, uint8_t mod, char c) {
     int64_t now_us = esp_timer_get_time();
 
     // Chống rung phím và chống bấm nhầm phím kép (< 65ms)
-    if ((now_us - s_last_key_press_us) < 65000LL) {
+    int64_t diff_us = now_us - s_last_key_press_us;
+    if (diff_us < 65000LL) {
         return true;
     }
     s_last_key_press_us = now_us;
+
+    // Đo tốc độ gõ biểu cảm (Dynamic Tempo): Allegro sôi động vs Andante êm dịu
+    const char *tempo_tag = "Moderato";
+    if (diff_us < 220000LL) {
+        tempo_tag = "Allegro (Sôi động)";
+    } else if (diff_us > 550000LL) {
+        tempo_tag = "Andante (Êm dịu)";
+    }
 
     // Nếu vừa hoàn thành bài và đang phát "Bé giỏi quá!" + hiệu ứng pháo hoa ăn mừng (1.2 giây):
     // Các phím bấm theo quán tính của bé trong 1.2s này sẽ không ăn lẹm vào nốt đầu bài tiếp theo!
@@ -147,17 +156,33 @@ static bool mode_mozart_handle_key(uint8_t kc, uint8_t mod, char c) {
         printf(" -> [XUẤT SẮC! BÉ VỪA HOÀN THÀNH TRỌN VẸN BÀI: \"%s\" (%s) - %d nốt!]\r\n",
                info.name, info.artist, (int)info.total_notes);
     } else {
-        printf(" -> [BABY MOZART: \"%s\" | Nốt %d/%d: %.1f Hz %s| Đàn %s]\r\n",
+        printf(" -> [BABY MOZART: \"%s\" | Nốt %d/%d: %.1f Hz %s| Nhịp %s | Đàn %s]\r\n",
                info.name, (int)info.note_idx, (int)info.total_notes, info.freq,
                (info.bass_freq > 20.0f) ? "+ Bass 4 Góc " : "",
+               tempo_tag,
                audio_mozart_get_timbre_name());
     }
     return true;
 }
 
+static uint32_t s_mozart_hint_timer_ms = 0;
+
 static void mode_mozart_background_tick(uint32_t delta_ms) {
-    (void)delta_ms;
     audio_mozart_autoplay_tick();
+
+    // Chế độ Follow-the-Light: Khi bé tự đánh, đèn LED ở vị trí nốt tiếp theo nhấp nháy dẫn đường
+    if (!audio_mozart_is_autoplay()) {
+        s_mozart_hint_timer_ms += delta_ms;
+        if (s_mozart_hint_timer_ms >= 500) {
+            s_mozart_hint_timer_ms = 0;
+            mozart_play_info_t info;
+            audio_mozart_get_info(&info);
+            if (info.total_notes > 0 && info.note_idx < info.total_notes) {
+                uint8_t hint_led = (uint8_t)((info.note_idx * (LED_STRIP_COUNT - 1)) / info.total_notes);
+                led_effects_note(hint_led, LED_STRIP_COUNT, 255, 215, 0);
+            }
+        }
+    }
 }
 
 static void mode_mozart_handle_action(void) {

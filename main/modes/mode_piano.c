@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdbool.h>
+#include "esp_timer.h"
 #include "mode_interface.h"
 #include "audio_synth.h"
 #include "led_effects.h"
@@ -7,6 +8,9 @@
 // Biến trạng thái nội bộ của Mode 1 (Đóng gói an toàn)
 static piano_timbre_t s_piano_timbre = TIMBRE_PIANO;
 static bool s_pentatonic_mode = false;
+static bool s_sustain_pedal = false;       // Bàn đạp ngân vang (Sustain Pedal)
+static int64_t s_last_piano_key_time = 0; // Phát hiện vuốt phím lướt sóng (Glissando)
+static uint8_t s_glissando_count = 0;
 
 // Bảng 20 nốt Ngũ Cung Đô Trưởng (C - D - E - G - A) trải dài từ C3 -> A6
 static const float s_pentatonic_freqs[20] = {
@@ -147,7 +151,19 @@ static bool mode_piano_handle_key(uint8_t kc, uint8_t mod, char c) {
 
     // 6. PHÍM ĐẶC BIỆT, 4 MŨI TÊN (THẮP SÁNG ĐÚNG 4 CẠNH) & MODIFIERS
     else if (kc == 0x2C || c == ' ') {
-        freq = 261.63f; note_name = "Space: Bàn Đạp Ngân Vang (Đồ C4)"; is_chord = true; penta_idx = 5;
+        // Bàn đạp ngân vang Sustain Pedal
+        s_sustain_pedal = !s_sustain_pedal;
+        printf(" -> [BÀN ĐẠP NGÂN VANG (SUSTAIN PEDAL): %s]\r\n", s_sustain_pedal ? "BẬT (TIẾNG NGÂN DÀI VANG DỘI)" : "TẮT (GÕ TIẾNG ĐANH GỌN)");
+        if (s_sustain_pedal) {
+            audio_play_piano_note_dur(261.63f, s_piano_timbre, 0, 700);
+            audio_play_piano_note_dur(329.63f, s_piano_timbre, 0, 700);
+            audio_play_piano_note_dur(392.00f, s_piano_timbre, 0, 800);
+            led_effects_square_side_pulse(2, 0, 255, 200);
+        } else {
+            audio_play_piano_note_dur(261.63f, s_piano_timbre, 0, 150);
+            led_effects_square_side_pulse(2, 100, 100, 100);
+        }
+        return true;
     } else if (kc >= 0x4F && kc <= 0x52) {
         // 4 phím Mũi tên kích hoạt 4 cạnh hình vuông tương ứng (Lên=0, Phải=1, Xuống=2, Trái=3)
         penta_idx = 10 + (kc - 0x4F);
@@ -181,19 +197,44 @@ static bool mode_piano_handle_key(uint8_t kc, uint8_t mod, char c) {
         note_name = s_pentatonic_names[penta_idx];
     }
 
-    audio_play_piano_note_key(freq, s_piano_timbre, kc);
+    // Phát hiện vuốt phím lướt sóng (Glissando)
+    int64_t now_us = esp_timer_get_time();
+    if (now_us - s_last_piano_key_time < 90000LL) {
+        s_glissando_count++;
+        if (s_glissando_count >= 3) {
+            led_effects_square_spin(true, 0, 220, 255);
+        }
+    } else {
+        s_glissando_count = 1;
+    }
+    s_last_piano_key_time = now_us;
+
     uint8_t led_idx = row_side * 8 + pos_in_side;
     uint8_t r = (led_idx * 29 + 40) % 255;
     uint8_t g = (255 - led_idx * 17) % 255;
     uint8_t b = (led_idx * 43 + 90) % 255;
 
-    if (is_chord) {
+    // Tự động đệm Hợp âm thông minh (Auto-Chord Companion khi giữ phím bổ trợ hoặc hợp âm)
+    bool has_mod_chord = ((mod & 0x55) != 0); // Shift, Ctrl, Alt
+    if (is_chord || has_mod_chord) {
+        uint32_t dur = s_sustain_pedal ? 850 : 420;
+        audio_play_piano_note_dur(freq, s_piano_timbre, kc, dur);
+        audio_play_piano_note_dur(freq * 1.25992f, s_piano_timbre, 0, dur); // Nốt bậc 3
+        audio_play_piano_note_dur(freq * 1.49831f, s_piano_timbre, 0, dur); // Nốt bậc 5
         led_effects_piano_chord(r, g, b);
+        printf(" -> [PIANO AUTO-CHORD: Hợp âm hòa thanh 3 nốt %.1f Hz - %.1f Hz - %.1f Hz]\r\n",
+               freq, freq * 1.25992f, freq * 1.49831f);
     } else {
+        if (s_sustain_pedal) {
+            audio_play_piano_note_dur(freq, s_piano_timbre, kc, 800);
+        } else {
+            audio_play_piano_note_key(freq, s_piano_timbre, kc);
+        }
         led_effects_piano_key(row_side, pos_in_side, (uint8_t)s_piano_timbre, r, g, b);
+        printf(" -> [PIANO: %s - %.1f Hz (Cạnh %u, Bóng %u)%s]\r\n",
+               note_name, freq, (unsigned int)row_side, (unsigned int)pos_in_side,
+               s_sustain_pedal ? " (Sustain On)" : "");
     }
-    printf(" -> [PIANO: %s - %.1f Hz (Cạnh %u, Bóng %u)]\r\n",
-           note_name, freq, (unsigned int)row_side, (unsigned int)pos_in_side);
     return true;
 }
 

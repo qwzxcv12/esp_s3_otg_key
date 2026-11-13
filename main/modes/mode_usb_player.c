@@ -47,10 +47,14 @@ static void mode_usb_player_on_enter(void) {
         printf("   - BTN 3                 : Chuyển sang chế độ tiếp theo\r\n");
         printf("  [NẾU CẮM BÀN PHÍM QUA HUB]:\r\n");
         printf("   - Phím SPACE            : Play / Pause\r\n");
-        printf("   - Mũi tên Phải / Enter  : Next Track\r\n");
+        printf("   - Mũi tên Phải / Enter  : Next Track (vòng quay LED 360°)\r\n");
         printf("   - Mũi tên Trái          : Prev Track\r\n");
         printf("   - Phím 1..9             : Nhảy nhanh tới bài 1 đến 9\r\n");
         printf("   - Phím R                : Đổi chế độ lặp (All / 1 bài / Ngẫu nhiên)\r\n");
+        printf("   - Phím S                : Bật / Tắt phát ngẫu nhiên (Shuffle)\r\n");
+        printf("   - Phím V                : Đổi kiểu Visualizer LED nháy theo nhạc\r\n");
+        printf("   - Phím M                : Tắt / Bật tiếng nhanh (Mute / Unmute)\r\n");
+        printf("   - Phím + / -            : Tăng / Giảm âm lượng\r\n");
         printf("   - Phím E                : Bật / Tắt bộ lọc Hi-Fi DSP (Subsonic HPF + Bass + Treble)\r\n");
         printf("========================================================\r\n\r\n");
 
@@ -67,9 +71,19 @@ static void mode_usb_player_on_exit(void) {
 }
 
 static void mode_usb_player_handle_action(void) {
-    printf("\r\n>>> [BTN 6: ĐỔI SANG BÀI HÁT KẾ TIẾP (NEXT TRACK)] <<<\r\n");
-    mp3_player_next();
-    led_effects_color_burst(0, 255, 255);
+    int64_t now = esp_timer_get_time();
+    int64_t diff_ms = (now - s_last_action_click_time) / 1000;
+    s_last_action_click_time = now;
+
+    if (diff_ms < 450) {
+        printf("\r\n>>> [BTN 6 (DOUBLE-CLICK): NEXT TRACK] <<<\r\n");
+        mp3_player_next();
+        led_effects_square_spin(true, 0, 220, 255);
+    } else {
+        printf("\r\n>>> [BTN 6 (CLICK): PLAY / PAUSE] <<<\r\n");
+        mp3_player_toggle_pause();
+        led_effects_color_burst(0, 255, 200);
+    }
 }
 
 static bool mode_usb_player_handle_key(uint8_t kc, uint8_t mod, char c) {
@@ -85,7 +99,7 @@ static bool mode_usb_player_handle_key(uint8_t kc, uint8_t mod, char c) {
     if (kc == 0x4F || kc == 0x28 || c == '\n' || c == '\r') {
         printf(">>> [BÀN PHÍM: NEXT TRACK] <<<\r\n");
         mp3_player_next();
-        led_effects_color_burst(0, 200, 255);
+        led_effects_square_spin(true, 0, 220, 255);
         return true;
     }
 
@@ -93,7 +107,7 @@ static bool mode_usb_player_handle_key(uint8_t kc, uint8_t mod, char c) {
     if (kc == 0x50) {
         printf(">>> [BÀN PHÍM: PREVIOUS TRACK] <<<\r\n");
         mp3_player_prev();
-        led_effects_color_burst(200, 100, 255);
+        led_effects_square_spin(false, 200, 100, 255);
         return true;
     }
 
@@ -121,7 +135,58 @@ static bool mode_usb_player_handle_key(uint8_t kc, uint8_t mod, char c) {
         return true;
     }
 
-    // 6. Phím 'e' hoặc 'E': Bật / Tắt bộ lọc Hi-Fi DSP (Subsonic HPF + Bass Boost + Vocal Clarity)
+    // 6. Phím 's' hoặc 'S': Bật / Tắt Shuffle (Phát ngẫu nhiên)
+    if (c == 's' || c == 'S') {
+        repeat_mode_t rep = mp3_player_get_repeat_mode();
+        if (rep == REPEAT_MODE_SHUFFLE) {
+            mp3_player_set_repeat_mode(REPEAT_MODE_ALL);
+            printf(">>> [BÀN PHÍM]: TẮT PHÁT NGẪU NHIÊN -> PHÁT TUẦN TỰ TOÀN BỘ <<<\r\n");
+            led_effects_color_burst(0, 255, 120);
+        } else {
+            mp3_player_set_repeat_mode(REPEAT_MODE_SHUFFLE);
+            printf(">>> [BÀN PHÍM]: BẬT PHÁT NGẪU NHIÊN (SHUFFLE MODE) <<<\r\n");
+            led_effects_square_spin(true, 255, 100, 255);
+        }
+        return true;
+    }
+
+    // 7. Phím 'v' hoặc 'V': Đổi Visualizer LED nháy theo nhạc
+    if (c == 'v' || c == 'V') {
+        led_style_t st = led_effects_next_style();
+        printf(">>> [BÀN PHÍM]: ĐỔI VISUALIZER LED -> %s <<<\r\n", led_effects_get_style_name(st));
+        audio_play_led_mode_feedback((uint8_t)st);
+        return true;
+    }
+
+    // 8. Phím 'm' hoặc 'M': Mute / Unmute nhanh
+    if (c == 'm' || c == 'M') {
+        bool muted = audio_synth_toggle_mute();
+        printf(">>> [BÀN PHÍM]: %s <<<\r\n", muted ? "TẮT TIẾNG (MUTED)" : "BẬT TIẾNG (UNMUTED)");
+        audio_play_mute_feedback(muted);
+        return true;
+    }
+
+    // 9. Phím '+' / '=': Tăng âm lượng
+    if (c == '+' || c == '=') {
+        audio_synth_volume_up();
+        float vol = audio_synth_get_volume();
+        printf(">>> [BÀN PHÍM]: TĂNG ÂM LƯỢNG -> %.0f%% <<<\r\n", vol * 100.0f);
+        audio_play_volume_tick(vol, true);
+        led_effects_volume(vol);
+        return true;
+    }
+
+    // 10. Phím '-' / '_': Giảm âm lượng
+    if (c == '-' || c == '_') {
+        audio_synth_volume_down();
+        float vol = audio_synth_get_volume();
+        printf(">>> [BÀN PHÍM]: GIẢM ÂM LƯỢNG -> %.0f%% <<<\r\n", vol * 100.0f);
+        audio_play_volume_tick(vol, false);
+        led_effects_volume(vol);
+        return true;
+    }
+
+    // 11. Phím 'e' hoặc 'E': Bật / Tắt bộ lọc Hi-Fi DSP (Subsonic HPF + Bass Boost + Vocal Clarity)
     if (c == 'e' || c == 'E') {
         bool dsp = !audio_dsp_is_enabled();
         audio_dsp_set_enabled(dsp);

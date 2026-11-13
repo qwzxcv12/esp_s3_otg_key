@@ -15,9 +15,15 @@ static const char *s_morse_digits[10] = {
     "-----", ".----", "..---", "...--", "....-", ".....", "-....", "--...", "---..", "----."
 };
 
+static char s_agent_word[16] = {0};
+static uint8_t s_agent_word_len = 0;
+
 static void mode_agent_on_enter(void) {
+    s_agent_word_len = 0;
+    s_agent_word[0] = '\0';
     printf("\r\n>>> [ĐIỆP VIÊN NHÍ & ROBOT R2-D2 TRÊN KHUNG HÌNH VUÔNG 32 LED] <<<\r\n");
-    printf(">>> [Chữ A-Z & Số 0-9: Truyền Quang Học Mã Morse Quanh 4 Cạnh | Space: Radar Xoay 360° | Phím khác: Bảng Mạch R2-D2] <<<\r\n\r\n");
+    printf(">>> [Chữ A-Z & Số 0-9: Truyền Quang Học Mã Morse Quanh 4 Cạnh | Enter: Bắn Mật Thư Toàn Bộ Từ] <<<\r\n");
+    printf(">>> [Space: Radar Xoay 360° | Phím khác: Đối thoại Robot R2-D2 líu lo] <<<\r\n\r\n");
 }
 
 static bool mode_agent_handle_key(uint8_t kc, uint8_t mod, char c) {
@@ -30,12 +36,20 @@ static bool mode_agent_handle_key(uint8_t kc, uint8_t mod, char c) {
         const char *morse = s_morse_letters[upper - 'A'];
         audio_play_morse_char(c);
         led_effects_morse_code(morse);
-        printf(" -> [ĐIỆP VIÊN: MÃ MORSE QUANG HỌC '%c' = %s (CHẠY QUANH 4 CẠNH)]\r\n", upper, morse);
+        if (s_agent_word_len < sizeof(s_agent_word) - 1) {
+            s_agent_word[s_agent_word_len++] = upper;
+            s_agent_word[s_agent_word_len] = '\0';
+        }
+        printf(" -> [ĐIỆP VIÊN: MÃ MORSE '%c' = %s | Từ hiện tại: \"%s\"]\r\n", upper, morse, s_agent_word);
     } else if (c >= '0' && c <= '9') {
         const char *morse = s_morse_digits[c - '0'];
         audio_play_morse_char(c);
         led_effects_morse_code(morse);
-        printf(" -> [ĐIỆP VIÊN: MÃ MORSE SỐ '%c' = %s (CHẠY QUANH 4 CẠNH)]\r\n", c, morse);
+        if (s_agent_word_len < sizeof(s_agent_word) - 1) {
+            s_agent_word[s_agent_word_len++] = c;
+            s_agent_word[s_agent_word_len] = '\0';
+        }
+        printf(" -> [ĐIỆP VIÊN: MÃ MORSE SỐ '%c' = %s | Chuỗi: \"%s\"]\r\n", c, morse, s_agent_word);
     } else if (c == ' ' || kc == 0x2C) {
         // Phím Space: Tia Radar Sonar xoay 360° quanh 4 cạnh khung vuông + nháy đỏ mục tiêu
         audio_play_piano_note_dur(1046.50f, TIMBRE_MUSIC_BOX, 0, 180);
@@ -43,10 +57,20 @@ static bool mode_agent_handle_key(uint8_t kc, uint8_t mod, char c) {
         led_effects_radar_sweep();
         printf(" -> [ĐIỆP VIÊN: QUÉT SÓNG RADAR 360 ĐỘ QUANH KHUNG VUÔNG... PHÁT HIỆN MỤC TIÊU!]\r\n");
     } else if (c == '\r' || c == '\n' || kc == 0x28 || kc == 0x58) {
-        // Phím Enter: Giải mã mật thư thành công!
-        audio_play_praise();
-        led_effects_celebration();
-        printf(" -> [ĐIỆP VIÊN: GIẢI MÃ MẬT THƯ THÀNH CÔNG - NHIỆM VỤ HOÀN TẤT!]\r\n");
+        // Phím Enter: Bắn truyền toàn bộ từ mật mã đã gom!
+        if (s_agent_word_len > 0) {
+            printf("\r\n======================================================\r\n");
+            printf(">>> [ĐIỆP VIÊN: BẮN TRUYỀN MẬT THƯ HOÀN CHỈNH: \"%s\"] <<<\r\n", s_agent_word);
+            printf("======================================================\r\n");
+            audio_play_praise();
+            led_effects_celebration();
+            s_agent_word_len = 0;
+            s_agent_word[0] = '\0';
+        } else {
+            audio_play_praise();
+            led_effects_celebration();
+            printf(" -> [ĐIỆP VIÊN: GIẢI MÃ MẬT THƯ THÀNH CÔNG - NHIỆM VỤ HOÀN TẤT!]\r\n");
+        }
     } else if (kc >= 0x4F && kc <= 0x52) {
         // 4 Phím Mũi Tên: Quét kiểm tra an ninh từng Cạnh Hình Vuông (Trên / Phải / Dưới / Trái)
         uint8_t side = (kc == 0x52) ? 0 : (kc == 0x4F) ? 1 : (kc == 0x51) ? 2 : 3;
@@ -54,10 +78,11 @@ static bool mode_agent_handle_key(uint8_t kc, uint8_t mod, char c) {
         led_effects_square_side_pulse(side, 0, 255, 100);
         printf(" -> [ĐIỆP VIÊN: QUÉT AN NINH CẠNH %u HÌNH VUÔNG!]\r\n", (unsigned int)side);
     } else {
-        // Bảng mạch Holo-Display 8 ô của Robot R2-D2
+        // Đối thoại Robot R2-D2: Líu lo đa âm kèm bảng mạch Holo 4 cạnh
         audio_play_robot_chirp();
+        audio_play_piano_note_dur(783.99f + (kc % 7) * 90.0f, TIMBRE_8BIT_MARIO, 0, 90);
         led_effects_r2d2_holo();
-        printf(" -> [ROBOT R2-D2: BẢNG MẠCH HOLO-DISPLAY 4 CẠNH BÍP BOOP CHIRP!]\r\n");
+        printf(" -> [ROBOT R2-D2: HỘI THOẠI HOLO-DISPLAY LÍU LO BÍP BOOP!]\r\n");
     }
     return true;
 }

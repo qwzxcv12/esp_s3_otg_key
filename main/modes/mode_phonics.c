@@ -1,9 +1,14 @@
 #include <stdio.h>
 #include <stdbool.h>
+#include <stdlib.h>
 #include "mode_interface.h"
 #include "audio_synth.h"
 #include "soundbank.h"
 #include "led_effects.h"
+
+static bool s_quiz_active = false;
+static char s_quiz_target = 'A';
+static char s_prev_letter = 0;
 
 static const char *s_spell_dict[26] = {
     "Chữ A -> A... Con Cá / Quả Cam!",
@@ -48,11 +53,36 @@ static bool mode_phonics_handle_key(uint8_t kc, uint8_t mod, char c) {
 
     // 1. Phím chữ cái A - Z: Phát âm ngữ âm tiếng Việt & thắp sáng vị trí chữ cái trên khung vuông
     if (upper >= 'A' && upper <= 'Z') {
+        // Kiểm tra câu trả lời nếu đang trong trò chơi Đố Vui Tìm Chữ
+        if (s_quiz_active) {
+            if (upper == s_quiz_target) {
+                s_quiz_active = false;
+                audio_play_praise();
+                led_effects_celebration();
+                printf("\r\n>>> [ĐỐ VUI: CHÍNH XÁC! Bé đã tìm đúng chữ cái '%c'! Hoan hô bé!] <<<\r\n\r\n", upper);
+                s_prev_letter = 0;
+                return true;
+            } else {
+                printf(" -> [ĐỐ VUI: Chưa đúng chữ '%c' rồi, bé tìm lại xem chữ '%c' ở đâu nhé!]\r\n", s_quiz_target, s_quiz_target);
+            }
+        }
+
         audio_play_phonics_letter(upper);
         led_effects_phonics_letter(upper);
 
         const char *spell_text = s_spell_dict[upper - 'A'];
-        printf(" -> [BÉ HỌC ĐÁNH VẦN: %s]\r\n", spell_text);
+
+        // Ghép vần 2 chữ cái cơ bản: Phụ âm (B, C, D, G, M, N, T, V) + Nguyên âm (A, E, O, U, I)
+        if (s_prev_letter != 0 && (upper == 'A' || upper == 'E' || upper == 'O' || upper == 'U' || upper == 'I')) {
+            printf(" -> [BÉ HỌC ĐÁNH VẦN: %s]\r\n", spell_text);
+            printf(" >>> [GHÉP VẦN THẦN KỲ]: Chữ '%c' ghép với chữ '%c' tạo thành tiếng: [ %c%c ]!\r\n",
+                   s_prev_letter, upper, s_prev_letter, upper);
+            audio_play_action_feedback();
+            s_prev_letter = 0;
+        } else {
+            printf(" -> [BÉ HỌC ĐÁNH VẦN: %s]\r\n", spell_text);
+            s_prev_letter = upper;
+        }
         return true;
     }
 
@@ -119,10 +149,15 @@ static bool mode_phonics_handle_key(uint8_t kc, uint8_t mod, char c) {
 }
 
 static void mode_phonics_handle_action(void) {
-    audio_play_praise();
-    printf("\r\n>>> [BTN 6 ACTION: KHEN NGỢI & VỖ TAY HOAN HÔ!] <<<\r\n");
+    s_quiz_active = true;
+    s_quiz_target = 'A' + (rand() % 26);
+    audio_play_phonics_letter(s_quiz_target);
+    printf("\r\n======================================================\r\n");
+    printf(">>> [MINI-GAME ĐỐ VUI]: Đố bé tìm thấy chữ cái [ %c ] ở đâu nào? <<<\r\n", s_quiz_target);
+    printf(">>> Hãy nhìn bản đồ chữ cái trên bàn phím và bấm đúng chữ nhé! <<<\r\n");
+    printf("======================================================\r\n\r\n");
     fflush(stdout);
-    led_effects_celebration();
+    led_effects_square_spin(true, 0, 200, 255);
 }
 
 const toy_mode_driver_t g_mode_phonics_driver = {

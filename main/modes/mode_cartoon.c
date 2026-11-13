@@ -9,6 +9,8 @@
 static uint8_t s_cartoon_scenario_step = 0;
 static uint16_t s_cartoon_combo = 0;
 static int64_t s_cartoon_last_key_time = 0;
+static bool s_cartoon_quiz_active = false;
+static char s_cartoon_quiz_target = '1';
 
 static void mode_cartoon_on_enter(void) {
     s_cartoon_scenario_step = 0;
@@ -44,6 +46,45 @@ static bool mode_cartoon_handle_key(uint8_t kc, uint8_t mod, char c) {
     char upper = 0;
     if (c >= 'a' && c <= 'z') upper = c - 32;
     else if (c >= 'A' && c <= 'Z') upper = c;
+
+    // Kiểm tra câu trả lời nếu đang trong trò chơi Đố Vui Âm Thanh
+    if (s_cartoon_quiz_active) {
+        if (c == s_cartoon_quiz_target) {
+            s_cartoon_quiz_active = false;
+            audio_play_cartoon_sfx(SFX_GAME_1UP);
+            led_effects_celebration();
+            printf("\r\n>>> [ĐỐ VUI HOẠT HÌNH: CHÍNH XÁC! Bé có đôi tai hoạt hình siêu đỉnh! (+200 Điểm)] <<<\r\n\r\n");
+            return true;
+        } else if ((c >= '1' && c <= '7') || (kc >= 0x59 && kc <= 0x5F)) {
+            printf(" -> [ĐỐ VUI: Chưa đúng rồi, bé lắng nghe lại và bấm thử phím khác nhé!]\r\n");
+        }
+    }
+
+    // Phím G: Kích hoạt Mini-game "Đố Vui Âm Thanh Hoạt Hình"
+    if (upper == 'G') {
+        s_cartoon_quiz_active = true;
+        static const char targets[] = {'1', '2', '3', '7'};
+        s_cartoon_quiz_target = targets[rand() % 4];
+        printf("\r\n======================================================\r\n");
+        printf(">>> [MINI-GAME ĐỐ VUI: BÉ HÃY ĐOÁN ÂM THANH NÀY LÀ GÌ?] <<<\r\n");
+        if (s_cartoon_quiz_target == '1') {
+            audio_play_cartoon_sfx(SFX_MARIO_COIN);
+            printf(">>> Gợi ý: Tiếng ăn tiền vàng leng keng trong game Mario!\r\n");
+        } else if (s_cartoon_quiz_target == '2') {
+            audio_play_cartoon_sfx(SFX_GAME_JUMP);
+            printf(">>> Gợi ý: Tiếng nhảy tưng bổng lên cao!\r\n");
+        } else if (s_cartoon_quiz_target == '3') {
+            audio_play_cartoon_sfx(SFX_GAME_POWERUP);
+            printf(">>> Gợi ý: Tiếng ăn nấm biến hình lớn lên!\r\n");
+        } else {
+            audio_play_cartoon_sfx(SFX_LASER);
+            printf(">>> Gợi ý: Tiếng súng laser chíu chíu!\r\n");
+        }
+        printf(">>> Bé hãy bấm phím số tương ứng (1, 2, 3 hoặc 7) nhé!\r\n");
+        printf("======================================================\r\n\r\n");
+        led_effects_square_spin(true, 255, 200, 0);
+        return true;
+    }
 
     // 1. Phím SPACE: VỞ KỊCH RƯỢT ĐUỔI TOM & JERRY CHẠY VÒNG QUANH KHUNG HÌNH VUÔNG
     if (c == ' ' || kc == 0x2C) {

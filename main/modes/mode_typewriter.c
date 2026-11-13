@@ -73,12 +73,14 @@ static bool mode_typewriter_handle_key(uint8_t kc, uint8_t mod, char c) {
     s_carriage_col++;
 
     if (s_carriage_col >= TYPEWRITER_MAX_COL) {
-        // Đã gõ đầy 32 LED (4 cạnh x 8 chữ) -> Tự động kéo trục giấy ngược vòng về 0!
+        // Đã gõ đầy 32 LED (4 cạnh x 8 chữ) -> Tự động kéo trục giấy ngược vòng về 0 + Lời khen thưởng!
         s_carriage_col = 0;
         audio_play_typewriter(TYPEWRITER_ENTER_BELL);
         audio_play_typewriter(TYPEWRITER_SPACE_SLIDE);
+        audio_play_praise(); // Lời khen hoàn thành trang sách
         led_effects_typewriter_return(prev_col);
-        printf(" -> [MÁY GÕ CHỮ: ĐẦY 4 DÒNG (32 CỘT) -> KENGGG! TỰ ĐỘNG KÉO TRỤC GIẤY VỀ 0!]\r\n");
+        led_effects_celebration();
+        printf(" -> [MÁY GÕ CHỮ: HOAN HÔ! BÉ ĐÃ VIẾT XONG 1 TRANG SÁCH 32 CHỮ -> KENGGG! TỰ ĐỘNG SANG TRANG!]\r\n");
         return true;
     }
 
