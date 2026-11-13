@@ -66,6 +66,7 @@ bool sb_play_cockpit_sfx(int sfx_id);
 bool sb_play_cockpit_sfx_delayed(int sfx_id, uint32_t delay_ms);
 bool sb_play_animal(char key);
 bool sb_play_letter(char c);
+bool sb_play_letter_dur(char c, uint32_t *duration_ms);
 bool sb_play_number(uint8_t num, uint32_t *duration_ms); // spoken number, returns its length
 bool sb_play_praise(void);
 bool sb_play_special_key(uint8_t kc);                   // special / navigation / modifier keys

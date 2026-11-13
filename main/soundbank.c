@@ -636,9 +636,18 @@ bool sb_play_animal(char key) {
 }
 
 bool sb_play_letter(char c) {
+    return sb_play_letter_dur(c, NULL);
+}
+
+bool sb_play_letter_dur(char c, uint32_t *duration_ms) {
     if (c >= 'a' && c <= 'z') c -= 32;
     if (c < 'A' || c > 'Z') return false;
-    return play_id((snd_id_t)(SND_LETTER_A + (c - 'A')), 1.40f, 0, false, CHOKE_SPEECH, 0, 0, 0);
+    snd_id_t id = (snd_id_t)(SND_LETTER_A + (c - 'A'));
+    if (!is_loaded(id)) return false;
+    if (duration_ms && s_snd[id].asset.sample_rate > 0) {
+        *duration_ms = (uint32_t)((uint64_t)s_snd[id].asset.num_samples * 1000u / s_snd[id].asset.sample_rate);
+    }
+    return play_id(id, 1.40f, 0, false, CHOKE_SPEECH, 0, 0, 0);
 }
 
 bool sb_play_number(uint8_t num, uint32_t *duration_ms) {

@@ -1966,6 +1966,54 @@ void led_effects_phonics_letter(char upper_letter) {
     xSemaphoreGive(s_led_mutex);
 }
 
+void led_effects_spelling_quiz_display(char target_letter, char user_guess, bool pulse_guide) {
+    if (!s_led_strip || !s_led_mutex) return;
+    touch_led_activity(true);
+    if (xSemaphoreTake(s_led_mutex, pdMS_TO_TICKS(2)) != pdTRUE) return;
+
+    // Nền mờ dịu nhẹ màu xanh biển sâu quanh 32 bóng LED
+    for (int i = 0; i < LED_STRIP_COUNT; i++) {
+        canvas_set_pixel(i, 2, 8, 20);
+    }
+
+    // 4 góc vuông điểm sáng ngọc trai nhẹ định vị khung hình vuông
+    canvas_set_pixel(0, 10, 25, 40);
+    canvas_set_pixel(8, 10, 25, 40);
+    canvas_set_pixel(16, 10, 25, 40);
+    canvas_set_pixel(24, 10, 25, 40);
+
+    // Vị trí chữ cái mục tiêu (A..Z) nhấp nháy dẫn đường
+    if (target_letter >= 'A' && target_letter <= 'Z') {
+        int idx = target_letter - 'A';
+        uint8_t center = WRAP32((idx * LED_STRIP_COUNT) / 26);
+        uint8_t r, g, b;
+        hsv_to_rgb((idx * 14) % 360, 100, 100, &r, &g, &b);
+
+        if (pulse_guide) {
+            canvas_set_pixel(center, r, g, b);
+            canvas_set_pixel(WRAP32(center + 31), r / 3, g / 3, b / 3);
+            canvas_set_pixel(WRAP32(center + 1),  r / 3, g / 3, b / 3);
+        } else {
+            canvas_set_pixel(center, r / 4, g / 4, b / 4);
+        }
+    }
+
+    // Vị trí bé vừa đoán (nếu đoán sai) hiển thị màu đỏ cam cảnh báo
+    if (user_guess >= 'A' && user_guess <= 'Z') {
+        int g_idx = user_guess - 'A';
+        uint8_t g_center = WRAP32((g_idx * LED_STRIP_COUNT) / 26);
+        if (user_guess == target_letter) {
+            canvas_set_pixel(g_center, 255, 255, 255);
+        } else {
+            canvas_set_pixel(g_center, 255, 30, 20);
+        }
+    }
+
+    s_decay_rate = 240;
+    flush_canvas_locked();
+    xSemaphoreGive(s_led_mutex);
+}
+
 void led_effects_math_quiz_display(uint8_t num_a, uint8_t op, uint8_t num_b, int8_t ans, bool pulse_guide) {
     if (!s_led_strip || !s_led_mutex) return;
     touch_led_activity(true);
