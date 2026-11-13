@@ -31,7 +31,8 @@ typedef enum {
     MATH_STATE_ANS_BANG,
     MATH_STATE_ANS_VAL,
     MATH_STATE_ANS_PRAISE,
-    MATH_STATE_CELEBRATE
+    MATH_STATE_CELEBRATE,
+    MATH_STATE_HINT_WRONG
 } math_quiz_state_t;
 
 static bool s_math_active = false;
@@ -286,13 +287,17 @@ static bool mode_phonics_handle_key(uint8_t kc, uint8_t mod, char c) {
                     printf(" -> [CHƯA ĐÚNG RỒI]: Bé bấm số %d. %d %c %d không phải bằng %d đâu!\r\n",
                            ans, s_math_a, (s_math_op == 0 ? '+' : '-'), s_math_b, ans);
                     printf(" -> [GỢI Ý]: Bé hãy đếm số bóng đèn bên Trái (Cyan) và bên Phải (Cam) nhé!\r\n");
+                    printf(" -> [TỰ ĐỘNG ĐỌC LẠI CÂU HỎI]: \"%s %s %s bằng mấy?\"\r\n",
+                           s_math_num_words[s_math_a <= 10 ? s_math_a : 0],
+                           (s_math_op == 0 ? "cộng" : "trừ"),
+                           s_math_num_words[s_math_b <= 10 ? s_math_b : 0]);
                     fflush(stdout);
 
                     uint32_t dur = 600;
                     math_audio_play(MATH_SND_HINT_WRONG, &dur);
                     led_effects_math_quiz_display(s_math_a, s_math_op, s_math_b, ans, false);
-                    s_math_state = MATH_STATE_WAIT_INPUT;
-                    s_math_timer_ms = dur + 100;
+                    s_math_state = MATH_STATE_HINT_WRONG;
+                    s_math_timer_ms = dur + 250; // Chờ đọc xong câu "Chưa đúng rồi, bé đếm lại nhé!" rồi tự động đọc lại câu hỏi!
                 }
             }
             return true;
@@ -484,6 +489,16 @@ static void mode_phonics_background_tick(uint32_t delta_ms) {
         case MATH_STATE_CELEBRATE:
             if (s_math_timer_ms == 0) {
                 math_quiz_start_question_delayed(400);
+            }
+            break;
+
+        case MATH_STATE_HINT_WRONG:
+            if (s_math_timer_ms == 0) {
+                // Sau khi nhắc nhở xong, tự động đọc lại câu hỏi từ đầu: "A op B bằng mấy?"
+                s_math_user_ans = -1;
+                led_effects_math_quiz_display(s_math_a, s_math_op, s_math_b, -1, true);
+                s_math_state = MATH_STATE_SPEAK_A;
+                s_math_timer_ms = 0;
             }
             break;
 
