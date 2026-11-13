@@ -19,6 +19,7 @@ idf_component_register(SRCS "main.c"
                             "modes/mode_agent.c"
                             "modes/mode_cockpit.c"
                             "modes/mode_phonics.c"
+                            "modes/math_audio_data.c"
                             "modes/mode_usb_player.c"
                     INCLUDE_DIRS "." "modes"
                     REQUIRES usb_host_hid usb_host_msc fatfs vfs esp_driver_gpio esp_driver_i2s esp_driver_rmt led_strip esp_psram esp_timer littlefs esp_driver_i2c esp_driver_uart esp_wifi esp_event nvs_flash esp_netif esp_http_server app_update mdns lwip)

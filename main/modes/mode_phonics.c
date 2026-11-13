@@ -5,6 +5,7 @@
 #include "audio_synth.h"
 #include "soundbank.h"
 #include "led_effects.h"
+#include "math_audio_data.h"
 
 static bool s_quiz_active = false;
 static char s_quiz_target = 'A';
@@ -34,6 +35,10 @@ static bool s_math_pulse_toggle = false;
 static uint16_t s_math_score = 0;
 static uint8_t s_math_streak = 0;
 
+static const char *s_math_num_words[11] = {
+    "Không", "Một", "Hai", "Ba", "Bốn", "Năm", "Sáu", "Bảy", "Tám", "Chín", "Mười"
+};
+
 static void math_quiz_start_question(void) {
     s_math_active = true;
     s_quiz_active = false; // Tắt quiz chữ nếu đang mở
@@ -53,18 +58,22 @@ static void math_quiz_start_question(void) {
 
     s_math_user_ans = -1;
     s_math_state = MATH_STATE_SPEAK_A;
-    s_math_timer_ms = 100;
+    s_math_timer_ms = 80;
 
     printf("\r\n============================================================\r\n");
     printf(">>> [TRÒ CHƠI: BÉ TẬP LÀM TOÁN THẦN TỐC - CÂU ĐỐ SỐ %d] <<<\r\n", (s_math_score / 10) + 1);
     printf("           >>> [   %d  %c  %d  =  ?   ] <<<\r\n",
            s_math_a, (s_math_op == 0 ? '+' : '-'), s_math_b);
     printf("------------------------------------------------------------\r\n");
-    printf(" - Cạnh Trái (Cyan) : %d bóng đèn số hạng thứ nhất\r\n", s_math_a);
-    printf(" - Cạnh Phải (Cam)  : %d bóng đèn số hạng thứ hai\r\n", s_math_b);
+    printf(" - Giọng đọc        : \"%s %s %s bằng mấy?\"\r\n",
+           s_math_num_words[s_math_a <= 10 ? s_math_a : 0],
+           (s_math_op == 0 ? "cộng" : "trừ"),
+           s_math_num_words[s_math_b <= 10 ? s_math_b : 0]);
+    printf(" - Cạnh Trái (Cyan) : %d bóng đèn số thứ nhất\r\n", s_math_a);
+    printf(" - Cạnh Phải (Cam)  : %d bóng đèn số thứ hai\r\n", s_math_b);
     printf(" - Cạnh Trên        : Dấu [%c] (%s)\r\n",
            (s_math_op == 0 ? '+' : '-'), (s_math_op == 0 ? "Vàng - Phép Cộng" : "Đỏ - Phép Trừ"));
-    printf(" - Cạnh Dưới        : Chờ bé bấm phím số kết quả (0..10)!\r\n");
+    printf(" - Cạnh Dưới        : Chờ bé bấm phím số đáp án (0..10)!\r\n");
     printf(" - Phím SPACE / '?' : Nghe lại câu hỏi | Phím ESC: Thoát trò chơi\r\n");
     printf("============================================================\r\n\r\n");
     fflush(stdout);
@@ -102,16 +111,19 @@ static const char *s_spell_dict[26] = {
 };
 
 static void mode_phonics_on_enter(void) {
-    s_math_active = false;
-    s_math_state = MATH_STATE_IDLE;
+    s_math_score = 0;
+    s_math_streak = 0;
     s_quiz_active = false;
     s_prev_letter = 0;
 
     printf("\r\n>>> [BÉ HỌC ĐÁNH VẦN CHỮ CÁI, TẬP ĐẾM SỐ & LÀM TOÁN TRÊN KHUNG VUÔNG 32 LED] <<<\r\n");
-    printf(">>> [Phím A..Z: Bản đồ chữ cái cầu vồng quanh 4 cạnh | Phím 0..10: Đoàn tàu đếm số cầu vồng] <<<\r\n");
-    printf(">>> [4 Phím Mũi Tên: Học 4 hướng (Lên/Phải/Xuống/Trái) sáng đúng 4 cạnh hình vuông!] <<<\r\n");
-    printf(">>> [Phím 'M' hoặc '+', '-', '=': KÍCH HOẠT TRÒ CHƠI BÉ TẬP LÀM TOÁN THẦN TỐC (MATH QUIZ)!] <<<\r\n");
-    printf(">>> [BTN 6 (Action): Đố vui tìm chữ cái hoặc chuyển câu hỏi toán] <<<\r\n\r\n");
+    printf(">>> [TỰ ĐỘNG KHỞI ĐỘNG TRÒ CHƠI BÉ TẬP LÀM TOÁN THẦN TỐC (MATH GENIUS QUIZ)!] <<<\r\n");
+    printf(">>> [Giọng đọc tự nhiên: \"5 trừ 4 bằng mấy?\" | Cạnh Trái (A) - Phải (B) - Trên (+/-) - Dưới (Đáp án)] <<<\r\n");
+    printf(">>> [Phím số 0..10: Bấm đáp án | BTN 6 / Space / '?': Đổi câu hỏi / Nghe lại câu hỏi] <<<\r\n");
+    printf(">>> [Phím ESC: Chuyển sang chế độ tự do gõ chữ cái A..Z] <<<\r\n\r\n");
+
+    // Khởi động câu đố toán ngay khi vào Mode 9!
+    math_quiz_start_question();
 }
 
 static bool mode_phonics_handle_key(uint8_t kc, uint8_t mod, char c) {
@@ -303,38 +315,37 @@ static void mode_phonics_background_tick(uint32_t delta_ms) {
         s_math_timer_ms = 0;
     }
 
+    uint32_t dur = 300;
     switch (s_math_state) {
         case MATH_STATE_SPEAK_A:
             if (s_math_timer_ms == 0) {
-                uint32_t dur = 550;
-                sb_play_number(s_math_a, &dur);
+                math_audio_play((math_snd_id_t)(MATH_SND_NUM_0 + s_math_a), &dur);
                 s_math_state = MATH_STATE_SPEAK_OP;
-                s_math_timer_ms = dur + 120;
+                s_math_timer_ms = dur + 60;
             }
             break;
 
         case MATH_STATE_SPEAK_OP:
             if (s_math_timer_ms == 0) {
-                sb_play_symbol(s_math_op == 0 ? '+' : '-');
+                math_audio_play(s_math_op == 0 ? MATH_SND_PLUS : MATH_SND_MINUS, &dur);
                 s_math_state = MATH_STATE_SPEAK_B;
-                s_math_timer_ms = 720;
+                s_math_timer_ms = dur + 60;
             }
             break;
 
         case MATH_STATE_SPEAK_B:
             if (s_math_timer_ms == 0) {
-                uint32_t dur = 550;
-                sb_play_number(s_math_b, &dur);
+                math_audio_play((math_snd_id_t)(MATH_SND_NUM_0 + s_math_b), &dur);
                 s_math_state = MATH_STATE_SPEAK_EQUAL;
-                s_math_timer_ms = dur + 120;
+                s_math_timer_ms = dur + 60;
             }
             break;
 
         case MATH_STATE_SPEAK_EQUAL:
             if (s_math_timer_ms == 0) {
-                sb_play_symbol('=');
+                math_audio_play(MATH_SND_ASK_EQUALS, &dur);
                 s_math_state = MATH_STATE_WAIT_INPUT;
-                s_math_timer_ms = 700;
+                s_math_timer_ms = dur + 80;
             }
             break;
 
@@ -354,22 +365,8 @@ static void mode_phonics_background_tick(uint32_t delta_ms) {
 }
 
 static void mode_phonics_handle_action(void) {
-    if (s_math_active) {
-        // Đang làm toán: Đổi sang câu hỏi toán tiếp theo
-        math_quiz_start_question();
-        return;
-    }
-
-    s_quiz_active = true;
-    s_quiz_target = 'A' + (rand() % 26);
-    audio_play_phonics_letter(s_quiz_target);
-    printf("\r\n======================================================\r\n");
-    printf(">>> [MINI-GAME ĐỐ VUI]: Đố bé tìm thấy chữ cái [ %c ] ở đâu nào? <<<\r\n", s_quiz_target);
-    printf(">>> Hãy nhìn bản đồ chữ cái trên bàn phím và bấm đúng chữ nhé! <<<\r\n");
-    printf(">>> (Mẹo: Nhấn phím 'M' hoặc '+', '-' để bật Đố Làm Toán Thần Tốc) <<<\r\n");
-    printf("======================================================\r\n\r\n");
-    fflush(stdout);
-    led_effects_square_spin(true, 0, 200, 255);
+    // BTN 6 (Action): Khởi động hoặc chuyển sang câu hỏi toán tiếp theo
+    math_quiz_start_question();
 }
 
 const toy_mode_driver_t g_mode_phonics_driver = {
