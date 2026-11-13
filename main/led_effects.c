@@ -99,6 +99,11 @@ static uint8_t s_tw_col = 0;
 static uint8_t s_tw_max_col = 32;
 static uint8_t s_tw_head_flash = 0;
 
+// Biến Lớp phủ OSD Hiển thị Âm lượng (Non-destructive Volume HUD Overlay)
+static volatile bool     s_vol_hud_active = false;
+static volatile float    s_vol_hud_level = 0.5f;
+static volatile int32_t  s_vol_hud_timer_ms = 0;
+
 static uint32_t s_idle_step = 0;
 static uint32_t s_idle_elapsed_ms = 0;
 static led_style_t s_current_style = LED_STYLE_REACTIVE;
@@ -213,14 +218,105 @@ static void flush_canvas_locked(void) {
         led_strip_clear(s_led_strip);
         return;
     }
-    // Chốt chặn 2: Đang ở chế độ Cầu vồng hoặc Đèn ngủ thở -> Không cho phím bấm đè lên gây giật chớp
-    if (s_current_style == LED_STYLE_RAINBOW || s_current_style == LED_STYLE_BREATHING) {
+    // Chốt chặn 2: Đang ở chế độ Cầu vồng hoặc Đèn ngủ thở -> Nếu không có Volume HUD thì không cho đè
+    if ((s_current_style == LED_STYLE_RAINBOW || s_current_style == LED_STYLE_BREATHING) && !s_vol_hud_active) {
         return;
     }
+
+    uint8_t out_r[LED_STRIP_COUNT];
+    uint8_t out_g[LED_STRIP_COUNT];
+    uint8_t out_b[LED_STRIP_COUNT];
+
+    // Lấy dữ liệu nền hiện tại từ Canvas
     for (int i = 0; i < LED_STRIP_COUNT; i++) {
-        uint8_t r = s_canvas_r[i];
-        uint8_t g = s_canvas_g[i];
-        uint8_t b = s_canvas_b[i];
+        out_r[i] = s_canvas_r[i];
+        out_g[i] = s_canvas_g[i];
+        out_b[i] = s_canvas_b[i];
+    }
+
+    // Nếu Volume HUD đang được kích hoạt: Hòa trộn lớp phủ OSD đối xứng 4 cạnh x 8 LED
+    if (s_vol_hud_active && s_vol_hud_timer_ms > 0) {
+        // Hệ số hiển thị alpha (1.0 trong 900ms đầu, tuyến tính về 0 trong 300ms cuối)
+        float alpha = 1.0f;
+        if (s_vol_hud_timer_ms < 300) {
+            alpha = (float)s_vol_hud_timer_ms / 300.0f;
+        }
+        if (alpha > 1.0f) alpha = 1.0f;
+        if (alpha < 0.0f) alpha = 0.0f;
+
+        // Tính số LED sáng trên mỗi cạnh (Khung hình vuông gồm 4 cạnh x 8 LED)
+        // Dải phân giải 8 nấc (mỗi nấc 12.5%):
+        int n_leds = (int)(s_vol_hud_level * 8.0f + 0.5f);
+        if (s_vol_hud_level > 0.01f && n_leds == 0) n_leds = 1;
+        if (n_leds > 8) n_leds = 8;
+
+        // Hệ số làm dịu nền (Dimming background): Giảm nền xuống 40% để thanh âm lượng nổi bật rõ nét
+        float dim_bg = 1.0f - (0.60f * alpha);
+
+        // Duyệt qua cả 4 cạnh của khung hình vuông (Cạnh 0: 0..7, Cạnh 1: 8..15, Cạnh 2: 16..23, Cạnh 3: 24..31)
+        for (int side = 0; side < 4; side++) {
+            int base = side * 8;
+            for (int k = 0; k < 8; k++) {
+                int idx = base + k;
+                uint8_t bg_r = (uint8_t)(out_r[idx] * dim_bg);
+                uint8_t bg_g = (uint8_t)(out_g[idx] * dim_bg);
+                uint8_t bg_b = (uint8_t)(out_b[idx] * dim_bg);
+
+                if (s_vol_hud_level <= 0.01f) {
+                    // Trạng thái Tắt tiếng (MUTE / 0%): 4 góc chớp đỏ báo hiệu, các LED còn lại mờ
+                    if (k == 0) {
+                        uint8_t hud_r = 180, hud_g = 20, hud_b = 20;
+                        out_r[idx] = (uint8_t)(hud_r * alpha + bg_r * (1.0f - alpha));
+                        out_g[idx] = (uint8_t)(hud_g * alpha + bg_g * (1.0f - alpha));
+                        out_b[idx] = (uint8_t)(hud_b * alpha + bg_b * (1.0f - alpha));
+                    } else {
+                        // Vạch đo mờ định vị khung thang đo
+                        uint8_t tr_r = 8, tr_g = 12, tr_b = 18;
+                        out_r[idx] = (uint8_t)(tr_r * alpha + bg_r * (1.0f - alpha * 0.3f));
+                        out_g[idx] = (uint8_t)(tr_g * alpha + bg_g * (1.0f - alpha * 0.3f));
+                        out_b[idx] = (uint8_t)(tr_b * alpha + bg_g * (1.0f - alpha * 0.3f));
+                    }
+                } else if (k < n_leds) {
+                    // LED thuộc thanh đo âm lượng
+                    uint8_t hud_r = 0, hud_g = 0, hud_b = 0;
+                    if (k < 4) {
+                        // Nấc 1..4 (≤ 50%): Xanh ngọc Cyan tươi sáng, êm dịu
+                        hud_r = 0;   hud_g = 220; hud_b = 160;
+                    } else if (k < 6) {
+                        // Nấc 5..6 (50% - 75%): Vàng hổ phách ấm áp
+                        hud_r = 255; hud_g = 190; hud_b = 0;
+                    } else {
+                        // Nấc 7..8 (75% - 100%): Đỏ cam cảnh báo âm lượng lớn
+                        hud_r = 255; hud_g = 45;  hud_b = 20;
+                    }
+
+                    // Điểm nhấn kim chỉ mức (Peak Needle): LED đỉnh pha sáng trắng rõ nét
+                    if (k == n_leds - 1) {
+                        hud_r = (uint8_t)((hud_r + 255) / 2);
+                        hud_g = (uint8_t)((hud_g + 255) / 2);
+                        hud_b = (uint8_t)((hud_b + 255) / 2);
+                    }
+
+                    // Hòa trộn sắc nét lớp HUD đè lên nền
+                    out_r[idx] = (uint8_t)(hud_r * alpha + bg_r * (1.0f - alpha));
+                    out_g[idx] = (uint8_t)(hud_g * alpha + bg_g * (1.0f - alpha));
+                    out_b[idx] = (uint8_t)(hud_b * alpha + bg_b * (1.0f - alpha));
+                } else {
+                    // LED chưa đạt tới trên cạnh: Vạch thang đo mờ dẫn hướng
+                    uint8_t tr_r = 8, tr_g = 12, tr_b = 18;
+                    out_r[idx] = (uint8_t)(tr_r * alpha + bg_r * (1.0f - alpha * 0.3f));
+                    out_g[idx] = (uint8_t)(tr_g * alpha + bg_g * (1.0f - alpha * 0.3f));
+                    out_b[idx] = (uint8_t)(tr_b * alpha + bg_g * (1.0f - alpha * 0.3f));
+                }
+            }
+        }
+    }
+
+    // Áp dụng Master Brightness và gửi dữ liệu ra LED Strip phần cứng
+    for (int i = 0; i < LED_STRIP_COUNT; i++) {
+        uint8_t r = out_r[i];
+        uint8_t g = out_g[i];
+        uint8_t b = out_b[i];
         if (s_master_brightness < 255) {
             r = (uint8_t)(((uint16_t)r * s_master_brightness) >> 8);
             g = (uint8_t)(((uint16_t)g * s_master_brightness) >> 8);
@@ -373,6 +469,8 @@ void led_effects_clear(void) {
     s_mozart_autoplay = false;
     s_mozart_progress_leds = 0;
     s_race_active_ms = 0;
+    s_vol_hud_active = false;
+    s_vol_hud_timer_ms = 0;
     memset(s_ripples, 0, sizeof(s_ripples));
     if (xSemaphoreTake(s_led_mutex, pdMS_TO_TICKS(5)) != pdTRUE) return;
     canvas_clear_mem();
@@ -577,6 +675,15 @@ void led_effects_tick(uint32_t delta_ms) {
     if (!s_led_strip || !s_led_mutex) return;
     if (s_current_style == LED_STYLE_OFF) return;
 
+    // Cập nhật bộ đếm thời gian hiển thị lớp phủ OSD Volume HUD
+    if (s_vol_hud_timer_ms > 0) {
+        s_vol_hud_timer_ms -= (int32_t)delta_ms;
+        if (s_vol_hud_timer_ms <= 0) {
+            s_vol_hud_timer_ms = 0;
+            s_vol_hud_active = false;
+        }
+    }
+
     // Khi đang ngủ (độ sáng = 0), xóa dải LED nếu còn dư và dừng tính toán để tiết kiệm CPU tối đa
     if (s_master_brightness == 0) {
         if (s_canvas_active) {
@@ -591,25 +698,29 @@ void led_effects_tick(uint32_t delta_ms) {
 
     // 1. Xử lý các chế độ đèn nền chủ động (Ambient Styles từ BTN 4)
     if (s_current_style == LED_STYLE_RAINBOW) {
-        if (xSemaphoreTake(s_led_mutex, pdMS_TO_TICKS(3)) == pdTRUE) {
-            s_style_step = (s_style_step + 4) % 360;
-            for (int i = 0; i < LED_STRIP_COUNT; i++) {
-                uint8_t r, g, b;
-                hsv_to_rgb((s_style_step + (i * 360) / LED_STRIP_COUNT) % 360, 100, 80, &r, &g, &b);
-                if (s_master_brightness < 255) {
-                    r = (uint8_t)(((uint16_t)r * s_master_brightness) >> 8);
-                    g = (uint8_t)(((uint16_t)g * s_master_brightness) >> 8);
-                    b = (uint8_t)(((uint16_t)b * s_master_brightness) >> 8);
+        if (!s_vol_hud_active) {
+            if (xSemaphoreTake(s_led_mutex, pdMS_TO_TICKS(3)) == pdTRUE) {
+                s_style_step = (s_style_step + 4) % 360;
+                for (int i = 0; i < LED_STRIP_COUNT; i++) {
+                    uint8_t r, g, b;
+                    hsv_to_rgb((s_style_step + (i * 360) / LED_STRIP_COUNT) % 360, 100, 80, &r, &g, &b);
+                    if (s_master_brightness < 255) {
+                        r = (uint8_t)(((uint16_t)r * s_master_brightness) >> 8);
+                        g = (uint8_t)(((uint16_t)g * s_master_brightness) >> 8);
+                        b = (uint8_t)(((uint16_t)b * s_master_brightness) >> 8);
+                    }
+                    led_strip_set_pixel(s_led_strip, i, r, g, b);
                 }
-                led_strip_set_pixel(s_led_strip, i, r, g, b);
+                led_strip_refresh(s_led_strip);
+                xSemaphoreGive(s_led_mutex);
             }
-            led_strip_refresh(s_led_strip);
-            xSemaphoreGive(s_led_mutex);
+            return;
         }
-        return;
     } else if (s_current_style == LED_STYLE_BREATHING) {
-        led_effects_idle_step();
-        return;
+        if (!s_vol_hud_active) {
+            led_effects_idle_step();
+            return;
+        }
     } else if (s_current_style == LED_STYLE_STARRY) {
         // Không return: để engine bên dưới tiếp tục render sóng lan & mờ dần của các tia sao
         s_style_step++;
@@ -618,10 +729,12 @@ void led_effects_tick(uint32_t delta_ms) {
         }
     }
 
-    // Nếu đang ở trạng thái Standby và không chạy animation đặc biệt: chạy hiệu ứng thở đối xứng êm dịu
+    // Nếu đang ở trạng thái Standby và không chạy animation đặc biệt: chạy hiệu ứng thở đối xứng êm dịu (chỉ khi không có Volume HUD)
     if (s_standby_mode && s_anim_type == LED_ANIM_NONE) {
-        led_effects_idle_step();
-        return;
+        if (!s_vol_hud_active) {
+            led_effects_idle_step();
+            return;
+        }
     }
 
     // 2. Xử lý đếm số đồng bộ theo thời gian thực (Mode 9 Counting)
@@ -656,7 +769,7 @@ void led_effects_tick(uint32_t delta_ms) {
                        (s_anim_type != LED_ANIM_NONE) ||
                        s_dj_beat_active || s_mozart_autoplay ||
                        (s_mozart_bass_glow > 0) || (s_race_active_ms > 0) ||
-                       s_tw_page_active;
+                       s_tw_page_active || s_vol_hud_active;
 
     if (need_render) {
         if (xSemaphoreTake(s_led_mutex, pdMS_TO_TICKS(4)) == pdTRUE) {
@@ -1099,16 +1212,17 @@ void led_effects_tick(uint32_t delta_ms) {
             xSemaphoreGive(s_led_mutex);
 
             if (max_brightness == 0 && !has_active_ripples && s_anim_type == LED_ANIM_NONE &&
-                !s_dj_beat_active && !s_mozart_autoplay && s_race_active_ms == 0 && !s_tw_page_active) {
+                !s_dj_beat_active && !s_mozart_autoplay && s_race_active_ms == 0 && !s_tw_page_active &&
+                !s_vol_hud_active) {
                 s_canvas_active = false;
             }
         }
         return;
     }
 
-    // 4. Khi không gõ phím sau 4.5 giây -> Đèn thở đối xứng 4 cạnh êm dịu
+    // 4. Khi không gõ phím sau 4.5 giây -> Đèn thở đối xứng 4 cạnh êm dịu (chỉ khi không có Volume HUD)
     s_idle_elapsed_ms += delta_ms;
-    if (s_idle_elapsed_ms >= 4500) {
+    if (s_idle_elapsed_ms >= 4500 && !s_vol_hud_active) {
         led_effects_idle_step();
     }
 }
@@ -1370,25 +1484,22 @@ void led_effects_carriage(uint8_t col, uint8_t max_col) {
     led_effects_typewriter_key(col, max_col, false);
 }
 
-// Hiển thị âm lượng (Volume) đối xứng trên cả 4 cạnh hình vuông
+// Hiển thị âm lượng (Volume HUD) đối xứng trên cả 4 cạnh hình vuông dưới dạng OSD Overlay không phá nền
 void led_effects_volume(float volume) {
     if (!s_led_strip || !s_led_mutex) return;
-    touch_led_activity(true);
-    if (xSemaphoreTake(s_led_mutex, pdMS_TO_TICKS(2)) != pdTRUE) return;
+    if (xSemaphoreTake(s_led_mutex, pdMS_TO_TICKS(5)) != pdTRUE) return;
 
-    canvas_clear_mem();
-    int active_leds = (int)(volume * LED_STRIP_COUNT + 0.5f);
-    if (active_leds > LED_STRIP_COUNT) active_leds = LED_STRIP_COUNT;
+    if (volume < 0.0f) volume = 0.0f;
+    if (volume > 1.0f) volume = 1.0f;
 
-    for (int i = 0; i < active_leds; i++) {
-        float ratio = (float)i / (float)LED_STRIP_COUNT;
-        uint8_t r = 0, g = 0, b = 0;
-        if (ratio < 0.60f)      { r = 0;   g = 200; b = 80; }
-        else if (ratio < 0.85f) { r = 240; g = 180; b = 0;  }
-        else                    { r = 255; g = 30;  b = 30; }
-        canvas_set_pixel(i, r, g, b);
-    }
-    s_decay_rate = 235;
+    s_vol_hud_level = volume;
+    s_vol_hud_timer_ms = 1200; // Giữ sáng rõ trong 900ms, mờ dần biến mất trong 300ms cuối
+    s_vol_hud_active = true;
+    s_canvas_active = true;
+    s_idle_elapsed_ms = 0;     // Hoãn đèn thở idle khi người dùng vừa chỉnh âm lượng
+
+    // Không gọi canvas_clear_mem() -> Bảo toàn 100% hiệu ứng đèn của chế độ đang chạy
+    // Không gọi touch_led_activity(true) -> Không hủy hoạt cảnh hay trạng thái phím
     flush_canvas_locked();
     xSemaphoreGive(s_led_mutex);
 }
