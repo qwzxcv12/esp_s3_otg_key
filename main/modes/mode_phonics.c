@@ -24,8 +24,10 @@ typedef enum {
     SPELL_STATE_SPEAK_LETTER,  // "Chữ [X]" (từ soundbank qua sb_play_letter_dur)
     SPELL_STATE_SPEAK_OUTRO,   // "ở đâu nào?"
     SPELL_STATE_WAIT_INPUT,    // Chờ bé bấm phím chữ cái
-    SPELL_STATE_CORRECT_PRAISE,// "Chính xác! Bé giỏi quá!"
-    SPELL_STATE_HINT_WRONG     // "Chưa đúng rồi, bé tìm lại nhé!" -> tự động đọc lại câu hỏi
+    SPELL_STATE_SAY_GUESS,     // Phát âm chữ bé vừa bấm ("Chữ [Y]") trước, rồi mới tính tiếp đúng hay sai
+    SPELL_STATE_PLAY_WORD,     // Nếu đúng: Phát âm tên con vật / đồ vật ("Con bò", "Con cò"...)
+    SPELL_STATE_CORRECT_PRAISE,// Sau đó khen: "Chính xác! Bé giỏi quá!"
+    SPELL_STATE_HINT_WRONG     // Nếu sai: "Chưa đúng rồi, bé tìm lại nhé!" -> tự động đọc lại câu hỏi
 } spelling_quiz_state_t;
 
 static spelling_quiz_state_t s_spell_state = SPELL_STATE_IDLE;
@@ -167,12 +169,15 @@ static void spelling_quiz_start_question_delayed(uint32_t delay_ms) {
     s_spell_state = SPELL_STATE_SPEAK_INTRO;
     s_spell_timer_ms = delay_ms;
 
+    const char *word_name = math_audio_get_word_text(s_spell_target);
+
     printf("\r\n============================================================\r\n");
     printf(">>> [TRÒ CHƠI: BÉ TẬP ĐÁNH VẦN & TÌM CHỮ CÁI - CÂU ĐỐ SỐ %d] <<<\r\n", (s_spell_score / 10) + 1);
     printf("           >>> [   ĐỐ BÉ TÌM THẤY CHỮ '%c'   ] <<<\r\n", s_spell_target);
     printf("------------------------------------------------------------\r\n");
     printf(" - Giọng đọc        : \"Đố bé tìm thấy Chữ %c ở đâu nào?\"\r\n", s_spell_target);
-    printf(" - Từ gợi ý         : %s\r\n", s_spell_dict[s_spell_target - 'A']);
+    printf(" - Con vật / Đồ vật : \"%s\"!\r\n", word_name);
+    printf(" - Gợi ý thêm       : %s\r\n", s_spell_dict[s_spell_target - 'A']);
     printf(" - Đèn LED          : Nhấp nháy dẫn đường tại vị trí chữ '%c' trên khung 32 LED!\r\n", s_spell_target);
     printf(" - Phím SPACE / '?' : Nghe lại câu hỏi | Phím ESC / CAPS LOCK: Thoát trò chơi\r\n");
     printf("============================================================\r\n\r\n");
@@ -251,7 +256,7 @@ static bool mode_phonics_handle_key(uint8_t kc, uint8_t mod, char c) {
             printf(">>> [CHUYỂN SANG: TRÒ CHƠI BÉ TẬP ĐÁNH VẦN & TÌM CHỮ CÁI] <<<\r\n");
             printf(">>> - Loa đọc câu đố: \"Đố bé tìm thấy Chữ [X] ở đâu nào?\"\r\n");
             printf(">>> - Đèn LED: Nhấp nháy dẫn đường tại vị trí chữ cái trên khung 32 LED!\r\n");
-            printf(">>> - Phím chữ A..Z: Bấm để trả lời! (Nếu bấm sai, tự động đọc lại câu hỏi)\r\n");
+            printf(">>> - Phím chữ A..Z: Bấm để trả lời! (Loa phát âm chữ vừa bấm rồi báo đúng/sai)\r\n");
             printf(">>> (Nhấn CAPS LOCK hoặc ESC để quay lại Chế Độ Gõ Phím Mặc Định)\r\n");
             printf("============================================================\r\n\r\n");
             fflush(stdout);
@@ -342,40 +347,25 @@ static bool mode_phonics_handle_key(uint8_t kc, uint8_t mod, char c) {
         // Bé bấm phím chữ cái (A..Z) để trả lời
         if (upper >= 'A' && upper <= 'Z') {
             // Cho phép bé trả lời ngay cả khi câu hỏi đang đọc hoặc khi đang chờ bấm
-            if (s_spell_state != SPELL_STATE_CORRECT_PRAISE && s_spell_state != SPELL_STATE_HINT_WRONG) {
+            // Chỉ chặn khi đang trong chuỗi phát âm kết quả khen thưởng
+            if (s_spell_state != SPELL_STATE_SAY_GUESS &&
+                s_spell_state != SPELL_STATE_PLAY_WORD &&
+                s_spell_state != SPELL_STATE_CORRECT_PRAISE &&
+                s_spell_state != SPELL_STATE_HINT_WRONG) {
+
                 s_spell_user_guess = upper;
-                if (upper == s_spell_target) {
-                    s_spell_score += 10;
-                    s_spell_streak++;
-                    printf("\r\n============================================================\r\n");
-                    printf(">>> [CHÍNH XÁC! BÉ GIỎI QUÁ!]: Chữ '%c'!\r\n", upper);
-                    printf(">>> [TỪ GỢI Ý]: %s\r\n", s_spell_dict[upper - 'A']);
-                    printf(">>> [ĐIỂM SỐ: %d ĐIỂM | CHUỖI ĐÚNG LIÊN TIẾP (STREAK): %d] <<<\r\n",
-                           s_spell_score, s_spell_streak);
-                    printf("============================================================\r\n\r\n");
-                    fflush(stdout);
 
-                    led_effects_celebration();
-                    led_effects_spelling_quiz_display(s_spell_target, upper, false);
+                // 1. PHÁT ÂM NGAY LẬP TỨC CHỮ BÉ VỪA BẤM (Ví dụ: "Chữ B", "Chữ C"...)
+                uint32_t dur = 600;
+                sb_play_letter_dur(upper, &dur);
+                led_effects_spelling_quiz_display(s_spell_target, upper, false);
 
-                    uint32_t dur = 1400;
-                    math_audio_play(MATH_SND_PRAISE_CORRECT, &dur);
-                    s_spell_state = SPELL_STATE_CORRECT_PRAISE;
-                    s_spell_timer_ms = dur + 400; // Đợi đọc xong lời khen rồi sang câu tiếp theo
-                } else {
-                    s_spell_streak = 0;
-                    printf(" -> [CHƯA ĐÚNG RỒI]: Bé bấm chữ '%c'. Không phải chữ '%c' đâu!\r\n",
-                           upper, s_spell_target);
-                    printf(" -> [GỢI Ý]: Đèn LED đang nhấp nháy dẫn đường tại vị trí chữ '%c' đó!\r\n", s_spell_target);
-                    printf(" -> [TỰ ĐỘNG ĐỌC LẠI CÂU HỎI]: \"Đố bé tìm thấy chữ %c ở đâu nào?\"\r\n", s_spell_target);
-                    fflush(stdout);
+                printf("\r\n>>> [BÉ VỪA BẤM]: Chữ '%c' (Loa phát âm: \"Chữ %c\"...) <<<\r\n", upper, upper);
+                fflush(stdout);
 
-                    uint32_t dur = 1600;
-                    math_audio_play(MATH_SND_SPELL_HINT_WRONG, &dur); // "Chưa đúng rồi, bé tìm lại nhé!"
-                    led_effects_spelling_quiz_display(s_spell_target, upper, false);
-                    s_spell_state = SPELL_STATE_HINT_WRONG;
-                    s_spell_timer_ms = dur + 250; // Chờ đọc xong lời nhắc rồi tự động đọc lại câu hỏi
-                }
+                // 2. Chuyển sang trạng thái SAY_GUESS: chờ phát âm xong chữ vừa bấm rồi mới tính tiếp đúng hay sai!
+                s_spell_state = SPELL_STATE_SAY_GUESS;
+                s_spell_timer_ms = dur + 60; // Ngắt nhịp 60ms cho tự nhiên
             }
             return true;
         }
@@ -597,6 +587,51 @@ static void mode_phonics_background_tick(uint32_t delta_ms) {
 
             case SPELL_STATE_WAIT_INPUT:
                 led_effects_spelling_quiz_display(s_spell_target, s_spell_user_guess, s_pulse_toggle);
+                break;
+
+            case SPELL_STATE_SAY_GUESS:
+                if (s_spell_timer_ms == 0) {
+                    // Sau khi phát âm xong "Chữ [X]" bé vừa bấm, TÍNH TIẾP ĐÚNG HAY SAI:
+                    if (s_spell_user_guess == s_spell_target) {
+                        s_spell_score += 10;
+                        s_spell_streak++;
+                        const char *word_name = math_audio_get_word_text(s_spell_target);
+                        printf("\r\n============================================================\r\n");
+                        printf(">>> [CHÍNH XÁC! BÉ GIỎI QUÁ!]: Chữ '%c' -> %s! <<<\r\n", s_spell_target, word_name);
+                        printf(">>> [ĐIỂM SỐ: %d ĐIỂM | CHUỖI ĐÚNG LIÊN TIẾP (STREAK): %d] <<<\r\n",
+                               s_spell_score, s_spell_streak);
+                        printf("============================================================\r\n\r\n");
+                        fflush(stdout);
+
+                        // Phát âm tên con vật / đồ vật bắt đầu bằng chữ cái đó!
+                        math_audio_play_word(s_spell_target, &dur);
+                        s_spell_state = SPELL_STATE_PLAY_WORD;
+                        s_spell_timer_ms = dur + 80;
+                    } else {
+                        s_spell_streak = 0;
+                        printf(" -> [CHƯA ĐÚNG RỒI]: Bé vừa bấm chữ '%c'. Không phải chữ '%c' đâu!\r\n",
+                               s_spell_user_guess, s_spell_target);
+                        printf(" -> [GỢI Ý]: Đèn LED đang nhấp nháy dẫn đường tại vị trí chữ '%c' đó!\r\n", s_spell_target);
+                        printf(" -> [TỰ ĐỘNG ĐỌC LẠI CÂU HỎI]: \"Đố bé tìm thấy chữ %c ở đâu nào?\"\r\n", s_spell_target);
+                        fflush(stdout);
+
+                        math_audio_play(MATH_SND_SPELL_HINT_WRONG, &dur); // "Chưa đúng rồi, bé tìm lại nhé!"
+                        led_effects_spelling_quiz_display(s_spell_target, s_spell_user_guess, false);
+                        s_spell_state = SPELL_STATE_HINT_WRONG;
+                        s_spell_timer_ms = dur + 250;
+                    }
+                }
+                break;
+
+            case SPELL_STATE_PLAY_WORD:
+                if (s_spell_timer_ms == 0) {
+                    // Sau khi đọc xong tên con vật/đồ vật ("Con bò", "Con cò"...), phát âm lời khen & LED cầu vồng:
+                    led_effects_celebration();
+                    led_effects_spelling_quiz_display(s_spell_target, s_spell_target, false);
+                    math_audio_play(MATH_SND_PRAISE_CORRECT, &dur); // "Chính xác, bé giỏi quá!"
+                    s_spell_state = SPELL_STATE_CORRECT_PRAISE;
+                    s_spell_timer_ms = dur + 400;
+                }
                 break;
 
             case SPELL_STATE_CORRECT_PRAISE:
