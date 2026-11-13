@@ -129,5 +129,6 @@ void led_effects_bell_ring(void);
 
 // Mode 9: Bé Học Đánh Vần & Tập Đếm Số
 void led_effects_phonics_letter(char upper_letter);
+void led_effects_math_quiz_display(uint8_t num_a, uint8_t op, uint8_t num_b, int8_t ans, bool pulse_guide);
 
 #endif // LED_EFFECTS_H

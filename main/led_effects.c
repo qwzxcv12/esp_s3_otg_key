@@ -1965,3 +1965,62 @@ void led_effects_phonics_letter(char upper_letter) {
     flush_canvas_locked();
     xSemaphoreGive(s_led_mutex);
 }
+
+void led_effects_math_quiz_display(uint8_t num_a, uint8_t op, uint8_t num_b, int8_t ans, bool pulse_guide) {
+    if (!s_led_strip || !s_led_mutex) return;
+    touch_led_activity(true);
+    if (xSemaphoreTake(s_led_mutex, pdMS_TO_TICKS(2)) != pdTRUE) return;
+
+    // Side 3 (Cạnh Trái, indices 24..31): Số hạng A (Xanh Cyan)
+    uint8_t max_a = (num_a > 8) ? 8 : num_a;
+    for (int i = 0; i < 8; i++) {
+        if (i < max_a) {
+            canvas_set_pixel(24 + i, 0, 180, 255);
+        } else {
+            canvas_set_pixel(24 + i, 0, 10, 25);
+        }
+    }
+
+    // Side 1 (Cạnh Phải, indices 8..15): Số hạng B (Cam ấm)
+    uint8_t max_b = (num_b > 8) ? 8 : num_b;
+    for (int i = 0; i < 8; i++) {
+        if (i < max_b) {
+            canvas_set_pixel(8 + i, 255, 140, 0);
+        } else {
+            canvas_set_pixel(8 + i, 25, 12, 0);
+        }
+    }
+
+    // Side 0 (Cạnh Trên, indices 0..7): Phép toán (+ Vàng, - Đỏ)
+    for (int i = 0; i < 8; i++) {
+        if (op == 0) {
+            canvas_set_pixel(i, 255, 215, 0); // Vàng tươi
+        } else {
+            canvas_set_pixel(i, 255, 30, 30);  // Đỏ rực
+        }
+    }
+
+    // Side 2 (Cạnh Dưới, indices 16..23): Chờ bé nhập kết quả hoặc hiển thị đáp án bé vừa chọn
+    if (ans < 0) {
+        for (int i = 0; i < 8; i++) {
+            if ((i == 3 || i == 4) && pulse_guide) {
+                canvas_set_pixel(16 + i, 200, 200, 255);
+            } else {
+                canvas_set_pixel(16 + i, 15, 15, 25);
+            }
+        }
+    } else {
+        uint8_t max_ans = (ans > 8) ? 8 : (uint8_t)ans;
+        for (int i = 0; i < 8; i++) {
+            if (i < max_ans) {
+                canvas_set_pixel(16 + i, 50, 255, 80); // Xanh lá ngọc lục bảo
+            } else {
+                canvas_set_pixel(16 + i, 0, 20, 0);
+            }
+        }
+    }
+
+    s_decay_rate = 240;
+    flush_canvas_locked();
+    xSemaphoreGive(s_led_mutex);
+}
