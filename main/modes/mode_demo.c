@@ -28,6 +28,12 @@ void mode_demo_init(void) {
 }
 
 void mode_demo_start(uint8_t mode_index) {
+    if (mode_index == 8) {
+        // Mode 9: Interactive Math Quiz & Phonics learning - do not run background demo to prevent audio collision
+        s_demo_active = false;
+        return;
+    }
+
     s_demo_active = true;
     s_demo_mode = mode_index;
     s_demo_elapsed_ms = 0;

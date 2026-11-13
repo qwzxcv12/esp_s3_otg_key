@@ -6,6 +6,7 @@
 #include "soundbank.h"
 #include "led_effects.h"
 #include "math_audio_data.h"
+#include "mode_demo.h"
 
 static bool s_quiz_active = false;
 static char s_quiz_target = 'A';
@@ -19,6 +20,9 @@ typedef enum {
     MATH_STATE_SPEAK_B,
     MATH_STATE_SPEAK_EQUAL,
     MATH_STATE_WAIT_INPUT,
+    MATH_STATE_ANS_BANG,
+    MATH_STATE_ANS_VAL,
+    MATH_STATE_ANS_PRAISE,
     MATH_STATE_CELEBRATE
 } math_quiz_state_t;
 
@@ -39,26 +43,26 @@ static const char *s_math_num_words[11] = {
     "Không", "Một", "Hai", "Ba", "Bốn", "Năm", "Sáu", "Bảy", "Tám", "Chín", "Mười"
 };
 
-static void math_quiz_start_question(void) {
+static void math_quiz_start_question_delayed(uint32_t delay_ms) {
     s_math_active = true;
     s_quiz_active = false; // Tắt quiz chữ nếu đang mở
 
     s_math_op = (rand() % 2); // 0 = +, 1 = -
     if (s_math_op == 0) {
-        // Phép cộng (+): A + B <= 10
+        // Phép cộng (+): A + B <= 9 (đáp án 0..9, khớp 8 LED mỗi bên và hàng phím số)
         s_math_a = 1 + (rand() % 5);               // 1..5
-        s_math_b = 1 + (rand() % (10 - s_math_a)); // 1..(10 - A)
+        s_math_b = 1 + (rand() % (9 - s_math_a));  // 1..(9 - A)
         s_math_target = (int8_t)(s_math_a + s_math_b);
     } else {
-        // Phép trừ (-): A - B >= 0
-        s_math_a = 2 + (rand() % 9);               // 2..10
+        // Phép trừ (-): A - B >= 0, A <= 8
+        s_math_a = 2 + (rand() % 7);               // 2..8
         s_math_b = 1 + (rand() % s_math_a);        // 1..A
         s_math_target = (int8_t)(s_math_a - s_math_b);
     }
 
     s_math_user_ans = -1;
     s_math_state = MATH_STATE_SPEAK_A;
-    s_math_timer_ms = 80;
+    s_math_timer_ms = delay_ms;
 
     printf("\r\n============================================================\r\n");
     printf(">>> [TRÒ CHƠI: BÉ TẬP LÀM TOÁN THẦN TỐC - CÂU ĐỐ SỐ %d] <<<\r\n", (s_math_score / 10) + 1);
@@ -73,12 +77,16 @@ static void math_quiz_start_question(void) {
     printf(" - Cạnh Phải (Cam)  : %d bóng đèn số thứ hai\r\n", s_math_b);
     printf(" - Cạnh Trên        : Dấu [%c] (%s)\r\n",
            (s_math_op == 0 ? '+' : '-'), (s_math_op == 0 ? "Vàng - Phép Cộng" : "Đỏ - Phép Trừ"));
-    printf(" - Cạnh Dưới        : Chờ bé bấm phím số đáp án (0..10)!\r\n");
+    printf(" - Cạnh Dưới        : Chờ bé bấm phím số đáp án (0..9)!\r\n");
     printf(" - Phím SPACE / '?' : Nghe lại câu hỏi | Phím ESC: Thoát trò chơi\r\n");
     printf("============================================================\r\n\r\n");
     fflush(stdout);
 
     led_effects_math_quiz_display(s_math_a, s_math_op, s_math_b, -1, true);
+}
+
+static void math_quiz_start_question(void) {
+    math_quiz_start_question_delayed(80);
 }
 
 static const char *s_spell_dict[26] = {
@@ -116,14 +124,25 @@ static void mode_phonics_on_enter(void) {
     s_quiz_active = false;
     s_prev_letter = 0;
 
-    printf("\r\n>>> [BÉ HỌC ĐÁNH VẦN CHỮ CÁI, TẬP ĐẾM SỐ & LÀM TOÁN TRÊN KHUNG VUÔNG 32 LED] <<<\r\n");
-    printf(">>> [TỰ ĐỘNG KHỞI ĐỘNG TRÒ CHƠI BÉ TẬP LÀM TOÁN THẦN TỐC (MATH GENIUS QUIZ)!] <<<\r\n");
-    printf(">>> [Giọng đọc tự nhiên: \"5 trừ 4 bằng mấy?\" | Cạnh Trái (A) - Phải (B) - Trên (+/-) - Dưới (Đáp án)] <<<\r\n");
-    printf(">>> [Phím số 0..10: Bấm đáp án | BTN 6 / Space / '?': Đổi câu hỏi / Nghe lại câu hỏi] <<<\r\n");
-    printf(">>> [Phím ESC: Chuyển sang chế độ tự do gõ chữ cái A..Z] <<<\r\n\r\n");
+    mode_demo_stop(); // Chắc chắn dừng mọi bản demo khác để tránh chồng âm thanh
 
-    // Khởi động câu đố toán ngay khi vào Mode 9!
-    math_quiz_start_question();
+    printf("\r\n============================================================\r\n");
+    printf(">>> [BÉ HỌC ĐÁNH VẦN CHỮ CÁI, TẬP ĐẾM SỐ & LÀM TOÁN TRÊN KHUNG VUÔNG 32 LED] <<<\r\n");
+    printf(">>> [TỰ ĐỘNG KHỞI ĐỘNG TRÒ CHƠI BÉ TẬP LÀM TOÁN THẦN TỐC (MATH GENIUS QUIZ)!] <<<\r\n");
+    printf(">>> [Giọng đọc tự nhiên: \"2 trừ 1 bằng mấy?\" | Cạnh Trái (A) - Phải (B) - Trên (+/-) - Dưới (Đáp án)] <<<\r\n");
+    printf(">>> [Phím số 0..9: Bấm đáp án | Phím Space / '?': Nghe lại câu hỏi | Phím ESC: Thoát trò chơi] <<<\r\n");
+    printf("============================================================\r\n\r\n");
+    fflush(stdout);
+
+    // Chờ thông báo tên chế độ ("Chế độ 9...") phát xong (1700ms) rồi mới đọc câu hỏi toán
+    math_quiz_start_question_delayed(1700);
+}
+
+static void mode_phonics_on_exit(void) {
+    s_math_active = false;
+    s_math_state = MATH_STATE_IDLE;
+    s_quiz_active = false;
+    s_prev_letter = 0;
 }
 
 static bool mode_phonics_handle_key(uint8_t kc, uint8_t mod, char c) {
@@ -166,28 +185,42 @@ static bool mode_phonics_handle_key(uint8_t kc, uint8_t mod, char c) {
         else if (kc == 0x43 || (kc == 0x27 && c == ')')) ans = 10; // F10 hoặc Shift+0 = 10
 
         if (ans >= 0) {
-            if (s_math_state == MATH_STATE_WAIT_INPUT) {
+            // Cho phép bé trả lời ngay cả khi câu hỏi đang đọc hoặc khi đang chờ bấm!
+            // Chỉ bỏ qua khi đang đọc chuỗi khen đáp án (ANS_BANG, ANS_VAL, ANS_PRAISE)
+            if (s_math_state != MATH_STATE_ANS_BANG &&
+                s_math_state != MATH_STATE_ANS_VAL &&
+                s_math_state != MATH_STATE_ANS_PRAISE &&
+                s_math_state != MATH_STATE_CELEBRATE) {
                 s_math_user_ans = ans;
                 if (ans == s_math_target) {
                     s_math_score += 10;
                     s_math_streak++;
                     printf("\r\n============================================================\r\n");
-                    printf(">>> [CHÍNH XÁC! HOAN HÔ BÉ!]: %d %c %d = %d <<<\r\n",
+                    printf(">>> [CHÍNH XÁC! BÉ GIỎI QUÁ!]: %d %c %d = %d <<<\r\n",
                            s_math_a, (s_math_op == 0 ? '+' : '-'), s_math_b, ans);
                     printf(">>> [ĐIỂM SỐ: %d ĐIỂM | CHUỖI ĐÚNG LIÊN TIẾP (STREAK): %d] <<<\r\n",
                            s_math_score, s_math_streak);
                     printf("============================================================\r\n\r\n");
-                    sb_play_praise();
+                    fflush(stdout);
+
                     led_effects_celebration();
-                    s_math_state = MATH_STATE_CELEBRATE;
-                    s_math_timer_ms = 2400;
+                    led_effects_math_quiz_display(s_math_a, s_math_op, s_math_b, ans, false);
+
+                    // Bắt đầu chuỗi đọc kết quả: "Bằng" -> "<Đáp án>" -> "Chính xác, bé giỏi quá!"
+                    s_math_state = MATH_STATE_ANS_BANG;
+                    s_math_timer_ms = 0;
                 } else {
                     s_math_streak = 0;
-                    sb_play_typewriter(TYPEWRITER_BACKSPACE);
                     printf(" -> [CHƯA ĐÚNG RỒI]: Bé bấm số %d. %d %c %d không phải bằng %d đâu!\r\n",
                            ans, s_math_a, (s_math_op == 0 ? '+' : '-'), s_math_b, ans);
                     printf(" -> [GỢI Ý]: Bé hãy đếm số bóng đèn bên Trái (Cyan) và bên Phải (Cam) nhé!\r\n");
+                    fflush(stdout);
+
+                    uint32_t dur = 600;
+                    math_audio_play(MATH_SND_HINT_WRONG, &dur);
                     led_effects_math_quiz_display(s_math_a, s_math_op, s_math_b, ans, false);
+                    s_math_state = MATH_STATE_WAIT_INPUT;
+                    s_math_timer_ms = dur + 100;
                 }
             }
             return true;
@@ -353,9 +386,33 @@ static void mode_phonics_background_tick(uint32_t delta_ms) {
             led_effects_math_quiz_display(s_math_a, s_math_op, s_math_b, s_math_user_ans, s_math_pulse_toggle);
             break;
 
+        case MATH_STATE_ANS_BANG:
+            if (s_math_timer_ms == 0) {
+                math_audio_play(MATH_SND_ANS_BANG, &dur); // Phát âm: "Bằng"
+                s_math_state = MATH_STATE_ANS_VAL;
+                s_math_timer_ms = dur + 40;
+            }
+            break;
+
+        case MATH_STATE_ANS_VAL:
+            if (s_math_timer_ms == 0) {
+                math_audio_play((math_snd_id_t)(MATH_SND_NUM_0 + s_math_target), &dur); // e.g. "Một", "Hai"...
+                s_math_state = MATH_STATE_ANS_PRAISE;
+                s_math_timer_ms = dur + 50;
+            }
+            break;
+
+        case MATH_STATE_ANS_PRAISE:
+            if (s_math_timer_ms == 0) {
+                math_audio_play(MATH_SND_PRAISE_CORRECT, &dur); // Phát âm: "Chính xác, bé giỏi quá!"
+                s_math_state = MATH_STATE_CELEBRATE;
+                s_math_timer_ms = dur + 400;
+            }
+            break;
+
         case MATH_STATE_CELEBRATE:
             if (s_math_timer_ms == 0) {
-                math_quiz_start_question();
+                math_quiz_start_question_delayed(400);
             }
             break;
 
@@ -375,7 +432,7 @@ const toy_mode_driver_t g_mode_phonics_driver = {
     .short_desc         = "Học chữ cái, đếm số 0-10 & Trò chơi làm toán cộng trừ thần tốc trên khung vuông 32 LED",
     .init               = NULL,
     .on_enter           = mode_phonics_on_enter,
-    .on_exit            = NULL,
+    .on_exit            = mode_phonics_on_exit,
     .handle_key         = mode_phonics_handle_key,
     .handle_key_release = NULL,
     .background_tick    = mode_phonics_background_tick,

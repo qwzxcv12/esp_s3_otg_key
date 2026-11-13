@@ -21,6 +21,9 @@ typedef enum {
     MATH_SND_PLUS,
     MATH_SND_MINUS,
     MATH_SND_ASK_EQUALS,
+    MATH_SND_ANS_BANG,
+    MATH_SND_PRAISE_CORRECT,
+    MATH_SND_HINT_WRONG,
     MATH_SND_COUNT
 } math_snd_id_t;
 
